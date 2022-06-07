@@ -162,7 +162,7 @@ impl<F: Field> SpecialChunkTableConfig<F> {
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct BaseInfo<F> {
+pub struct BaseInfo<F> {
     input_base: u8,
     output_base: u8,
     // How many chunks we perform in a lookup?
