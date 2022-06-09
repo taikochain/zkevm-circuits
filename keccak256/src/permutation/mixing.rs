@@ -31,6 +31,7 @@ pub struct MixingConfig<F> {
 impl<F: Field> MixingConfig<F> {
     pub fn configure(
         meta: &mut ConstraintSystem<F>,
+        state: [Column<Advice>; 25],
         base_conv_config_b9_b13: BaseConversionConfig<F>,
         base_conv_config_b2_b9: BaseConversionConfig<F>,
         round_ctant_b9: Column<Advice>,
@@ -71,17 +72,6 @@ impl<F: Field> MixingConfig<F> {
                 q_flag * bool_constraint(negated_flag),
             ]
         });
-
-        // Allocate state columns and enable copy constraints for them.
-        let state: [Column<Advice>; 25] = (0..25)
-            .map(|_| {
-                let column = meta.advice_column();
-                meta.enable_equality(column);
-                column
-            })
-            .collect::<Vec<_>>()
-            .try_into()
-            .unwrap();
 
         // We don't mix -> Flag = false
         let iota_b9_config =
@@ -359,6 +349,8 @@ mod tests {
         #[derive(Clone)]
         struct MyConfig<F> {
             mixing_conf: MixingConfig<F>,
+            state: [Column<Advice>; 25],
+            next_inputs: [Column<Advice>; NEXT_INPUTS_LANES],
             table_b9_b13: FromBase9TableConfig<F>,
             table_b2_b9: FromBinaryTableConfig<F>,
         }
@@ -372,6 +364,19 @@ mod tests {
             }
 
             fn configure(meta: &mut ConstraintSystem<F>) -> Self::Config {
+                let state = [(); 25].map(|_| meta.advice_column()).map(|col| {
+                    meta.enable_equality(col);
+                    col
+                });
+
+                let next_inputs =
+                    [(); NEXT_INPUTS_LANES]
+                        .map(|_| meta.advice_column())
+                        .map(|col| {
+                            meta.enable_equality(col);
+                            col
+                        });
+
                 let flag = meta.advice_column();
                 meta.enable_equality(flag);
                 let table_b9 = FromBase9TableConfig::configure(meta);
@@ -408,6 +413,7 @@ mod tests {
                 MyConfig {
                     mixing_conf: MixingConfig::configure(
                         meta,
+                        state,
                         base_conv_config_b9_b13,
                         base_conv_config_b2_b9,
                         round_ctant_b9,
@@ -416,6 +422,8 @@ mod tests {
                         round_constants_b13,
                         flag,
                     ),
+                    state,
+                    next_inputs,
                     table_b9_b13: table_b9,
                     table_b2_b9: table_b2,
                 }
@@ -440,7 +448,7 @@ mod tests {
                             for (idx, val) in self.in_state.iter().enumerate() {
                                 let cell = region.assign_advice(
                                     || "witness input state",
-                                    config.mixing_conf.state[idx],
+                                    config.state[idx],
                                     offset,
                                     || Ok(*val),
                                 )?;
@@ -465,7 +473,7 @@ mod tests {
                             {
                                 let cell = region.assign_advice(
                                     || "witness next_inputs",
-                                    config.mixing_conf.state[idx],
+                                    config.next_inputs[idx],
                                     offset,
                                     || Ok(*val),
                                 )?;

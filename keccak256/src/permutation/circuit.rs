@@ -4,8 +4,7 @@ use crate::{
     keccak_arith::*,
     permutation::{
         base_conversion::BaseConversionConfig, iota_b9::IotaB9Config, mixing::MixingConfig,
-        pi::pi_gate_permutation, rho::RhoConfig, tables::FromBase9TableConfig, theta::ThetaConfig,
-        xi::XiConfig,
+        pi::pi_gate_permutation, rho::RhoConfig, theta::ThetaConfig, xi::XiConfig,
     },
 };
 use eth_types::Field;
@@ -23,27 +22,23 @@ pub struct KeccakFConfig<F: Field> {
     rho_config: RhoConfig<F>,
     xi_config: XiConfig<F>,
     iota_b9_config: IotaB9Config<F>,
-    from_b9_table: FromBase9TableConfig<F>,
-    base_conversion_config: BaseConversionConfig<F>,
+    base_conv_config_b9: BaseConversionConfig<F>,
     mixing_config: MixingConfig<F>,
-    pub state: [Column<Advice>; 25],
+    state: [Column<Advice>; 25],
     q_out: Selector,
     base_conv_activator: Column<Advice>,
 }
 
 impl<F: Field> KeccakFConfig<F> {
     // We assume state is received in base-9.
-    pub fn configure(meta: &mut ConstraintSystem<F>) -> Self {
-        let state = (0..25)
-            .map(|_| {
-                let column = meta.advice_column();
-                meta.enable_equality(column);
-                column
-            })
-            .collect_vec()
-            .try_into()
-            .unwrap();
-
+    pub fn configure(
+        meta: &mut ConstraintSystem<F>,
+        state: [Column<Advice>; 25],
+        base_conv_config_b9: BaseConversionConfig<F>,
+        base_conv_config_b2: BaseConversionConfig<F>,
+        base_conv_activator: Column<Advice>,
+        flag: Column<Advice>,
+    ) -> Self {
         // theta
         let theta_config = ThetaConfig::configure(meta.selector(), meta, state);
         // rho
@@ -67,25 +62,18 @@ impl<F: Field> KeccakFConfig<F> {
         let iota_b9_config =
             IotaB9Config::configure(meta, state, round_ctant_b9, round_constants_b9);
 
-        // Allocate space for the activation flag of the base_conversion.
-        let base_conv_activator = meta.advice_column();
-        meta.enable_equality(base_conv_activator);
-        // Base conversion config.
-        let from_b9_table = FromBase9TableConfig::configure(meta);
-        let base_info = from_b9_table.get_base_info(false);
-        let base_conv_lane = meta.advice_column();
-        let base_conversion_config =
-            BaseConversionConfig::configure(meta, base_info, base_conv_lane, base_conv_activator);
-
         // Mixing will make sure that the flag is binary constrained and that
         // the out state matches the expected result.
         let mixing_config = MixingConfig::configure(
             meta,
-            &from_b9_table,
+            state,
+            base_conv_config_b9.clone(),
+            base_conv_config_b2,
             round_ctant_b9,
             round_ctant_b13,
             round_constants_b9,
             round_constants_b13,
+            flag,
         );
 
         // Allocate the `out state correctness` gate selector
@@ -109,8 +97,7 @@ impl<F: Field> KeccakFConfig<F> {
             rho_config,
             xi_config,
             iota_b9_config,
-            from_b9_table,
-            base_conversion_config,
+            base_conv_config_b9,
             mixing_config,
             state,
             q_out,
@@ -119,17 +106,15 @@ impl<F: Field> KeccakFConfig<F> {
     }
 
     pub fn load(&self, layouter: &mut impl Layouter<F>) -> Result<(), Error> {
-        self.rho_config.load(layouter)?;
-        self.from_b9_table.load(layouter)
+        self.rho_config.load(layouter)
     }
 
-    pub fn assign_all(
+    pub fn assign_permutation(
         &self,
         layouter: &mut impl Layouter<F>,
         in_state: [AssignedCell<F, F>; 25],
-        out_state: [F; 25],
         flag: bool,
-        next_mixing: Option<[F; NEXT_INPUTS_LANES]>,
+        next_mixing: [AssignedCell<F, F>; NEXT_INPUTS_LANES],
     ) -> Result<[AssignedCell<F, F>; 25], Error> {
         let mut state = in_state;
 
@@ -199,7 +184,7 @@ impl<F: Field> KeccakFConfig<F> {
                     },
                 )?;
 
-                self.base_conversion_config
+                self.base_conv_config_b9
                     .assign_state(layouter, &state, activation_flag)?
             }
         }
@@ -207,13 +192,17 @@ impl<F: Field> KeccakFConfig<F> {
         // Mixing step
         let mix_res = KeccakFArith::mixing(
             &state_to_biguint(split_state_cells(state.clone())),
-            next_mixing
-                .map(|state| state_to_state_bigint::<F, NEXT_INPUTS_LANES>(state))
-                .as_ref(),
+            if !flag {
+                None
+            } else {
+                Some(state_to_state_bigint::<F, NEXT_INPUTS_LANES>(
+                    split_state_cells(next_mixing.clone()),
+                ))
+            },
             *ROUND_CONSTANTS.last().unwrap(),
         );
 
-        let mix_res = self.mixing_config.assign_state(
+        self.mixing_config.assign_state(
             layouter,
             &state,
             state_bigint_to_field(mix_res),
@@ -221,9 +210,7 @@ impl<F: Field> KeccakFConfig<F> {
             next_mixing,
             // Last round = PERMUTATION - 1
             PERMUTATION - 1,
-        )?;
-
-        self.constrain_out_state(layouter, &mix_res, out_state)
+        )
     }
 
     pub fn constrain_out_state(
@@ -287,6 +274,7 @@ mod tests {
     use super::*;
     use crate::common::{State, NEXT_INPUTS_LANES, ROUND_CONSTANTS};
     use crate::gate_helpers::biguint_to_f;
+    use crate::permutation::tables::{FromBase9TableConfig, FromBinaryTableConfig};
     use halo2_proofs::circuit::Layouter;
     use halo2_proofs::pairing::bn256::Fr as Fp;
     use halo2_proofs::plonk::{ConstraintSystem, Error};
@@ -294,8 +282,6 @@ mod tests {
     use pretty_assertions::assert_eq;
     use std::convert::TryInto;
 
-    // TODO: Remove ignore once this can run in the CI without hanging.
-    #[ignore]
     #[test]
     fn test_keccak_round() {
         #[derive(Default)]
@@ -307,8 +293,17 @@ mod tests {
             is_mixing: bool,
         }
 
+        #[derive(Clone)]
+        struct MyConfig<F: Field> {
+            keccak_config: KeccakFConfig<F>,
+            state: [Column<Advice>; 25],
+            next_inputs: [Column<Advice>; NEXT_INPUTS_LANES],
+            table_b9_b13: FromBase9TableConfig<F>,
+            table_b2_b9: FromBinaryTableConfig<F>,
+        }
+
         impl<F: Field> Circuit<F> for MyCircuit<F> {
-            type Config = KeccakFConfig<F>;
+            type Config = MyConfig<F>;
             type FloorPlanner = SimpleFloorPlanner;
 
             fn without_witnesses(&self) -> Self {
@@ -316,7 +311,60 @@ mod tests {
             }
 
             fn configure(meta: &mut ConstraintSystem<F>) -> Self::Config {
-                Self::Config::configure(meta)
+                let state = [(); 25].map(|_| meta.advice_column()).map(|col| {
+                    meta.enable_equality(col);
+                    col
+                });
+
+                let next_inputs =
+                    [(); NEXT_INPUTS_LANES]
+                        .map(|_| meta.advice_column())
+                        .map(|col| {
+                            meta.enable_equality(col);
+                            col
+                        });
+
+                let flag = meta.advice_column();
+                meta.enable_equality(flag);
+                let table_b9 = FromBase9TableConfig::configure(meta);
+                let table_b2 = FromBinaryTableConfig::configure(meta);
+
+                let base_conv_lane = meta.advice_column();
+                meta.enable_equality(base_conv_lane);
+
+                let base_conv_activator = meta.advice_column();
+                meta.enable_equality(base_conv_activator);
+
+                let base_conv_config_b2_b9 = BaseConversionConfig::configure(
+                    meta,
+                    table_b2.get_base_info(true),
+                    base_conv_lane,
+                    flag,
+                );
+
+                let base_conv_config_b9_b13 = BaseConversionConfig::configure(
+                    meta,
+                    table_b9.get_base_info(false),
+                    base_conv_lane,
+                    flag,
+                );
+
+                let keccak_config = KeccakFConfig::configure(
+                    meta,
+                    state,
+                    base_conv_config_b9_b13,
+                    base_conv_config_b2_b9,
+                    base_conv_activator,
+                    flag,
+                );
+
+                MyConfig {
+                    keccak_config,
+                    state,
+                    next_inputs,
+                    table_b2_b9: table_b2,
+                    table_b9_b13: table_b9,
+                }
             }
 
             fn synthesize(
@@ -325,7 +373,9 @@ mod tests {
                 mut layouter: impl Layouter<F>,
             ) -> Result<(), Error> {
                 // Load the table
-                config.load(&mut layouter)?;
+                config.table_b2_b9.load(&mut layouter)?;
+                config.table_b9_b13.load(&mut layouter)?;
+                config.keccak_config.load(&mut layouter)?;
                 let offset: usize = 0;
 
                 let in_state = layouter.assign_region(
@@ -350,12 +400,41 @@ mod tests {
                     },
                 )?;
 
-                config.assign_all(
+                let next_inputs = layouter.assign_region(
+                    || "Witness next_inputs",
+                    |mut region| {
+                        // Witness `state`
+                        let next_inputs: [AssignedCell<F, F>; NEXT_INPUTS_LANES] = {
+                            let mut state: Vec<AssignedCell<F, F>> =
+                                Vec::with_capacity(NEXT_INPUTS_LANES);
+                            for (idx, val) in
+                                self.next_mixing.unwrap_or_default().iter().enumerate()
+                            {
+                                let cell = region.assign_advice(
+                                    || "witness input state",
+                                    config.next_inputs[idx],
+                                    offset,
+                                    || Ok(*val),
+                                )?;
+                                state.push(cell)
+                            }
+                            state.try_into().unwrap()
+                        };
+
+                        Ok(next_inputs)
+                    },
+                )?;
+
+                let out_state_obtained = config.keccak_config.assign_permutation(
                     &mut layouter,
                     in_state,
-                    self.out_state,
                     self.is_mixing,
-                    self.next_mixing,
+                    next_inputs,
+                )?;
+                config.keccak_config.constrain_out_state(
+                    &mut layouter,
+                    &out_state_obtained,
+                    self.out_state,
                 )?;
                 Ok(())
             }
@@ -388,7 +467,7 @@ mod tests {
 
         // Compute out_state_mix
         let mut out_state_mix = in_state_biguint.clone();
-        KeccakFArith::permute_and_absorb(&mut out_state_mix, Some(&next_input));
+        KeccakFArith::permute_and_absorb(&mut out_state_mix, Some(next_input));
 
         // Compute out_state_non_mix
         let mut out_state_non_mix = in_state_biguint.clone();
