@@ -1,5 +1,6 @@
 use crate::circuit_input_builder::{CircuitInputStateRef, ExecStep};
 use crate::evm::Opcode;
+use crate::operation::CallContextField;
 use crate::Error;
 use eth_types::GethExecStep;
 
@@ -12,7 +13,7 @@ impl Opcode for Returndatacopy {
         geth_steps: &[GethExecStep],
     ) -> Result<Vec<ExecStep>, Error> {
         // TODO: complete `ExecStep` and circuit implementation
-        let exec_step = state.new_step(&geth_steps[0])?;
+        let mut exec_step = state.new_step(&geth_steps[0])?;
 
         // reconstruction
         let geth_step = &geth_steps[0];
@@ -21,11 +22,24 @@ impl Opcode for Returndatacopy {
         let size = geth_step.stack.nth_last(2)?;
 
         // can we reduce this clone?
-        let return_data = state.call_ctx()?.return_data.clone();
+        let call_id = state.call()?.call_id;
+        let call_ctx = state.call_ctx()?;
+        let return_data = call_ctx.return_data.clone();
+        let length = size.as_usize();
+
+        // read last callee info
+        for (field, value) in [
+            (CallContextField::LastCalleeReturnDataOffset, offset),
+            (
+                CallContextField::LastCalleeReturnDataLength,
+                return_data.len().into(),
+            ),
+        ] {
+            state.call_context_read(&mut exec_step, call_id, field, value);
+        }
 
         let call_ctx = state.call_ctx_mut()?;
         let memory = &mut call_ctx.memory;
-        let length = size.as_usize();
         if length != 0 {
             let mem_starts = dest_offset.as_usize();
             let mem_ends = mem_starts + length;
