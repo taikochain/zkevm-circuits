@@ -66,22 +66,22 @@ impl<F: Field> ExecutionGadget<F> for ReturnDataCopyGadget<F> {
         cb.stack_pop(size.expr());
 
         // 2. Add lookup constraint in the call context for the returndatacopy field.
-        let return_data_size = cb.query_rlc();
         let return_data_offset = cb.query_rlc();
-        cb.call_context_lookup(
-            false.expr(),
-            None,
-            CallContextFieldTag::LastCalleeReturnDataLength,
-            from_bytes::expr(&return_data_size.cells),
-        );
+        let return_data_size = cb.query_rlc();
         cb.call_context_lookup(
             false.expr(),
             None,
             CallContextFieldTag::LastCalleeReturnDataOffset,
             from_bytes::expr(&return_data_offset.cells),
         );
+        cb.call_context_lookup(
+            false.expr(),
+            None,
+            CallContextFieldTag::LastCalleeReturnDataLength,
+            from_bytes::expr(&return_data_size.cells),
+        );
 
-        // 3. contraints for copy: copy overflow check.
+        // TODO: 3. contraints for copy: copy overflow check.
 
         // 4 memory copy
         // Construct memory address in the destionation (memory) to which we copy code.
@@ -102,19 +102,21 @@ impl<F: Field> ExecutionGadget<F> for ReturnDataCopyGadget<F> {
         );
 
         let copy_rwc_inc = cb.query_cell();
-        cb.copy_table_lookup(
-            cb.curr.state.call_id.expr(),
-            CopyDataType::Memory.expr(),
-            cb.curr.state.call_id.expr(),
-            CopyDataType::Memory.expr(),
-            return_data_offset.expr() + from_bytes::expr(&data_offset.cells),
-            return_data_offset.expr() + return_data_size.expr(),
-            dst_memory_addr.offset(),
-            dst_memory_addr.length(),
-            0.expr(), // for RETURNDATACOPY rlc_acc is 0???? TODO!!!
-            cb.curr.state.rw_counter.expr() + cb.rw_counter_offset().expr(),
-            copy_rwc_inc.expr(),
-        );
+        cb.condition(dst_memory_addr.has_length(), |cb| {
+            cb.copy_table_lookup(
+                cb.curr.state.call_id.expr(),
+                CopyDataType::Memory.expr(),
+                cb.curr.state.call_id.expr(),
+                CopyDataType::Memory.expr(),
+                return_data_offset.expr() + from_bytes::expr(&data_offset.cells),
+                return_data_offset.expr() + return_data_size.expr(),
+                dst_memory_addr.offset(),
+                dst_memory_addr.length(),
+                0.expr(), // for RETURNDATACOPY rlc_acc is 0???? TODO!!!
+                cb.curr.state.rw_counter.expr() + cb.rw_counter_offset().expr(),
+                copy_rwc_inc.expr(),
+            );
+        });
         cb.condition(not::expr(dst_memory_addr.has_length()), |cb| {
             cb.require_zero(
                 "if no bytes to copy, copy table rwc inc == 0",
@@ -228,7 +230,13 @@ mod test {
     use eth_types::{bytecode, ToWord, Word};
     use mock::test_ctx::TestContext;
 
-    fn test_ok_internal(return_data_offset: usize, return_data_size: usize) {
+    fn test_ok_internal(
+        return_data_offset: usize,
+        return_data_size: usize,
+        dest_offset: usize,
+        offset: usize,
+        size: usize,
+    ) {
         let (addr_a, addr_b) = (mock::MOCK_ACCOUNTS[0], mock::MOCK_ACCOUNTS[1]);
 
         let pushdata = rand_bytes(32);
@@ -255,9 +263,9 @@ mod test {
             PUSH32(0x1_0000) // gas
             CALL
             RETURNDATASIZE
-            PUSH1(0x00) // dest_offset
-            PUSH1(0x00) // offset
-            PUSH1(0x32) // size
+            PUSH1(dest_offset) // dest_offset
+            PUSH1(offset) // offset
+            PUSH1(size) // size
             RETURNDATACOPY
             STOP
         };
@@ -283,48 +291,27 @@ mod test {
 
     #[test]
     fn returndatacopy_gadget_simple() {
-        test_ok_internal(0x00, 0x02);
+        test_ok_internal(0x00, 0x02, 0x10, 0x00, 0x02);
     }
 
     #[test]
     fn returndatacopy_gadget_large() {
-        test_ok_internal(0x00, 0x20);
+        test_ok_internal(0x00, 0x20, 0x20, 0x00, 0x20);
+    }
+
+    #[test]
+    fn returndatacopy_gadget_large_partial() {
+        test_ok_internal(0x00, 0x20, 0x20, 0x10, 0x10);
+    }
+
+    #[test]
+    fn returndatacopy_gadget_zero_length() {
+        test_ok_internal(0x00, 0x00, 0x20, 0x00, 0x00);
     }
 
     #[test]
     #[should_panic]
     fn returndatacopy_gadget_out_of_bound() {
-        test_ok_internal(0x00, 0x0101);
-    }
-
-    #[test]
-    fn returndatacopy_gadget_zero_length() {
-        test_ok_internal(0x00, 0x00);
-    }
-
-    #[test]
-    fn test_simple() {
-        let (addr_a, addr_b) = (mock::MOCK_ACCOUNTS[0], mock::MOCK_ACCOUNTS[1]);
-        let code = bytecode! {
-            PUSH1(0x00) // dest_offset
-            PUSH1(0x00) // offset
-            PUSH1(0x32) // size
-            RETURNDATACOPY
-            STOP
-        };
-        let ctx = TestContext::<2, 1>::new(
-            None,
-            |accs| {
-                accs[0].address(addr_b).code(code);
-                accs[1].address(addr_a).balance(Word::from(1u64 << 30));
-            },
-            |mut txs, accs| {
-                txs[0].to(accs[0].address).from(accs[1].address);
-            },
-            |block, _tx| block,
-        )
-        .unwrap();
-
-        assert_eq!(run_test_circuits(ctx, None), Ok(()));
+        test_ok_internal(0x00, 0x10, 0x20, 0x10, 0x10);
     }
 }

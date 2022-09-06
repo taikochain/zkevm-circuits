@@ -21,6 +21,14 @@ impl Opcode for Returndatacopy {
         let offset = geth_step.stack.nth_last(1)?;
         let size = geth_step.stack.nth_last(2)?;
 
+        state.stack_read(
+            &mut exec_step,
+            geth_step.stack.nth_last_filled(0),
+            dest_offset,
+        )?;
+        state.stack_read(&mut exec_step, geth_step.stack.nth_last_filled(1), offset)?;
+        state.stack_read(&mut exec_step, geth_step.stack.nth_last_filled(2), size)?;
+
         // can we reduce this clone?
         let call_id = state.call()?.call_id;
         let call_ctx = state.call_ctx()?;
