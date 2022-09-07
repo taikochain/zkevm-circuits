@@ -22,14 +22,15 @@ use bus_mapping::{circuit_input_builder::CopyDataType, evm::OpcodeId};
 use eth_types::{evm_types::GasCost, Field, ToLittleEndian, ToScalar};
 use gadgets::util::not;
 use halo2_proofs::{circuit::Value, plonk::Error};
+use integer::rns::Common;
 
 #[derive(Clone, Debug)]
 pub(crate) struct ReturnDataCopyGadget<F> {
     same_context: SameContextGadget<F>,
     /// Holds the memory address for return data from where we read.
-    return_data_offset: MemoryAddress<F>,
+    return_data_offset: Cell<F>, //MemoryAddress<F>,
     /// Holds the size of the return data.
-    return_data_size: RandomLinearCombination<F, N_BYTES_MEMORY_ADDRESS>,
+    return_data_size: Cell<F>, //RandomLinearCombination<F, N_BYTES_MEMORY_ADDRESS>,
     /// The data is copied to memory. To verify this
     /// copy operation we need the MemoryAddressGadget.
     dst_memory_addr: MemoryAddressGadget<F>,
@@ -66,22 +67,23 @@ impl<F: Field> ExecutionGadget<F> for ReturnDataCopyGadget<F> {
         cb.stack_pop(size.expr());
 
         // 2. Add lookup constraint in the call context for the returndatacopy field.
-        let return_data_offset = cb.query_rlc();
-        let return_data_size = cb.query_rlc();
+        let return_data_offset = cb.query_cell();
+        let return_data_size = cb.query_cell();
         cb.call_context_lookup(
             false.expr(),
             None,
             CallContextFieldTag::LastCalleeReturnDataOffset,
-            from_bytes::expr(&return_data_offset.cells),
+            return_data_offset.expr(),
         );
         cb.call_context_lookup(
             false.expr(),
             None,
             CallContextFieldTag::LastCalleeReturnDataLength,
-            from_bytes::expr(&return_data_size.cells),
+            return_data_size.expr(),
         );
 
-        // TODO: 3. contraints for copy: copy overflow check.
+        // TODO: 3. contraints for copy: copy overflow check
+        // i.e., offset + size <= return_data_size
 
         // 4 memory copy
         // Construct memory address in the destionation (memory) to which we copy code.
@@ -112,7 +114,7 @@ impl<F: Field> ExecutionGadget<F> for ReturnDataCopyGadget<F> {
                 return_data_offset.expr() + return_data_size.expr(),
                 dst_memory_addr.offset(),
                 dst_memory_addr.length(),
-                0.expr(), // for RETURNDATACOPY rlc_acc is 0???? TODO!!!
+                0.expr(), // for RETURNDATACOPY rlc_acc is 0
                 cb.curr.state.rw_counter.expr() + cb.rw_counter_offset().expr(),
                 copy_rwc_inc.expr(),
             );
@@ -126,7 +128,6 @@ impl<F: Field> ExecutionGadget<F> for ReturnDataCopyGadget<F> {
 
         // State transition
         let step_state_transition = StepStateTransition {
-            // 1 tx id lookup + 3 stack pop + 2 call info query + option(calldatalength lookup)
             rw_counter: Delta(cb.rw_counter_offset() + copy_rwc_inc.expr()),
             program_counter: Delta(1.expr()),
             stack_pointer: Delta(3.expr()),
@@ -179,19 +180,19 @@ impl<F: Field> ExecutionGadget<F> for ReturnDataCopyGadget<F> {
         self.return_data_offset.assign(
             region,
             offset,
-            Some(
-                return_data_offset.to_le_bytes()[..N_BYTES_MEMORY_ADDRESS]
-                    .try_into()
-                    .unwrap(),
+            Value::known(
+                return_data_offset
+                    .to_scalar()
+                    .expect("unexpected U256 -> Scalar conversion failure"),
             ),
         )?;
         self.return_data_size.assign(
             region,
             offset,
-            Some(
-                return_data_size.to_le_bytes()[..N_BYTES_MEMORY_ADDRESS]
-                    .try_into()
-                    .unwrap(),
+            Value::known(
+                return_data_size
+                    .to_scalar()
+                    .expect("unexpected U256 -> Scalar conversion failure"),
             ),
         )?;
 
@@ -209,12 +210,15 @@ impl<F: Field> ExecutionGadget<F> for ReturnDataCopyGadget<F> {
         )?;
         self.memory_copier_gas
             .assign(region, offset, size.as_u64(), memory_expansion_cost)?;
-        // rw_counter increase from copy table lookup is number of bytes copied.
+
+        // rw_counter increase from copy lookup is `length` memory read & writes
+        let copy_rwc_inc = size + size;
         self.copy_rwc_inc.assign(
             region,
             offset,
             Value::known(
-                size.to_scalar()
+                copy_rwc_inc // 1 read & 1 write
+                    .to_scalar()
                     .expect("unexpected U256 -> Scalar conversion failure"),
             ),
         )?;
@@ -263,9 +267,9 @@ mod test {
             PUSH32(0x1_0000) // gas
             CALL
             RETURNDATASIZE
-            PUSH1(dest_offset) // dest_offset
-            PUSH1(offset) // offset
             PUSH1(size) // size
+            PUSH1(offset) // offset
+            PUSH1(dest_offset) // dest_offset
             RETURNDATACOPY
             STOP
         };
@@ -273,20 +277,25 @@ mod test {
         let ctx = TestContext::<3, 1>::new(
             None,
             |accs| {
-                accs[0].address(addr_b).code(code_b);
-                accs[1].address(addr_a).code(code_a);
+                accs[0].address(addr_a).code(code_a);
+                accs[1].address(addr_b).code(code_b);
                 accs[2]
                     .address(mock::MOCK_ACCOUNTS[2])
                     .balance(Word::from(1u64 << 30));
             },
             |mut txs, accs| {
-                txs[0].to(accs[1].address).from(accs[2].address);
+                txs[0].to(accs[0].address).from(accs[2].address);
             },
             |block, _tx| block,
         )
         .unwrap();
 
         assert_eq!(run_test_circuits(ctx, None), Ok(()));
+    }
+
+    #[test]
+    fn returndatacopy_gadget_do_nothing() {
+        test_ok_internal(0x00, 0x02, 0x10, 0x00, 0x00);
     }
 
     #[test]
@@ -313,5 +322,11 @@ mod test {
     #[should_panic]
     fn returndatacopy_gadget_out_of_bound() {
         test_ok_internal(0x00, 0x10, 0x20, 0x10, 0x10);
+    }
+
+    #[test]
+    #[should_panic]
+    fn returndatacopy_gadget_out_of_gas() {
+        test_ok_internal(0x00, 0x10, 0x20000, 0x10, 0x10);
     }
 }
