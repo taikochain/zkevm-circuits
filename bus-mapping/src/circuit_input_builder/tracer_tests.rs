@@ -1193,9 +1193,7 @@ fn tracer_err_return_data_out_of_bounds() {
             accs[0]
                 .address(address!("0x0000000000000000000000000000000000000000"))
                 .code(code_a);
-            accs[1]
-                .address(address!("0x000000000000000000000000000000000cafe001"))
-                .code(code_b);
+            accs[1].address(*ADDR_B).code(code_b);
             accs[2]
                 .address(address!("0x000000000000000000000000000000000cafe002"))
                 .balance(Word::from(1u64 << 30));
