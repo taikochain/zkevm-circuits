@@ -476,6 +476,13 @@ impl<'a> CircuitInputStateRef<'a> {
             .map(|caller_idx| &self.tx.calls()[caller_idx])
     }
 
+    /// Mutable reference to the current call's caller Call
+    pub fn caller_mut(&mut self) -> Result<&mut Call, Error> {
+        self.tx_ctx
+            .caller_index()
+            .map(|caller_idx| &mut self.tx.calls_mut()[caller_idx])
+    }
+
     /// Reference to the current Call
     pub fn call(&self) -> Result<&Call, Error> {
         self.tx_ctx
@@ -641,6 +648,7 @@ impl<'a> CircuitInputStateRef<'a> {
         let call = Call {
             call_id: self.block_ctx.rwc.0,
             caller_id: caller.call_id,
+            last_callee_id: 0,
             kind,
             is_static: kind == CallKind::StaticCall || caller.is_static,
             is_root: false,
@@ -657,6 +665,8 @@ impl<'a> CircuitInputStateRef<'a> {
             call_data_length,
             return_data_offset,
             return_data_length,
+            last_callee_return_data_offset: 0,
+            last_callee_return_data_length: 0,
         };
 
         Ok(call)
@@ -797,11 +807,11 @@ impl<'a> CircuitInputStateRef<'a> {
     pub fn handle_return(&mut self, step: &GethExecStep) -> Result<(), Error> {
         let call = self.call()?.clone();
         let call_ctx = self.call_ctx()?;
+        let offset = step.stack.nth_last(0)?;
+        let length = step.stack.nth_last(1)?;
 
         // Store deployed code if it's a successful create
         if call.is_create() && call.is_success && step.op == OpcodeId::RETURN {
-            let offset = step.stack.nth_last(0)?;
-            let length = step.stack.nth_last(1)?;
             let code = call_ctx
                 .memory
                 .read_chunk(offset.low_u64().into(), length.low_u64().into());
@@ -818,8 +828,18 @@ impl<'a> CircuitInputStateRef<'a> {
             self.handle_reversion();
         }
 
-        self.tx_ctx.pop_call_ctx();
+        // If current call has caller.
+        // TODO: use is_root??
+        match self.caller_mut() {
+            Ok(caller) => {
+                caller.last_callee_id = call.call_id;
+                caller.last_callee_return_data_length = call.return_data_length;
+                caller.last_callee_return_data_offset = call.return_data_offset;
+            }
+            Err(_) => {}
+        }
 
+        self.tx_ctx.pop_call_ctx();
         Ok(())
     }
 

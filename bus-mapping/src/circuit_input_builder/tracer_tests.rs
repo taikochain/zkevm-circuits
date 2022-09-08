@@ -1370,6 +1370,7 @@ fn tracer_err_write_protection() {
     builder.state_ref().push_call(Call {
         call_id: 0,
         caller_id: 0,
+        last_callee_id: 0,
         kind: CallKind::StaticCall,
         is_static: true,
         is_root: false,
@@ -1386,6 +1387,8 @@ fn tracer_err_write_protection() {
         call_data_length: 0,
         return_data_offset: 0,
         return_data_length: 0,
+        last_callee_return_data_offset: 0,
+        last_callee_return_data_length: 0,
     });
 
     assert_eq!(

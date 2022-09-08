@@ -34,13 +34,19 @@ impl Opcode for Returndatacopy {
         let call_id = state.call()?.call_id;
         let call_ctx = state.call_ctx()?;
         let return_data = call_ctx.return_data.clone();
-        let return_data_offset = state.call()?.return_data_offset;
+        let last_callee_return_data_offset = state.call()?.last_callee_return_data_offset;
+        let last_callee_return_data_length = state.call()?.last_callee_return_data_length;
+        assert_eq!(
+            last_callee_return_data_length as usize,
+            return_data.len(),
+            "callee return data size should be correct"
+        );
 
         // read last callee info
         for (field, value) in [
             (
                 CallContextField::LastCalleeReturnDataOffset,
-                return_data_offset.into(),
+                last_callee_return_data_offset.into(),
             ),
             (
                 CallContextField::LastCalleeReturnDataLength,
@@ -143,11 +149,11 @@ fn gen_copy_event(
     let data_offset = geth_step.stack.nth_last(1)?.as_u64();
     let length = geth_step.stack.nth_last(2)?.as_u64();
 
-    let return_data_offset = state.call()?.return_data_offset;
-    let return_data_length = state.call()?.return_data_length;
+    let last_callee_return_data_offset = state.call()?.last_callee_return_data_offset;
+    let last_callee_return_data_length = state.call()?.last_callee_return_data_length;
     let (src_addr, src_addr_end) = (
-        return_data_offset + data_offset,
-        return_data_offset + return_data_length,
+        last_callee_return_data_offset + data_offset,
+        last_callee_return_data_offset + last_callee_return_data_length,
     );
 
     let mut exec_step = state.new_step(geth_step)?;
