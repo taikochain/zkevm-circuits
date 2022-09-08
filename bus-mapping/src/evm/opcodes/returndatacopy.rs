@@ -95,8 +95,8 @@ fn gen_copy_steps(
         let addr = src_addr + idx;
         let rwc = state.block_ctx.rwc;
         let (value, is_pad) = if addr < src_addr_end {
-            let byte =
-                state.call_ctx()?.call_data[(addr - state.call()?.call_data_offset) as usize];
+            let byte = state.call_ctx()?.return_data
+                [(addr - state.call()?.last_callee_return_data_offset) as usize];
             state.push_op(
                 exec_step,
                 RW::READ,
