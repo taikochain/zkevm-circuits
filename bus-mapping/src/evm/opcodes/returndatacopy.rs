@@ -100,7 +100,7 @@ fn gen_copy_steps(
             state.push_op(
                 exec_step,
                 RW::READ,
-                MemoryOp::new(state.call()?.caller_id, addr.into(), byte),
+                MemoryOp::new(state.call()?.last_callee_id, addr.into(), byte),
             );
             (byte, false)
         } else {

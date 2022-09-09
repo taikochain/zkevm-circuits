@@ -37,6 +37,15 @@ impl Opcode for Return {
                 caller_ctx.return_data.resize(length as usize, 0);
                 caller_ctx.return_data[0..copy_len]
                     .copy_from_slice(&memory.0[offset..offset + copy_len]);
+                (0..copy_len)
+                    .map(|idx| {
+                        state.memory_write(
+                            &mut exec_step,
+                            (return_offset + idx).into(),
+                            memory.0[offset as usize + idx],
+                        )
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
             } else {
                 // dealing with contract creation
                 assert!(offset + length <= memory.0.len());
