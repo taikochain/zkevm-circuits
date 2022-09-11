@@ -79,6 +79,7 @@ fn mock_internal_create() -> Call {
     Call {
         call_id: 0,
         caller_id: 0,
+        last_callee_id: 0,
         kind: CallKind::Create,
         is_static: false,
         is_root: false,
@@ -95,6 +96,8 @@ fn mock_internal_create() -> Call {
         call_data_length: 0,
         return_data_offset: 0,
         return_data_length: 0,
+        last_callee_return_data_offset: 0,
+        last_callee_return_data_length: 0,
     }
 }
 
