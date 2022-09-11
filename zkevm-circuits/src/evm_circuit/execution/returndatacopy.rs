@@ -12,7 +12,7 @@ use crate::{
             from_bytes,
             math_gadget::LtGadget,
             memory_gadget::{MemoryAddressGadget, MemoryCopierGasGadget, MemoryExpansionGadget},
-            CachedRegion, Cell, MemoryAddress, RandomLinearCombination,
+            CachedRegion, Cell, MemoryAddress,
         },
         witness::{Block, Call, ExecStep, Transaction},
     },
@@ -23,7 +23,6 @@ use bus_mapping::{circuit_input_builder::CopyDataType, evm::OpcodeId};
 use eth_types::{evm_types::GasCost, Field, ToLittleEndian, ToScalar};
 use gadgets::util::not;
 use halo2_proofs::{circuit::Value, plonk::Error};
-use integer::rns::Common;
 
 #[derive(Clone, Debug)]
 pub(crate) struct ReturnDataCopyGadget<F> {

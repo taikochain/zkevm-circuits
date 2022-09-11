@@ -88,7 +88,7 @@ fn gen_copy_steps(
     dst_addr: u64,
     src_addr_end: u64,
     bytes_left: u64,
-    is_root: bool,
+    _is_root: bool,
 ) -> Result<Vec<CopyStep>, Error> {
     let mut copy_steps = Vec::with_capacity(2 * bytes_left as usize);
     for idx in 0..bytes_left {
