@@ -15,7 +15,7 @@ use halo2_proofs::plonk::Instance;
 use crate::table::TxFieldTag;
 use crate::util::random_linear_combine_word as rlc;
 use halo2_proofs::{
-    circuit::{AssignedCell, Layouter, Region, SimpleFloorPlanner, Value},
+    circuit::{AssignedCell, Layouter, Region, SimpleFloorPlanner},
     plonk::{Advice, Circuit, Column, ConstraintSystem, Error, Fixed, Selector},
     poly::Rotation,
 };
@@ -340,14 +340,14 @@ impl<F: Field, const MAX_TXS: usize, const MAX_CALLDATA: usize>
         self.q_tx_table.enable(region, offset)?;
 
         // Assign vals to Tx_table
-        region.assign_advice(|| "tx_id", self.tx_id, offset, || Value::known(tx_id))?;
-        region.assign_fixed(|| "tag", self.tag, offset, || Value::known(tag))?;
-        region.assign_advice(|| "index", self.index, offset, || Value::known(index))?;
+        region.assign_advice(|| "tx_id", self.tx_id, offset, || Ok(tx_id))?;
+        region.assign_fixed(|| "tag", self.tag, offset, || Ok(tag))?;
+        region.assign_advice(|| "index", self.index, offset, || Ok(index))?;
         region.assign_advice(
             || "tx_value",
             self.tx_value,
             offset,
-            || Value::known(tx_value),
+            || Ok(tx_value),
         )?;
 
         // Assign vals to raw_public_inputs column
@@ -361,21 +361,21 @@ impl<F: Field, const MAX_TXS: usize, const MAX_CALLDATA: usize>
             || "raw_pi.tx_id",
             self.raw_public_inputs,
             offset + id_offset,
-            || Value::known(tx_id),
+            || Ok(tx_id),
         )?;
 
         region.assign_advice(
             || "raw_pi.tx_index",
             self.raw_public_inputs,
             offset + index_offset,
-            || Value::known(index),
+            || Ok(index),
         )?;
 
         region.assign_advice(
             || "raw_pi.tx_value",
             self.raw_public_inputs,
             offset + value_offset,
-            || Value::known(tx_value),
+            || Ok(tx_value),
         )?;
 
         // Add copy to vec
@@ -406,13 +406,13 @@ impl<F: Field, const MAX_TXS: usize, const MAX_CALLDATA: usize>
             || "zero",
             self.block_value,
             offset,
-            || Value::known(F::zero()),
+            || Ok(F::zero()),
         )?;
         region.assign_advice(
             || "zero",
             self.raw_public_inputs,
             offset,
-            || Value::known(F::zero()),
+            || Ok(F::zero()),
         )?;
         raw_pi_vals[offset] = F::zero();
         offset += 1;
@@ -423,13 +423,13 @@ impl<F: Field, const MAX_TXS: usize, const MAX_CALLDATA: usize>
             || "coinbase",
             self.block_value,
             offset,
-            || Value::known(coinbase),
+            || Ok(coinbase),
         )?;
         region.assign_advice(
             || "coinbase",
             self.raw_public_inputs,
             offset,
-            || Value::known(coinbase),
+            || Ok(coinbase),
         )?;
         raw_pi_vals[offset] = coinbase;
         offset += 1;
@@ -440,13 +440,13 @@ impl<F: Field, const MAX_TXS: usize, const MAX_CALLDATA: usize>
             || "gas_limit",
             self.block_value,
             offset,
-            || Value::known(gas_limit),
+            || Ok(gas_limit),
         )?;
         region.assign_advice(
             || "gas_limit",
             self.raw_public_inputs,
             offset,
-            || Value::known(gas_limit),
+            || Ok(gas_limit),
         )?;
         raw_pi_vals[offset] = gas_limit;
         offset += 1;
@@ -457,13 +457,13 @@ impl<F: Field, const MAX_TXS: usize, const MAX_CALLDATA: usize>
             || "number",
             self.block_value,
             offset,
-            || Value::known(number),
+            || Ok(number),
         )?;
         region.assign_advice(
             || "number",
             self.raw_public_inputs,
             offset,
-            || Value::known(number),
+            || Ok(number),
         )?;
         raw_pi_vals[offset] = number;
         offset += 1;
@@ -474,13 +474,13 @@ impl<F: Field, const MAX_TXS: usize, const MAX_CALLDATA: usize>
             || "timestamp",
             self.block_value,
             offset,
-            || Value::known(timestamp),
+            || Ok(timestamp),
         )?;
         region.assign_advice(
             || "timestamp",
             self.raw_public_inputs,
             offset,
-            || Value::known(timestamp),
+            || Ok(timestamp),
         )?;
         raw_pi_vals[offset] = timestamp;
         offset += 1;
@@ -491,13 +491,13 @@ impl<F: Field, const MAX_TXS: usize, const MAX_CALLDATA: usize>
             || "difficulty",
             self.block_value,
             offset,
-            || Value::known(difficulty),
+            || Ok(difficulty),
         )?;
         region.assign_advice(
             || "difficulty",
             self.raw_public_inputs,
             offset,
-            || Value::known(difficulty),
+            || Ok(difficulty),
         )?;
         raw_pi_vals[offset] = difficulty;
         offset += 1;
@@ -508,13 +508,13 @@ impl<F: Field, const MAX_TXS: usize, const MAX_CALLDATA: usize>
             || "base_fee",
             self.block_value,
             offset,
-            || Value::known(base_fee),
+            || Ok(base_fee),
         )?;
         region.assign_advice(
             || "base_fee",
             self.raw_public_inputs,
             offset,
-            || Value::known(base_fee),
+            || Ok(base_fee),
         )?;
         raw_pi_vals[offset] = base_fee;
         offset += 1;
@@ -525,13 +525,13 @@ impl<F: Field, const MAX_TXS: usize, const MAX_CALLDATA: usize>
             || "chain_id",
             self.block_value,
             offset,
-            || Value::known(chain_id),
+            || Ok(chain_id),
         )?;
         let chain_id_cell = region.assign_advice(
             || "chain_id",
             self.raw_public_inputs,
             offset,
-            || Value::known(chain_id),
+            || Ok(chain_id),
         )?;
         raw_pi_vals[offset] = chain_id;
         offset += 1;
@@ -542,13 +542,13 @@ impl<F: Field, const MAX_TXS: usize, const MAX_CALLDATA: usize>
                 || "prev_hash",
                 self.block_value,
                 offset,
-                || Value::known(prev_hash),
+                || Ok(prev_hash),
             )?;
             region.assign_advice(
                 || "prev_hash",
                 self.raw_public_inputs,
                 offset,
-                || Value::known(prev_hash),
+                || Ok(prev_hash),
             )?;
             raw_pi_vals[offset] = prev_hash;
             offset += 1;
@@ -587,7 +587,7 @@ impl<F: Field, const MAX_TXS: usize, const MAX_CALLDATA: usize>
             || "state.root",
             self.raw_public_inputs,
             offset,
-            || Value::known(state_root),
+            || Ok(state_root),
         )?;
         raw_pi_vals[offset] = state_root;
         offset += 1;
@@ -598,7 +598,7 @@ impl<F: Field, const MAX_TXS: usize, const MAX_CALLDATA: usize>
             || "parent_block.hash",
             self.raw_public_inputs,
             offset,
-            || Value::known(prev_state_root),
+            || Ok(prev_state_root),
         )?;
         raw_pi_vals[offset] = prev_state_root;
         Ok([state_root_cell, prev_state_root_cell])
@@ -622,13 +622,13 @@ impl<F: Field, const MAX_TXS: usize, const MAX_CALLDATA: usize>
             || "rpi_rlc_acc",
             self.rpi_rlc_acc,
             offset,
-            || Value::known(rpi_rlc_acc),
+            || Ok(rpi_rlc_acc),
         )?;
         region.assign_advice(
             || "rand_rpi",
             self.rand_rpi,
             offset,
-            || Value::known(rand_rpi),
+            || Ok(rand_rpi),
         )?;
         self.q_end.enable(region, offset)?;
 
@@ -640,13 +640,13 @@ impl<F: Field, const MAX_TXS: usize, const MAX_CALLDATA: usize>
                 || "rpi_rlc_acc",
                 self.rpi_rlc_acc,
                 offset,
-                || Value::known(rpi_rlc_acc),
+                || Ok(rpi_rlc_acc),
             )?;
             region.assign_advice(
                 || "rand_rpi",
                 self.rand_rpi,
                 offset,
-                || Value::known(rand_rpi),
+                || Ok(rand_rpi),
             )?;
             self.q_not_end.enable(region, offset)?;
         }
@@ -658,10 +658,10 @@ impl<F: Field, const MAX_TXS: usize, const MAX_CALLDATA: usize>
             || "rpi_rlc_acc",
             self.rpi_rlc_acc,
             0,
-            || Value::known(rpi_rlc_acc),
+            || Ok(rpi_rlc_acc),
         )?;
         let rpi_rand =
-            region.assign_advice(|| "rand_rpi", self.rand_rpi, 0, || Value::known(rand_rpi))?;
+            region.assign_advice(|| "rand_rpi", self.rand_rpi, 0, || Ok(rand_rpi))?;
         self.q_not_end.enable(region, 0)?;
         Ok((rpi_rand, rpi_rlc))
     }
@@ -846,7 +846,7 @@ mod pi_circuit_test {
     use crate::test_util::rand_tx;
     use halo2_proofs::{
         dev::{MockProver, VerifyFailure},
-        halo2curves::bn256::Fr,
+        pairing::bn256::Fr,
     };
     use pretty_assertions::assert_eq;
     use rand::SeedableRng;

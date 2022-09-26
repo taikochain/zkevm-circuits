@@ -1,7 +1,7 @@
 use bus_mapping::{circuit_input_builder::CopyDataType, evm::OpcodeId};
 use eth_types::{evm_types::GasCost, Field, ToLittleEndian, ToScalar};
 use gadgets::util::{not, Expr};
-use halo2_proofs::{circuit::Value, plonk::Error};
+use halo2_proofs::{plonk::Error};
 
 use crate::evm_circuit::{
     param::N_BYTES_MEMORY_WORD_SIZE,
@@ -126,7 +126,7 @@ impl<F: Field> ExecutionGadget<F> for Sha3Gadget<F> {
         self.copy_rwc_inc.assign(
             region,
             offset,
-            Value::known(
+            Ok(
                 size.to_scalar()
                     .expect("unexpected U256 -> Scalar conversion failure"),
             ),
@@ -136,7 +136,7 @@ impl<F: Field> ExecutionGadget<F> for Sha3Gadget<F> {
             .map(|i| block.rws[step.rw_indices[i]].memory_value())
             .collect();
         let rlc_acc = rlc::value(values.iter().rev(), block.randomness);
-        self.rlc_acc.assign(region, offset, Value::known(rlc_acc))?;
+        self.rlc_acc.assign(region, offset, Ok(rlc_acc))?;
 
         // Memory expansion and dynamic gas cost for reading it.
         let (_, memory_expansion_gas_cost) = self.memory_expansion.assign(

@@ -4,7 +4,7 @@ use eth_types::geth_types::{GethData, Transaction};
 use ethers_core::types::{NameOrAddress, TransactionRequest};
 use ethers_signers::{LocalWallet, Signer};
 use halo2_proofs::dev::{MockProver, VerifyFailure};
-use halo2_proofs::halo2curves::bn256::Fr;
+use halo2_proofs::pairing::bn256::Fr;
 use mock::TestContext;
 use rand::{CryptoRng, Rng};
 

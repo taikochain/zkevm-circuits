@@ -18,7 +18,7 @@ use crate::{
 };
 use eth_types::{Field, ToLittleEndian, ToScalar, U256};
 use halo2_proofs::{
-    circuit::Value,
+    
     plonk::{Error, Expression},
 };
 
@@ -70,7 +70,7 @@ impl<F: Field> SameContextGadget<F> {
     ) -> Result<(), Error> {
         let opcode = step.opcode.unwrap();
         self.opcode
-            .assign(region, offset, Value::known(F::from(opcode.as_u64())))?;
+            .assign(region, offset, Ok(F::from(opcode.as_u64())))?;
 
         self.sufficient_gas_left.assign(
             region,
@@ -223,7 +223,7 @@ impl<F: Field> RestoreContextGadget<F> {
             cell.assign(
                 region,
                 offset,
-                Value::known(
+                Ok(
                     value
                         .to_scalar()
                         .expect("unexpected U256 -> Scalar conversion failure"),
@@ -234,7 +234,7 @@ impl<F: Field> RestoreContextGadget<F> {
         self.caller_code_hash.assign(
             region,
             offset,
-            Value::known(Word::random_linear_combine(
+            Ok(Word::random_linear_combine(
                 caller_code_hash.to_le_bytes(),
                 block.randomness,
             )),

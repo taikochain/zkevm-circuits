@@ -8,7 +8,7 @@ use crate::{
 };
 use eth_types::{Field, ToLittleEndian, ToScalar, Word};
 use halo2_proofs::{
-    circuit::Value,
+    
     plonk::{Error, Expression},
 };
 
@@ -48,7 +48,7 @@ impl<F: Field> IsZeroGadget<F> {
         value: F,
     ) -> Result<F, Error> {
         let inverse = value.invert().unwrap_or(F::zero());
-        self.inverse.assign(region, offset, Value::known(inverse))?;
+        self.inverse.assign(region, offset, Ok(inverse))?;
         Ok(if value.is_zero().into() {
             F::one()
         } else {
@@ -133,12 +133,12 @@ impl<F: Field, const N: usize> BatchedIsZeroGadget<F, N> {
         let is_zero =
             if let Some(inverse) = values.iter().find_map(|value| Option::from(value.invert())) {
                 self.nonempty_witness
-                    .assign(region, offset, Value::known(inverse))?;
+                    .assign(region, offset, Ok(inverse))?;
                 F::zero()
             } else {
                 F::one()
             };
-        self.is_zero.assign(region, offset, Value::known(is_zero))?;
+        self.is_zero.assign(region, offset, Ok(is_zero))?;
 
         Ok(is_zero)
     }
@@ -245,7 +245,7 @@ impl<F: Field, const N_ADDENDS: usize, const CHECK_OVREFLOW: bool>
         self.carry_lo.assign(
             region,
             offset,
-            Value::known(
+            Ok(
                 carry_lo
                     .to_scalar()
                     .expect("unexpected U256 -> Scalar conversion failure"),
@@ -257,7 +257,7 @@ impl<F: Field, const N_ADDENDS: usize, const CHECK_OVREFLOW: bool>
             self.carry_hi.as_ref().unwrap().assign(
                 region,
                 offset,
-                Value::known(
+                Ok(
                     carry_hi
                         .to_scalar()
                         .expect("unexpected U256 -> Scalar conversion failure"),
@@ -348,7 +348,7 @@ impl<F: Field> MulWordByU64Gadget<F> {
                 .to_le_bytes()
                 .iter(),
         ) {
-            cell.assign(region, offset, Value::known(F::from(*byte as u64)))?;
+            cell.assign(region, offset, Ok(F::from(*byte as u64)))?;
         }
 
         Ok(())
@@ -389,7 +389,7 @@ impl<F: Field, const N_BYTES: usize> RangeCheckGadget<F, N_BYTES> {
     ) -> Result<(), Error> {
         let bytes = value.to_repr();
         for (idx, part) in self.parts.iter().enumerate() {
-            part.assign(region, offset, Value::known(F::from(bytes[idx] as u64)))?;
+            part.assign(region, offset, Ok(F::from(bytes[idx] as u64)))?;
         }
         Ok(())
     }
@@ -448,7 +448,7 @@ impl<F: Field, const N_BYTES: usize> LtGadget<F, N_BYTES> {
         self.lt.assign(
             region,
             offset,
-            Value::known(if lt { F::one() } else { F::zero() }),
+            Ok(if lt { F::one() } else { F::zero() }),
         )?;
 
         // Set the bytes of diff
@@ -458,7 +458,7 @@ impl<F: Field, const N_BYTES: usize> LtGadget<F, N_BYTES> {
             diff.assign(
                 region,
                 offset,
-                Value::known(F::from(diff_bytes[idx] as u64)),
+                Ok(F::from(diff_bytes[idx] as u64)),
             )?;
         }
 
@@ -618,7 +618,7 @@ impl<F: Field> PairSelectGadget<F> {
         _b: F,
     ) -> Result<(F, F), Error> {
         let is_a = if value == a { F::one() } else { F::zero() };
-        self.is_a.assign(region, offset, Value::known(is_a))?;
+        self.is_a.assign(region, offset, Ok(is_a))?;
 
         Ok((is_a, F::one() - is_a))
     }
@@ -688,9 +688,9 @@ impl<F: Field, const N_BYTES: usize> ConstantDivisionGadget<F, N_BYTES> {
         let remainder = numerator % denominator;
 
         self.quotient
-            .assign(region, offset, Value::known(F::from_u128(quotient)))?;
+            .assign(region, offset, Ok(F::from_u128(quotient)))?;
         self.remainder
-            .assign(region, offset, Value::known(F::from_u128(remainder)))?;
+            .assign(region, offset, Ok(F::from_u128(remainder)))?;
 
         self.quotient_range_check
             .assign(region, offset, F::from_u128(quotient))?;
@@ -887,13 +887,13 @@ impl<F: Field> MulAddWordsGadget<F> {
         self.carry_lo
             .iter()
             .zip(carry_lo.to_le_bytes().iter())
-            .map(|(cell, byte)| cell.assign(region, offset, Value::known(F::from(*byte as u64))))
+            .map(|(cell, byte)| cell.assign(region, offset, Ok(F::from(*byte as u64))))
             .collect::<Result<Vec<_>, _>>()?;
 
         self.carry_hi
             .iter()
             .zip(carry_hi.to_le_bytes().iter())
-            .map(|(cell, byte)| cell.assign(region, offset, Value::known(F::from(*byte as u64))))
+            .map(|(cell, byte)| cell.assign(region, offset, Ok(F::from(*byte as u64))))
             .collect::<Result<Vec<_>, _>>()?;
 
         Ok(())
@@ -1145,19 +1145,19 @@ impl<F: Field> MulAddWords512Gadget<F> {
         self.carry_0
             .iter()
             .zip(carry_0.to_le_bytes().iter())
-            .map(|(cell, byte)| cell.assign(region, offset, Value::known(F::from(*byte as u64))))
+            .map(|(cell, byte)| cell.assign(region, offset, Ok(F::from(*byte as u64))))
             .collect::<Result<Vec<_>, _>>()?;
 
         self.carry_1
             .iter()
             .zip(carry_1.to_le_bytes().iter())
-            .map(|(cell, byte)| cell.assign(region, offset, Value::known(F::from(*byte as u64))))
+            .map(|(cell, byte)| cell.assign(region, offset, Ok(F::from(*byte as u64))))
             .collect::<Result<Vec<_>, _>>()?;
 
         self.carry_2
             .iter()
             .zip(carry_2.to_le_bytes().iter())
-            .map(|(cell, byte)| cell.assign(region, offset, Value::known(F::from(*byte as u64))))
+            .map(|(cell, byte)| cell.assign(region, offset, Ok(F::from(*byte as u64))))
             .collect::<Result<Vec<_>, _>>()?;
         Ok(())
     }

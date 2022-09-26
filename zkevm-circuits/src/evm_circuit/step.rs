@@ -11,7 +11,6 @@ use bus_mapping::evm::OpcodeId;
 use eth_types::ToLittleEndian;
 use halo2_proofs::{
     arithmetic::FieldExt,
-    circuit::Value,
     plonk::{Advice, Column, ConstraintSystem, Error, Expression},
 };
 use std::iter;
@@ -404,13 +403,13 @@ impl<F: FieldExt> DynamicSelectorHalf<F> {
         self.target_odd.assign(
             region,
             offset,
-            Value::known(if odd { F::one() } else { F::zero() }),
+            Ok(if odd { F::one() } else { F::zero() }),
         )?;
         for (index, cell) in self.target_pairs.iter().enumerate() {
             cell.assign(
                 region,
                 offset,
-                Value::known(if index == pair_index {
+                Ok(if index == pair_index {
                     F::one()
                 } else {
                     F::zero()
@@ -517,23 +516,23 @@ impl<F: FieldExt> Step<F> {
         self.state.rw_counter.assign(
             region,
             offset,
-            Value::known(F::from(step.rw_counter as u64)),
+            Ok(F::from(step.rw_counter as u64)),
         )?;
         self.state
             .call_id
-            .assign(region, offset, Value::known(F::from(call.id as u64)))?;
+            .assign(region, offset, Ok(F::from(call.id as u64)))?;
         self.state
             .is_root
-            .assign(region, offset, Value::known(F::from(call.is_root as u64)))?;
+            .assign(region, offset, Ok(F::from(call.is_root as u64)))?;
         self.state.is_create.assign(
             region,
             offset,
-            Value::known(F::from(call.is_create as u64)),
+            Ok(F::from(call.is_create as u64)),
         )?;
         self.state.code_hash.assign(
             region,
             offset,
-            Value::known(RandomLinearCombination::random_linear_combine(
+            Ok(RandomLinearCombination::random_linear_combine(
                 call.code_hash.to_le_bytes(),
                 block.randomness,
             )),
@@ -541,29 +540,29 @@ impl<F: FieldExt> Step<F> {
         self.state.program_counter.assign(
             region,
             offset,
-            Value::known(F::from(step.program_counter as u64)),
+            Ok(F::from(step.program_counter as u64)),
         )?;
         self.state.stack_pointer.assign(
             region,
             offset,
-            Value::known(F::from(step.stack_pointer as u64)),
+            Ok(F::from(step.stack_pointer as u64)),
         )?;
         self.state
             .gas_left
-            .assign(region, offset, Value::known(F::from(step.gas_left)))?;
+            .assign(region, offset, Ok(F::from(step.gas_left)))?;
         self.state.memory_word_size.assign(
             region,
             offset,
-            Value::known(F::from(step.memory_word_size())),
+            Ok(F::from(step.memory_word_size())),
         )?;
         self.state.reversible_write_counter.assign(
             region,
             offset,
-            Value::known(F::from(step.reversible_write_counter as u64)),
+            Ok(F::from(step.reversible_write_counter as u64)),
         )?;
         self.state
             .log_id
-            .assign(region, offset, Value::known(F::from(step.log_id as u64)))?;
+            .assign(region, offset, Ok(F::from(step.log_id as u64)))?;
         Ok(())
     }
 }

@@ -7,7 +7,8 @@ use crate::{
 };
 use ethers_core::types::TransactionRequest;
 use ethers_signers::{LocalWallet, Signer};
-use halo2_proofs::halo2curves::{group::ff::PrimeField, secp256k1};
+// use halo2_proofs::pairing::{group::ff::PrimeField, secp256k1};
+use ff::PrimeField;
 use num::Integer;
 use num_bigint::BigUint;
 use serde::{Serialize, Serializer};

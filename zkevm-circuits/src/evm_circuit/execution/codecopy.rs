@@ -1,6 +1,6 @@
 use bus_mapping::{circuit_input_builder::CopyDataType, evm::OpcodeId};
 use eth_types::{evm_types::GasCost, Field, ToLittleEndian, ToScalar};
-use halo2_proofs::{circuit::Value, plonk::Error};
+use halo2_proofs::{plonk::Error};
 
 use crate::{
     evm_circuit::{
@@ -167,7 +167,7 @@ impl<F: Field> ExecutionGadget<F> for CodeCopyGadget<F> {
         self.code_size.assign(
             region,
             offset,
-            Value::known(F::from(code.bytes.len() as u64)),
+            Ok(F::from(code.bytes.len() as u64)),
         )?;
 
         // assign the destination memory offset.
@@ -188,7 +188,7 @@ impl<F: Field> ExecutionGadget<F> for CodeCopyGadget<F> {
         self.copy_rwc_inc.assign(
             region,
             offset,
-            Value::known(
+            Ok(
                 size.to_scalar()
                     .expect("unexpected U256 -> Scalar conversion failure"),
             ),

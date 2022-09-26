@@ -18,7 +18,7 @@ use crate::{
 };
 use bus_mapping::evm::OpcodeId;
 use eth_types::Field;
-use halo2_proofs::{circuit::Value, plonk::Error};
+use halo2_proofs::{plonk::Error};
 
 #[derive(Clone, Debug)]
 pub(crate) struct StopGadget<F> {
@@ -109,7 +109,7 @@ impl<F: Field> ExecutionGadget<F> for StopGadget<F> {
         self.code_length.assign(
             region,
             offset,
-            Value::known(F::from(code.bytes.len() as u64)),
+            Ok(F::from(code.bytes.len() as u64)),
         )?;
 
         self.is_out_of_range.assign(
@@ -120,7 +120,7 @@ impl<F: Field> ExecutionGadget<F> for StopGadget<F> {
 
         let opcode = step.opcode.unwrap();
         self.opcode
-            .assign(region, offset, Value::known(F::from(opcode.as_u64())))?;
+            .assign(region, offset, Ok(F::from(opcode.as_u64())))?;
 
         self.restore_context
             .assign(region, offset, block, call, step)?;

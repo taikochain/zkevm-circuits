@@ -14,7 +14,7 @@ use eth_types::{
     {geth_types::Transaction, Address, Field, ToLittleEndian, ToScalar},
 };
 use halo2_proofs::{
-    circuit::{AssignedCell, Layouter, Region, SimpleFloorPlanner, Value},
+    circuit::{AssignedCell, Layouter, Region, SimpleFloorPlanner},
     plonk::{Advice, Circuit, Column, ConstraintSystem, Error, Expression},
 };
 use itertools::Itertools;
@@ -22,14 +22,14 @@ use log::error;
 use sign_verify::{SignVerifyChip, SignVerifyConfig};
 use std::marker::PhantomData;
 
-pub use halo2_proofs::halo2curves::{
+pub use halo2_proofs::pairing::{
     group::{
         ff::{Field as GroupField, PrimeField},
         prime::PrimeCurveAffine,
         Curve, Group, GroupEncoding,
     },
-    secp256k1::{self, Secp256k1Affine, Secp256k1Compressed},
 };
+pub use secp256k1::Secp256k1Affine;
 pub use sign_verify::{POW_RAND_SIZE, VERIF_HEIGHT};
 
 /// Config for TxCircuit
@@ -86,21 +86,21 @@ impl<F: Field> TxCircuitConfig<F> {
             || "tx_id",
             self.tx_id,
             offset,
-            || Value::known(F::from(tx_id as u64)),
+            || Ok(F::from(tx_id as u64)),
         )?;
         region.assign_advice(
             || "tag",
             self.tag,
             offset,
-            || Value::known(F::from(tag as u64)),
+            || Ok(F::from(tag as u64)),
         )?;
         region.assign_advice(
             || "index",
             self.index,
             offset,
-            || Value::known(F::from(index as u64)),
+            || Ok(F::from(index as u64)),
         )?;
-        region.assign_advice(|| "value", self.value, offset, || Value::known(value))
+        region.assign_advice(|| "value", self.value, offset, || Ok(value))
     }
 }
 
@@ -327,7 +327,7 @@ mod tx_circuit_tests {
     use halo2_proofs::{
         arithmetic::CurveAffine,
         dev::{MockProver, VerifyFailure},
-        halo2curves::{bn256::Fr, group::Group},
+        pairing::{bn256::Fr, group::Group},
     };
     use mock::AddrOrWallet;
     use pretty_assertions::assert_eq;

@@ -8,7 +8,7 @@ use crate::{
     util::Expr,
 };
 use eth_types::Field;
-use halo2_proofs::{circuit::Value, plonk::Error};
+use halo2_proofs::{plonk::Error};
 
 #[derive(Clone, Debug)]
 pub(crate) struct ReturnGadget<F> {
@@ -41,7 +41,7 @@ impl<F: Field> ExecutionGadget<F> for ReturnGadget<F> {
     ) -> Result<(), Error> {
         let opcode = step.opcode.unwrap();
         self.opcode
-            .assign(region, offset, Value::known(F::from(opcode.as_u64())))?;
+            .assign(region, offset, Ok(F::from(opcode.as_u64())))?;
 
         Ok(())
     }

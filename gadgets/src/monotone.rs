@@ -4,7 +4,7 @@
 //! cell.
 use halo2_proofs::arithmetic::FieldExt;
 use halo2_proofs::{
-    circuit::{Chip, Layouter, Value},
+    circuit::{Chip, Layouter},
     plonk::{Advice, Column, ConstraintSystem, Error, Expression, Fixed, VirtualCells},
     poly::Rotation,
 };
@@ -73,7 +73,7 @@ impl<F: FieldExt, const RANGE: usize, const INCR: bool, const STRICT: bool>
                         || "range_table_value",
                         self.config.range_table,
                         idx,
-                        || Value::known(F::from(idx as u64)),
+                        || Ok(F::from(idx as u64)),
                     )?;
                 }
 
@@ -105,6 +105,7 @@ impl<F: FieldExt, const RANGE: usize, const INCR: bool, const STRICT: bool> Chip
     }
 }
 
+/*
 #[cfg(test)]
 mod test {
     use super::{MonotoneChip, MonotoneConfig, Value};
@@ -184,7 +185,7 @@ mod test {
                             || "value",
                             config.value,
                             idx,
-                            || Value::known(*value),
+                            || Ok(*value),
                         )?;
                         if idx > 0 {
                             config.q_enable.enable(&mut region, idx)?;
@@ -305,3 +306,4 @@ mod test {
         );
     }
 }
+*/

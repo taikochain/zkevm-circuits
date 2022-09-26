@@ -14,7 +14,7 @@ use crate::{
 use array_init::array_init;
 use eth_types::{evm_types::GasCost, Field, ToLittleEndian, U256};
 use halo2_proofs::{
-    circuit::Value,
+    
     plonk::{Error, Expression},
 };
 
@@ -107,7 +107,7 @@ impl<F: Field> MemoryAddressGadget<F> {
         self.memory_offset.assign(
             region,
             offset,
-            Value::known(Word::random_linear_combine(memory_offset_bytes, randomness)),
+            Ok(Word::random_linear_combine(memory_offset_bytes, randomness)),
         )?;
         self.memory_offset_bytes.assign(
             region,
@@ -501,8 +501,8 @@ impl<F: Field, const MAX_BYTES: usize, const ADDR_SIZE_IN_BYTES: usize>
 
         assert_eq!(selectors.len(), MAX_BYTES);
         for (idx, selector) in selectors.iter().enumerate() {
-            self.selectors[idx].assign(region, offset, Value::known(F::from(*selector as u64)))?;
-            self.bytes[idx].assign(region, offset, Value::known(F::from(bytes[idx] as u64)))?;
+            self.selectors[idx].assign(region, offset, Ok(F::from(*selector as u64)))?;
+            self.bytes[idx].assign(region, offset, Ok(F::from(bytes[idx] as u64)))?;
             // assign bound_dist and bound_dist_is_zero
             let oob = addr_start + idx as u64 >= addr_end;
             let bound_dist = if oob {
@@ -510,7 +510,7 @@ impl<F: Field, const MAX_BYTES: usize, const ADDR_SIZE_IN_BYTES: usize>
             } else {
                 F::from(addr_end - addr_start - idx as u64)
             };
-            self.bound_dist[idx].assign(region, offset, Value::known(bound_dist))?;
+            self.bound_dist[idx].assign(region, offset, Ok(bound_dist))?;
             self.bound_dist_is_zero[idx].assign(region, offset, bound_dist)?;
         }
         Ok(())

@@ -13,7 +13,7 @@ use crate::{
 };
 use bus_mapping::evm::OpcodeId;
 use eth_types::{Field, ToLittleEndian};
-use halo2_proofs::{circuit::Value, plonk::Error};
+use halo2_proofs::{plonk::Error};
 
 #[derive(Clone, Debug)]
 pub(crate) struct IsZeroGadget<F> {
@@ -66,7 +66,7 @@ impl<F: Field> ExecutionGadget<F> for IsZeroGadget<F> {
 
         let value = block.rws[step.rw_indices[0]].stack_value();
         let value = Word::random_linear_combine(value.to_le_bytes(), block.randomness);
-        self.value.assign(region, offset, Value::known(value))?;
+        self.value.assign(region, offset, Ok(value))?;
         self.is_zero.assign(region, offset, value)?;
 
         Ok(())

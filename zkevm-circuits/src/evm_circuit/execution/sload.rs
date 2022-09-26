@@ -16,7 +16,7 @@ use crate::{
 };
 use eth_types::{evm_types::GasCost, Field, ToLittleEndian, ToScalar};
 use halo2_proofs::{
-    circuit::Value,
+    
     plonk::{Error, Expression},
 };
 
@@ -104,7 +104,7 @@ impl<F: Field> ExecutionGadget<F> for SloadGadget<F> {
         self.same_context.assign_exec_step(region, offset, step)?;
 
         self.tx_id
-            .assign(region, offset, Value::known(F::from(tx.id as u64)))?;
+            .assign(region, offset, Ok(F::from(tx.id as u64)))?;
         self.reversion_info.assign(
             region,
             offset,
@@ -114,7 +114,7 @@ impl<F: Field> ExecutionGadget<F> for SloadGadget<F> {
         self.callee_address.assign(
             region,
             offset,
-            Value::known(
+            Ok(
                 call.callee_address
                     .to_scalar()
                     .expect("unexpected Address -> Scalar conversion failure"),
@@ -126,7 +126,7 @@ impl<F: Field> ExecutionGadget<F> for SloadGadget<F> {
         self.key.assign(
             region,
             offset,
-            Value::known(Word::random_linear_combine(
+            Ok(Word::random_linear_combine(
                 key.to_le_bytes(),
                 block.randomness,
             )),
@@ -134,7 +134,7 @@ impl<F: Field> ExecutionGadget<F> for SloadGadget<F> {
         self.value.assign(
             region,
             offset,
-            Value::known(Word::random_linear_combine(
+            Ok(Word::random_linear_combine(
                 value.to_le_bytes(),
                 block.randomness,
             )),
@@ -144,7 +144,7 @@ impl<F: Field> ExecutionGadget<F> for SloadGadget<F> {
         self.committed_value.assign(
             region,
             offset,
-            Value::known(Word::random_linear_combine(
+            Ok(Word::random_linear_combine(
                 committed_value.to_le_bytes(),
                 block.randomness,
             )),
@@ -152,7 +152,7 @@ impl<F: Field> ExecutionGadget<F> for SloadGadget<F> {
 
         let (_, is_warm) = block.rws[step.rw_indices[7]].tx_access_list_value_pair();
         self.is_warm
-            .assign(region, offset, Value::known(F::from(is_warm as u64)))?;
+            .assign(region, offset, Ok(F::from(is_warm as u64)))?;
 
         Ok(())
     }

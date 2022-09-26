@@ -1,7 +1,6 @@
 use bus_mapping::evm::OpcodeId;
 use eth_types::{Field, ToLittleEndian};
 use halo2_proofs::{
-    circuit::Value,
     plonk::{Error, Expression},
 };
 
@@ -205,11 +204,11 @@ impl<F: Field> ExecutionGadget<F> for CallDataLoadGadget<F> {
             )
         };
         self.src_id
-            .assign(region, offset, Value::known(F::from(src_id)))?;
+            .assign(region, offset, Ok(F::from(src_id)))?;
         self.call_data_length
-            .assign(region, offset, Value::known(F::from(calldata_length)))?;
+            .assign(region, offset, Ok(F::from(calldata_length)))?;
         self.call_data_offset
-            .assign(region, offset, Value::known(F::from(calldata_offset)))?;
+            .assign(region, offset, Ok(F::from(calldata_offset)))?;
 
         let mut calldata_bytes = vec![0u8; N_BYTES_WORD];
         let (src_addr, src_addr_end) = (

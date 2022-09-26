@@ -14,7 +14,7 @@ use gadgets::util::{and, select, sum};
 use halo2_proofs::arithmetic::FieldExt;
 use halo2_proofs::plonk::VirtualCells;
 use halo2_proofs::{
-    circuit::{Layouter, Region, SimpleFloorPlanner, Value},
+    circuit::{Layouter, Region, SimpleFloorPlanner},
     plonk::{Advice, Circuit, Column, ConstraintSystem, Error, Expression, Fixed, TableColumn},
     poly::Rotation,
 };
@@ -1585,7 +1585,7 @@ impl<F: Field> KeccakPackedConfig<F> {
                 || format!("assign {} {}", name, offset),
                 *column,
                 offset,
-                || Value::known(*value),
+                || Ok(*value),
             )?;
         }
 
@@ -1600,7 +1600,7 @@ impl<F: Field> KeccakPackedConfig<F> {
                 || format!("assign {} {}", name, offset),
                 *column,
                 offset,
-                || Value::known(*value),
+                || Ok(*value),
             )?;
         }
 
@@ -1615,7 +1615,7 @@ impl<F: Field> KeccakPackedConfig<F> {
                 || format!("assign lookup value {} {}", idx, offset),
                 column.advice,
                 offset,
-                || Value::known(*bit),
+                || Ok(*bit),
             )?;
         }
 
@@ -1624,7 +1624,7 @@ impl<F: Field> KeccakPackedConfig<F> {
             || format!("assign round cst {}", offset),
             self.round_cst,
             offset,
-            || Value::known(row.round_cst),
+            || Ok(row.round_cst),
         )?;
 
         Ok(())

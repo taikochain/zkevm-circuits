@@ -10,7 +10,7 @@ ethers-core = "0.17.0"
 ethers-signers = "0.17.0"
 hex = "0.4"
 lazy_static = "1.4"
-halo2_proofs = { git = "https://github.com/privacy-scaling-explorations/halo2.git", tag = "v2022_08_19" }
+halo2_proofs = { path = "/home/xiaodino/Development/privacy-scaling-explorations/halo2-fft-gpu-optimization-79/halo2_proofs" }
 regex = "1.5.4"
 serde = {version = "1.0.130", features = ["derive"] }
 serde_json = "1.0.66"
@@ -22,3 +22,6 @@ sha3 = "0.10"
 num = "0.4"
 num-bigint = { version = "0.4" }
 
+ff = { git = 'https://github.com/starslabhq/ff', branch = "v0.11.1Char" }
+group = { git = "https://github.com/starslabhq/group", branch = "v0.11.0ff" }
+secp256k1 = { path = "/home/xiaodino/Development/privacy-scaling-explorations/halo2wrong/ecc/secp256k1", features = ["kzg"] }

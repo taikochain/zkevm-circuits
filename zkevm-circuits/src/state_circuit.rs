@@ -17,7 +17,7 @@ use constraint_builder::{ConstraintBuilder, Queries};
 use eth_types::{Address, Field};
 use gadgets::binary_number::{BinaryNumberChip, BinaryNumberConfig};
 use halo2_proofs::{
-    circuit::{Layouter, Region, SimpleFloorPlanner, Value},
+    circuit::{Layouter, Region, SimpleFloorPlanner},
     plonk::{Advice, Circuit, Column, ConstraintSystem, Error, Expression, Fixed, VirtualCells},
     poly::Rotation,
 };
@@ -155,7 +155,7 @@ impl<F: Field> StateCircuitConfig<F> {
                 || "selector",
                 self.selector,
                 offset,
-                || Value::known(F::one()),
+                || Ok(F::one()),
             )?;
 
             tag_chip.assign(region, offset, &row.tag())?;
@@ -196,7 +196,7 @@ impl<F: Field> StateCircuitConfig<F> {
                 || "initial_value",
                 self.initial_value,
                 offset,
-                || Value::known(initial_value),
+                || Ok(initial_value),
             )?;
         }
 
@@ -298,7 +298,7 @@ where
                             || "override",
                             advice_column,
                             offset,
-                            || Value::known(f),
+                            || Ok(f),
                         )?;
                     }
                 }

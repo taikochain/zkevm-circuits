@@ -14,11 +14,9 @@ use ecdsa::ecdsa::{AssignedEcdsaSig, AssignedPublicKey, EcdsaChip};
 use eth_types::sign_types::{pk_bytes_le, pk_bytes_swap_endianness, SignData};
 use eth_types::{self, Field};
 use gadgets::is_zero::{IsZeroChip, IsZeroConfig, IsZeroInstruction};
-use halo2_proofs::halo2curves::secp256k1::Secp256k1Affine;
 use halo2_proofs::{
     arithmetic::FieldExt,
-    circuit::{AssignedCell, Layouter, Region, Value},
-    halo2curves::secp256k1,
+    circuit::{AssignedCell, Layouter, Region},
     plonk::{Advice, Column, ConstraintSystem, Error, Expression, Selector},
     poly::Rotation,
 };
@@ -31,6 +29,7 @@ use maingate::{
     AssignedValue, MainGate, MainGateConfig, MainGateInstructions, RangeChip, RangeConfig,
     RangeInstructions, RegionCtx,
 };
+use secp256k1::Secp256k1Affine;
 use std::marker::PhantomData;
 
 /// Power of randomness vector size required for the SignVerifyChip
@@ -339,7 +338,7 @@ impl<F: Field, const MAX_VERIF: usize> SignVerifyChip<F, MAX_VERIF> {
         ctx: &mut RegionCtx<'_, F>,
         ecc_chip: &mut GeneralEccChip<Secp256k1Affine, F, NUMBER_OF_LIMBS, BIT_LEN_LIMB>,
     ) -> Result<(), Error> {
-        ecc_chip.assign_aux_generator(ctx, Value::known(self.aux_generator))?;
+        ecc_chip.assign_aux_generator(ctx, Ok(self.aux_generator))?;
         ecc_chip.assign_aux(ctx, self.window_size, 1)?;
         Ok(())
     }
@@ -365,9 +364,9 @@ impl<F: Field, const MAX_VERIF: usize> SignVerifyChip<F, MAX_VERIF> {
             ecdsa_chip,
         } = chips;
 
-        let integer_r = ecc_chip.new_unassigned_scalar(Value::known(*sig_r));
-        let integer_s = ecc_chip.new_unassigned_scalar(Value::known(*sig_s));
-        let msg_hash = ecc_chip.new_unassigned_scalar(Value::known(*msg_hash));
+        let integer_r = ecc_chip.new_unassigned_scalar(Ok(*sig_r));
+        let integer_s = ecc_chip.new_unassigned_scalar(Ok(*sig_s));
+        let msg_hash = ecc_chip.new_unassigned_scalar(Ok(*msg_hash));
 
         let r_assigned = scalar_chip.assign_integer(ctx, integer_r, Range::Remainder)?;
         let s_assigned = scalar_chip.assign_integer(ctx, integer_s, Range::Remainder)?;
@@ -376,7 +375,7 @@ impl<F: Field, const MAX_VERIF: usize> SignVerifyChip<F, MAX_VERIF> {
             s: s_assigned,
         };
 
-        let pk_in_circuit = ecc_chip.assign_point(ctx, Value::known(*pk))?;
+        let pk_in_circuit = ecc_chip.assign_point(ctx, Ok(*pk))?;
         let pk_assigned = AssignedPublicKey {
             point: pk_in_circuit,
         };
@@ -461,7 +460,7 @@ impl<F: Field, const MAX_VERIF: usize> SignVerifyChip<F, MAX_VERIF> {
             || "msg_hash_rlc",
             config.msg_hash_rlc,
             offset,
-            || Value::known(msg_hash_rlc),
+            || Ok(msg_hash_rlc),
         )?;
 
         // Assign pk
@@ -471,7 +470,7 @@ impl<F: Field, const MAX_VERIF: usize> SignVerifyChip<F, MAX_VERIF> {
                 || format!("pk x byte {}", i),
                 config.pk[0][i],
                 offset,
-                || Value::known(F::from(*byte as u64)),
+                || Ok(F::from(*byte as u64)),
             )?;
         }
         for (i, byte) in pk_le[32..].iter().enumerate() {
@@ -479,7 +478,7 @@ impl<F: Field, const MAX_VERIF: usize> SignVerifyChip<F, MAX_VERIF> {
                 || format!("pk y byte {}", i),
                 config.pk[1][i],
                 offset,
-                || Value::known(F::from(*byte as u64)),
+                || Ok(F::from(*byte as u64)),
             )?;
         }
 
@@ -496,7 +495,7 @@ impl<F: Field, const MAX_VERIF: usize> SignVerifyChip<F, MAX_VERIF> {
                 || format!("pk_hash byte {}", i),
                 config.pk_hash[i],
                 offset,
-                || Value::known(F::from(*byte as u64)),
+                || Ok(F::from(*byte as u64)),
             )?;
         }
 
@@ -506,9 +505,9 @@ impl<F: Field, const MAX_VERIF: usize> SignVerifyChip<F, MAX_VERIF> {
             || "address",
             config.address,
             offset,
-            || Value::known(address),
+            || Ok(address),
         )?;
-        address_is_zero_chip.assign(region, offset, Value::known(address))?;
+        address_is_zero_chip.assign(region, offset, Ok(address))?;
 
         // Assign msg_hash
         for (i, byte) in msg_hash_le.iter().enumerate() {
@@ -516,7 +515,7 @@ impl<F: Field, const MAX_VERIF: usize> SignVerifyChip<F, MAX_VERIF> {
                 || format!("msg_hash byte {}", i),
                 config.msg_hash[i],
                 offset,
-                || Value::known(F::from(*byte as u64)),
+                || Ok(F::from(*byte as u64)),
             )?;
         }
 
@@ -631,6 +630,7 @@ fn pub_key_hash_to_address<F: Field>(pk_hash: &[u8]) -> F {
         .fold(F::zero(), |acc, b| acc * F::from(256) + F::from(*b as u64))
 }
 
+/*
 #[cfg(test)]
 mod sign_verify_tests {
     use super::*;
@@ -641,7 +641,7 @@ mod sign_verify_tests {
     use halo2_proofs::{
         circuit::SimpleFloorPlanner,
         dev::MockProver,
-        halo2curves::{
+        pairing::{
             bn256::Fr,
             group::{Curve, Group},
             CurveAffine,
@@ -795,3 +795,4 @@ mod sign_verify_tests {
         run::<Fr, MAX_VERIF>(k, signatures);
     }
 }
+ */

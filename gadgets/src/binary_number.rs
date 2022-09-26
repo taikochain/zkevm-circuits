@@ -5,7 +5,7 @@
 use crate::util::{and, not, Expr};
 use eth_types::Field;
 use halo2_proofs::{
-    circuit::{Region, Value},
+    circuit::Region,
     plonk::{Advice, Column, ConstraintSystem, Error, Expression, Fixed, VirtualCells},
     poly::Rotation,
 };
@@ -180,7 +180,7 @@ where
                 || format!("binary number {:?}", column),
                 column,
                 offset,
-                || Value::known(F::from(bit)),
+                || Ok(F::from(bit)),
             )?;
         }
         Ok(())

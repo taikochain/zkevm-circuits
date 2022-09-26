@@ -13,7 +13,7 @@ use crate::{evm_circuit::util::constraint_builder::BaseConstraintBuilder, util::
 use eth_types::Field;
 use gadgets::util::{and, select, sum};
 use halo2_proofs::{
-    circuit::{Layouter, Region, SimpleFloorPlanner, Value},
+    circuit::{Layouter, Region, SimpleFloorPlanner},
     plonk::{
         Advice, Circuit, Column, ConstraintSystem, Error, Expression, Fixed, TableColumn,
         VirtualCells,
@@ -1269,7 +1269,7 @@ impl<F: Field> KeccakPackedConfig<F> {
                 || format!("assign {} {}", name, offset),
                 *column,
                 offset,
-                || Value::known(*value),
+                || Ok(*value),
             )?;
         }
 
@@ -1292,7 +1292,7 @@ impl<F: Field> KeccakPackedConfig<F> {
                 || format!("assign {} {}", name, offset),
                 *column,
                 offset,
-                || Value::known(*value),
+                || Ok(*value),
             )?;
         }
 
@@ -1302,7 +1302,7 @@ impl<F: Field> KeccakPackedConfig<F> {
                 || format!("assign state word {} {}", idx, offset),
                 *column,
                 offset,
-                || Value::known(*word),
+                || Ok(*word),
             )?;
         }
 
@@ -1317,7 +1317,7 @@ impl<F: Field> KeccakPackedConfig<F> {
                 || format!("assign lookup value {} {}", idx, offset),
                 *column,
                 offset,
-                || Value::known(*bit),
+                || Ok(*bit),
             )?;
         }
 
@@ -1326,7 +1326,7 @@ impl<F: Field> KeccakPackedConfig<F> {
             || format!("assign round cst {}", offset),
             self.round_cst,
             offset,
-            || Value::known(pack_u64::<F>(ROUND_CST[round])),
+            || Ok(pack_u64::<F>(ROUND_CST[round])),
         )?;
 
         Ok(())

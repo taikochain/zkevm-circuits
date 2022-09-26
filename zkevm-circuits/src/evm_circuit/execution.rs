@@ -16,7 +16,7 @@ use crate::{
 use eth_types::Field;
 use halo2_proofs::{
     arithmetic::FieldExt,
-    circuit::{Layouter, Region, Value},
+    circuit::{Layouter, Region},
     plonk::{Advice, Column, ConstraintSystem, Error, Expression, Selector, VirtualCells},
     poly::Rotation,
 };
@@ -778,7 +778,7 @@ impl<F: Field> ExecutionConfig<F> {
                             || "step selector",
                             self.q_step,
                             offset,
-                            || Value::known(if idx == 0 { F::one() } else { F::zero() }),
+                            || Ok(if idx == 0 { F::one() } else { F::zero() }),
                         )?;
                         let value = if idx == 0 {
                             F::zero()
@@ -789,13 +789,13 @@ impl<F: Field> ExecutionConfig<F> {
                             || "step height",
                             self.num_rows_until_next_step,
                             offset,
-                            || Value::known(value),
+                            || Ok(value),
                         )?;
                         region.assign_advice(
                             || "step height inv",
                             self.num_rows_inv,
                             offset,
-                            || Value::known(value.invert().unwrap_or(F::zero())),
+                            || Ok(value.invert().unwrap_or(F::zero())),
                         )?;
                     }
 
@@ -828,13 +828,13 @@ impl<F: Field> ExecutionConfig<F> {
                     || "step height",
                     self.num_rows_until_next_step,
                     offset,
-                    || Value::known(F::zero()),
+                    || Ok(F::zero()),
                 )?;
                 region.assign_advice(
                     || "step height inv",
                     self.q_step,
                     offset,
-                    || Value::known(F::zero()),
+                    || Ok(F::zero()),
                 )?;
 
                 self.q_step_last.enable(&mut region, offset - last_height)?;

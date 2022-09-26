@@ -1,19 +1,13 @@
 //! secp256k1 signature types and helper functions.
 
 use crate::{ToBigEndian, Word};
-use halo2_proofs::{
-    arithmetic::{CurveAffine, FieldExt},
-    halo2curves::{
-        group::{
-            ff::{Field as GroupField, PrimeField},
-            Curve,
-        },
-        secp256k1::{self, Secp256k1Affine},
-        Coordinates,
-    },
-};
+use ff::PrimeField;
+use group::{ff::Field as GroupField, prime::PrimeCurveAffine, Curve, GroupEncoding};
+use halo2_proofs::arithmetic::{BaseExt, Coordinates, CurveAffine};
 use lazy_static::lazy_static;
 use num_bigint::BigUint;
+use secp256k1::Secp256k1Affine;
+use std::io::Cursor;
 use subtle::CtOption;
 
 /// Do a secp256k1 signature with a given randomness value.
@@ -30,8 +24,10 @@ pub fn sign(
         .expect("point is the identity")
         .x();
 
-    let x_repr = &mut vec![0u8; 32];
-    x_repr.copy_from_slice(x.to_bytes().as_slice());
+
+    let x_repr = &mut Vec::with_capacity(32);
+    x.write(x_repr).expect("cannot write bytes to array");
+
 
     let mut x_bytes = [0u8; 64];
     x_bytes[..32].copy_from_slice(&x_repr[..]);
@@ -106,18 +102,10 @@ pub fn recover_pk(
     let pk = libsecp256k1::recover(&msg_hash, &signature, &recovery_id)?;
     let pk_be = pk.serialize();
     let pk_le = pk_bytes_swap_endianness(&pk_be[1..]);
-    let x = ct_option_ok_or(
-        secp256k1::Fp::from_bytes(pk_le[..32].try_into().unwrap()),
-        libsecp256k1::Error::InvalidPublicKey,
-    )?;
-    let y = ct_option_ok_or(
-        secp256k1::Fp::from_bytes(pk_le[32..].try_into().unwrap()),
-        libsecp256k1::Error::InvalidPublicKey,
-    )?;
-    ct_option_ok_or(
-        Secp256k1Affine::from_xy(x, y),
-        libsecp256k1::Error::InvalidPublicKey,
-    )
+    let mut pk_bytes = secp256k1::Serialized::default();
+    pk_bytes.as_mut().copy_from_slice(&pk_le[..]);
+    let pk = Secp256k1Affine::from_bytes(&pk_bytes);
+    ct_option_ok_or(pk, libsecp256k1::Error::InvalidPublicKey)
 }
 
 lazy_static! {
@@ -147,7 +135,13 @@ pub fn pk_bytes_swap_endianness<T: Clone>(pk: &[T]) -> [T; 64] {
 pub fn pk_bytes_le(pk: &Secp256k1Affine) -> [u8; 64] {
     let pk_coord = Option::<Coordinates<_>>::from(pk.coordinates()).expect("point is the identity");
     let mut pk_le = [0u8; 64];
-    pk_le[..32].copy_from_slice(&pk_coord.x().to_bytes());
-    pk_le[32..].copy_from_slice(&pk_coord.y().to_bytes());
+    pk_coord
+        .x()
+        .write(&mut Cursor::new(&mut pk_le[..32]))
+        .expect("cannot write bytes to array");
+    pk_coord
+        .y()
+        .write(&mut Cursor::new(&mut pk_le[32..]))
+        .expect("cannot write bytes to array");
     pk_le
 }

@@ -18,7 +18,6 @@ use crate::{
     util::Expr,
 };
 use eth_types::{evm_types::GasCost, Field, ToLittleEndian, ToScalar};
-use halo2_proofs::circuit::Value;
 use halo2_proofs::plonk::Error;
 
 #[derive(Clone, Debug)]
@@ -226,11 +225,11 @@ impl<F: Field> ExecutionGadget<F> for BeginTxGadget<F> {
                 .map(|idx| block.rws[idx].account_value_pair());
 
         self.tx_id
-            .assign(region, offset, Value::known(F::from(tx.id as u64)))?;
+            .assign(region, offset, Ok(F::from(tx.id as u64)))?;
         self.tx_nonce
-            .assign(region, offset, Value::known(F::from(tx.nonce)))?;
+            .assign(region, offset, Ok(F::from(tx.nonce)))?;
         self.tx_gas
-            .assign(region, offset, Value::known(F::from(tx.gas)))?;
+            .assign(region, offset, Ok(F::from(tx.gas)))?;
         self.tx_gas_price
             .assign(region, offset, Some(tx.gas_price.to_le_bytes()))?;
         self.mul_gas_fee_by_gas
@@ -238,7 +237,7 @@ impl<F: Field> ExecutionGadget<F> for BeginTxGadget<F> {
         self.tx_caller_address.assign(
             region,
             offset,
-            Value::known(
+            Ok(
                 tx.caller_address
                     .to_scalar()
                     .expect("unexpected Address -> Scalar conversion failure"),
@@ -247,23 +246,23 @@ impl<F: Field> ExecutionGadget<F> for BeginTxGadget<F> {
         self.tx_callee_address.assign(
             region,
             offset,
-            Value::known(
+            Ok(
                 tx.callee_address
                     .to_scalar()
                     .expect("unexpected Address -> Scalar conversion failure"),
             ),
         )?;
         self.tx_is_create
-            .assign(region, offset, Value::known(F::from(tx.is_create as u64)))?;
+            .assign(region, offset, Ok(F::from(tx.is_create as u64)))?;
         self.tx_call_data_length.assign(
             region,
             offset,
-            Value::known(F::from(tx.call_data_length as u64)),
+            Ok(F::from(tx.call_data_length as u64)),
         )?;
         self.tx_call_data_gas_cost.assign(
             region,
             offset,
-            Value::known(F::from(tx.call_data_gas_cost)),
+            Ok(F::from(tx.call_data_gas_cost)),
         )?;
         self.reversion_info.assign(
             region,
@@ -284,7 +283,7 @@ impl<F: Field> ExecutionGadget<F> for BeginTxGadget<F> {
         self.code_hash.assign(
             region,
             offset,
-            Value::known(RandomLinearCombination::random_linear_combine(
+            Ok(RandomLinearCombination::random_linear_combine(
                 callee_code_hash.to_le_bytes(),
                 block.randomness,
             )),

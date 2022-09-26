@@ -27,7 +27,7 @@ use eth_types::{
     evm_types::{GasCost, GAS_STIPEND_CALL_WITH_VALUE},
     Field, ToLittleEndian, ToScalar,
 };
-use halo2_proofs::{circuit::Value, plonk::Error};
+use halo2_proofs::{plonk::Error};
 use keccak256::EMPTY_HASH_LE;
 
 #[derive(Clone, Debug)]
@@ -371,10 +371,10 @@ impl<F: Field> ExecutionGadget<F> for CallGadget<F> {
 
         let opcode = step.opcode.unwrap();
         self.opcode
-            .assign(region, offset, Value::known(F::from(opcode.as_u64())))?;
+            .assign(region, offset, Ok(F::from(opcode.as_u64())))?;
 
         self.tx_id
-            .assign(region, offset, Value::known(F::from(tx_id.low_u64())))?;
+            .assign(region, offset, Ok(F::from(tx_id.low_u64())))?;
         self.reversion_info.assign(
             region,
             offset,
@@ -384,16 +384,16 @@ impl<F: Field> ExecutionGadget<F> for CallGadget<F> {
         self.current_address.assign(
             region,
             offset,
-            Value::known(
+            Ok(
                 current_address
                     .to_scalar()
                     .expect("unexpected Address -> Scalar conversion failure"),
             ),
         )?;
         self.is_static
-            .assign(region, offset, Value::known(F::from(is_static.low_u64())))?;
+            .assign(region, offset, Ok(F::from(is_static.low_u64())))?;
         self.depth
-            .assign(region, offset, Value::known(F::from(depth.low_u64())))?;
+            .assign(region, offset, Ok(F::from(depth.low_u64())))?;
 
         self.gas.assign(region, offset, Some(gas.to_le_bytes()))?;
         self.callee_address
@@ -401,16 +401,16 @@ impl<F: Field> ExecutionGadget<F> for CallGadget<F> {
         self.value
             .assign(region, offset, Some(value.to_le_bytes()))?;
         self.is_success
-            .assign(region, offset, Value::known(F::from(is_success.low_u64())))?;
+            .assign(region, offset, Ok(F::from(is_success.low_u64())))?;
         self.gas_is_u64.assign(
             region,
             offset,
             sum::value(&gas.to_le_bytes()[N_BYTES_GAS..]),
         )?;
         self.is_warm
-            .assign(region, offset, Value::known(F::from(is_warm as u64)))?;
+            .assign(region, offset, Ok(F::from(is_warm as u64)))?;
         self.is_warm_prev
-            .assign(region, offset, Value::known(F::from(is_warm_prev as u64)))?;
+            .assign(region, offset, Ok(F::from(is_warm_prev as u64)))?;
         self.callee_reversion_info.assign(
             region,
             offset,
@@ -441,7 +441,7 @@ impl<F: Field> ExecutionGadget<F> for CallGadget<F> {
         self.callee_nonce.assign(
             region,
             offset,
-            Value::known(
+            Ok(
                 callee_nonce
                     .to_scalar()
                     .expect("unexpected U256 -> Scalar conversion failure"),
@@ -450,7 +450,7 @@ impl<F: Field> ExecutionGadget<F> for CallGadget<F> {
         self.callee_code_hash.assign(
             region,
             offset,
-            Value::known(Word::random_linear_combine(
+            Ok(Word::random_linear_combine(
                 callee_code_hash.to_le_bytes(),
                 block.randomness,
             )),

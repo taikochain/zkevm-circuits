@@ -2,7 +2,7 @@
 
 use eth_types::{Field, ToScalar, Word};
 use halo2_proofs::{
-    circuit::{Layouter, Value},
+    circuit::{Layouter},
     plonk::{Error, TableColumn},
 };
 use itertools::Itertools;
@@ -374,13 +374,13 @@ pub fn load_normalize_table<F: Field>(
                     || format!("{} input", name),
                     tables[0],
                     offset,
-                    || Value::known(F::from(input)),
+                    || Ok(F::from(input)),
                 )?;
                 table.assign_cell(
                     || format!("{} output", name),
                     tables[1],
                     offset,
-                    || Value::known(F::from(output)),
+                    || Ok(F::from(output)),
                 )?;
             }
             Ok(())
@@ -401,10 +401,10 @@ pub fn load_pack_table<F: Field>(
                     || "unpacked",
                     tables[0],
                     offset,
-                    || Value::known(F::from(idx)),
+                    || Ok(F::from(idx)),
                 )?;
                 let packed: F = pack(&into_bits(&[idx as u8]));
-                table.assign_cell(|| "packed", tables[1], offset, || Value::known(packed))?;
+                table.assign_cell(|| "packed", tables[1], offset, || Ok(packed))?;
             }
             Ok(())
         },
@@ -439,13 +439,13 @@ pub fn load_lookup_table<F: Field>(
                     || format!("{} input", name),
                     tables[0],
                     offset,
-                    || Value::known(F::from(input)),
+                    || Ok(F::from(input)),
                 )?;
                 table.assign_cell(
                     || format!("{} output", name),
                     tables[1],
                     offset,
-                    || Value::known(F::from(output)),
+                    || Ok(F::from(output)),
                 )?;
             }
             Ok(())

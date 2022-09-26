@@ -79,11 +79,11 @@ use eth_types::{
 
 use eth_types::geth_types::{self, GethData};
 use halo2_proofs::arithmetic::{CurveAffine, Field as Halo2Field};
-use halo2_proofs::halo2curves::{
+use halo2_proofs::pairing::{
     bn256::Fr,
     group::{Curve, Group},
-    secp256k1::Secp256k1Affine,
 };
+use secp256k1::Secp256k1Affine;
 use rand::RngCore;
 use strum::IntoEnumIterator;
 

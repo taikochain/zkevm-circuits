@@ -10,7 +10,7 @@ use eth_types::{Field, ToAddress, ToLittleEndian, ToScalar, Word, U256};
 use gadgets::binary_number::{BinaryNumberChip, BinaryNumberConfig};
 use halo2_proofs::{
     arithmetic::FieldExt,
-    circuit::{Region, Value},
+    circuit::{Region},
     plonk::{Advice, Column, ConstraintSystem, Error},
 };
 use halo2_proofs::{circuit::Layouter, plonk::*, poly::Rotation};
@@ -125,7 +125,7 @@ impl TxTable {
                         || "tx table all-zero row",
                         column,
                         offset,
-                        || Value::known(F::zero()),
+                        || Ok(F::zero()),
                     )?;
                 }
                 offset += 1;
@@ -138,7 +138,7 @@ impl TxTable {
                                 || format!("tx table row {}", offset),
                                 *column,
                                 offset,
-                                || Value::known(value),
+                                || Ok(value),
                             )?;
                         }
                         offset += 1;
@@ -387,7 +387,7 @@ impl RwTable {
                 || "assign rw row on rw table",
                 column,
                 offset,
-                || Value::known(value),
+                || Ok(value),
             )?;
         }
         Ok(())
@@ -479,7 +479,7 @@ impl BytecodeTable {
                         || "bytecode table all-zero row",
                         column,
                         offset,
-                        || Value::known(F::zero()),
+                        || Ok(F::zero()),
                     )?;
                 }
                 offset += 1;
@@ -492,7 +492,7 @@ impl BytecodeTable {
                                 || format!("bytecode table row {}", offset),
                                 *column,
                                 offset,
-                                || Value::known(value),
+                                || Ok(value),
                             )?;
                         }
                         offset += 1;
@@ -577,7 +577,7 @@ impl BlockTable {
                         || "block table all-zero row",
                         column,
                         offset,
-                        || Value::known(F::zero()),
+                        || Ok(F::zero()),
                     )?;
                 }
                 offset += 1;
@@ -589,7 +589,7 @@ impl BlockTable {
                             || format!("block table row {}", offset),
                             *column,
                             offset,
-                            || Value::known(value),
+                            || Ok(value),
                         )?;
                     }
                     offset += 1;
@@ -658,7 +658,7 @@ impl KeccakTable {
                 || format!("assign {}", offset),
                 *column,
                 offset,
-                || Value::known(*value),
+                || Ok(*value),
             )?;
         }
         Ok(())
@@ -681,7 +681,7 @@ impl KeccakTable {
                         || "keccak table all-zero row",
                         column,
                         offset,
-                        || Value::known(F::zero()),
+                        || Ok(F::zero()),
                     )?;
                 }
                 offset += 1;
@@ -695,7 +695,7 @@ impl KeccakTable {
                                 || format!("keccak table row {}", offset),
                                 *column,
                                 offset,
-                                || Value::known(value),
+                                || Ok(value),
                             )?;
                         }
                         offset += 1;
@@ -842,7 +842,7 @@ impl CopyTable {
                         || "copy table all-zero row",
                         column,
                         offset,
-                        || Value::known(F::zero()),
+                        || Ok(F::zero()),
                     )?;
                 }
                 offset += 1;
@@ -856,7 +856,7 @@ impl CopyTable {
                                 || format!("copy table row {}", offset),
                                 *column,
                                 offset,
-                                || Value::known(value),
+                                || Ok(value),
                             )?;
                         }
                         tag_chip.assign(&mut region, offset, &tag)?;

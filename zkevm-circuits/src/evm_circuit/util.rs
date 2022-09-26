@@ -8,7 +8,7 @@ use crate::{
 use eth_types::U256;
 use halo2_proofs::{
     arithmetic::FieldExt,
-    circuit::{AssignedCell, Region, Value},
+    circuit::{AssignedCell, Region},
     plonk::{Advice, Assigned, Column, ConstraintSystem, Error, Expression, VirtualCells},
     poly::Rotation,
 };
@@ -174,7 +174,7 @@ impl<F: FieldExt> StoredExpression<F> {
             &|a, b| a * b,
             &|a, scalar| a * scalar,
         );
-        self.cell.assign(region, offset, Value::known(value))
+        self.cell.assign(region, offset, Ok(value))
     }
 }
 
@@ -350,7 +350,7 @@ impl<F: FieldExt, const N: usize> RandomLinearCombination<F, N> {
                 .iter()
                 .zip(bytes.iter())
                 .map(|(cell, byte)| {
-                    cell.assign(region, offset, Value::known(F::from(*byte as u64)))
+                    cell.assign(region, offset, Ok(F::from(*byte as u64)))
                 })
                 .collect()
         })

@@ -14,7 +14,7 @@ use crate::{
 };
 use bus_mapping::evm::OpcodeId;
 use eth_types::{Field, ToLittleEndian};
-use halo2_proofs::{circuit::Value, plonk::Error};
+use halo2_proofs::{plonk::Error};
 
 #[derive(Clone, Debug)]
 pub(crate) struct ChainIdGadget<F> {
@@ -68,7 +68,7 @@ impl<F: Field> ExecutionGadget<F> for ChainIdGadget<F> {
         self.chain_id.assign(
             region,
             offset,
-            Value::known(Word::random_linear_combine(
+            Ok(Word::random_linear_combine(
                 chain_id.to_le_bytes(),
                 block.randomness,
             )),

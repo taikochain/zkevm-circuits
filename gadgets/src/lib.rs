@@ -20,7 +20,7 @@ pub mod util;
 
 use eth_types::Field;
 use halo2_proofs::{
-    circuit::{AssignedCell, Value},
+    circuit::{AssignedCell},
     plonk::Expression,
 };
 
@@ -29,11 +29,11 @@ use halo2_proofs::{
 #[derive(Clone, Debug)]
 pub struct Variable<T, F: Field> {
     assig_cell: AssignedCell<F, F>,
-    value: Value<T>,
+    value: Option<T>,
 }
 
 impl<T, F: Field> Variable<T, F> {
-    pub(crate) fn new(assig_cell: AssignedCell<F, F>, value: Value<T>) -> Self {
+    pub(crate) fn new(assig_cell: AssignedCell<F, F>, value: Option<T>) -> Self {
         Self { assig_cell, value }
     }
 }

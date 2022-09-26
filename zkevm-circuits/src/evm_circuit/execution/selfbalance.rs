@@ -14,7 +14,7 @@ use crate::{
 };
 use bus_mapping::evm::OpcodeId;
 use eth_types::{Field, ToLittleEndian, ToScalar};
-use halo2_proofs::{circuit::Value, plonk::Error};
+use halo2_proofs::{plonk::Error};
 
 #[derive(Clone, Debug)]
 pub(crate) struct SelfbalanceGadget<F> {
@@ -71,7 +71,7 @@ impl<F: Field> ExecutionGadget<F> for SelfbalanceGadget<F> {
         self.callee_address.assign(
             region,
             offset,
-            Value::known(
+            Ok(
                 call.callee_address
                     .to_scalar()
                     .expect("unexpected Address -> Scalar conversion failure"),
@@ -82,7 +82,7 @@ impl<F: Field> ExecutionGadget<F> for SelfbalanceGadget<F> {
         self.self_balance.assign(
             region,
             offset,
-            Value::known(Word::random_linear_combine(
+            Ok(Word::random_linear_combine(
                 self_balance.to_le_bytes(),
                 block.randomness,
             )),
