@@ -11,6 +11,7 @@ use eth_types::{
 };
 use halo2_proofs::plonk::Instance;
 
+use crate::compress_circuit::{CompressCircuitConfig, CompressCircuitConfigArgs};
 use crate::table::BlockTable;
 use crate::table::TxFieldTag;
 use crate::table::TxTable;
@@ -178,10 +179,8 @@ pub struct PiCircuitConfig<F: Field> {
     is_final: Column<Advice>,
 
     raw_public_inputs: Column<Advice>,
-    rpi_rlc_acc: Column<Advice>,
-    rand_rpi: Column<Advice>,
-    q_not_end: Selector,
-    q_end: Selector,
+    // compress circuit
+    compress_circuit: CompressCircuitConfig<F>,
 
     pi: Column<Instance>, // rpi_rand, rpi_rlc, chain_ID, state_root, prev_state_root
 
@@ -238,51 +237,12 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
         let is_final = meta.advice_column();
 
         let raw_public_inputs = meta.advice_column();
-        let rpi_rlc_acc = meta.advice_column();
-        let rand_rpi = meta.advice_column();
-        let q_not_end = meta.selector();
-        let q_end = meta.selector();
 
         let pi = meta.instance_column();
 
         meta.enable_equality(raw_public_inputs);
-        meta.enable_equality(rpi_rlc_acc);
-        meta.enable_equality(rand_rpi);
+
         meta.enable_equality(pi);
-
-        // 0.0 rpi_rlc_acc[0] == RLC(raw_public_inputs, rand_rpi)
-        meta.create_gate(
-            "rpi_rlc_acc[i] = rand_rpi * rpi_rlc_acc[i+1] + raw_public_inputs[i]",
-            |meta| {
-                // q_not_end * row.rpi_rlc_acc ==
-                // (q_not_end * row_next.rpi_rlc_acc * row.rand_rpi + row.raw_public_inputs )
-                let q_not_end = meta.query_selector(q_not_end);
-                let cur_rpi_rlc_acc = meta.query_advice(rpi_rlc_acc, Rotation::cur());
-                let next_rpi_rlc_acc = meta.query_advice(rpi_rlc_acc, Rotation::next());
-                let rand_rpi = meta.query_advice(rand_rpi, Rotation::cur());
-                let raw_public_inputs = meta.query_advice(raw_public_inputs, Rotation::cur());
-
-                vec![
-                    q_not_end * (next_rpi_rlc_acc * rand_rpi + raw_public_inputs - cur_rpi_rlc_acc),
-                ]
-            },
-        );
-        meta.create_gate("rpi_rlc_acc[last] = raw_public_inputs[last]", |meta| {
-            let q_end = meta.query_selector(q_end);
-            let raw_public_inputs = meta.query_advice(raw_public_inputs, Rotation::cur());
-            let rpi_rlc_acc = meta.query_advice(rpi_rlc_acc, Rotation::cur());
-            vec![q_end * (raw_public_inputs - rpi_rlc_acc)]
-        });
-
-        // 0.1 rand_rpi[i] == rand_rpi[j]
-        meta.create_gate("rand_pi = rand_rpi.next", |meta| {
-            // q_not_end * row.rand_rpi == q_not_end * row_next.rand_rpi
-            let q_not_end = meta.query_selector(q_not_end);
-            let cur_rand_rpi = meta.query_advice(rand_rpi, Rotation::cur());
-            let next_rand_rpi = meta.query_advice(rand_rpi, Rotation::next());
-
-            vec![q_not_end * (cur_rand_rpi - next_rand_rpi)]
-        });
 
         // 0.2 Block table -> value column match with raw_public_inputs at expected
         // offset
@@ -519,6 +479,9 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
             ]
         });
 
+        let compress_circuit =
+            CompressCircuitConfig::new(meta, CompressCircuitConfigArgs { raw_public_inputs });
+
         Self {
             max_txs,
             max_calldata,
@@ -535,11 +498,8 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
             calldata_gas_cost,
             is_final,
             raw_public_inputs,
-            rpi_rlc_acc,
-            rand_rpi,
-            q_not_end,
-            q_end,
             pi,
+            compress_circuit,
             _marker: PhantomData,
         }
     }
@@ -1024,62 +984,15 @@ impl<F: Field> PiCircuitConfig<F> {
     #[allow(clippy::type_complexity)]
     fn assign_rlc_pi(
         &self,
-        region: &mut Region<'_, F>,
-        rand_rpi: F,
+        layouter: &mut impl Layouter<F>,
+        rand_cpi: F,
         raw_pi_vals: Vec<F>,
     ) -> Result<(AssignedCell<F, F>, AssignedCell<F, F>), Error> {
         let circuit_len = self.circuit_len();
         assert_eq!(circuit_len, raw_pi_vals.len());
 
-        // Last row
-        let offset = circuit_len - 1;
-        let mut rpi_rlc_acc = raw_pi_vals[offset];
-        region.assign_advice(
-            || "rpi_rlc_acc",
-            self.rpi_rlc_acc,
-            offset,
-            || Value::known(rpi_rlc_acc),
-        )?;
-        region.assign_advice(
-            || "rand_rpi",
-            self.rand_rpi,
-            offset,
-            || Value::known(rand_rpi),
-        )?;
-        self.q_end.enable(region, offset)?;
-
-        // Next rows
-        for offset in (1..circuit_len - 1).rev() {
-            rpi_rlc_acc *= rand_rpi;
-            rpi_rlc_acc += raw_pi_vals[offset];
-            region.assign_advice(
-                || "rpi_rlc_acc",
-                self.rpi_rlc_acc,
-                offset,
-                || Value::known(rpi_rlc_acc),
-            )?;
-            region.assign_advice(
-                || "rand_rpi",
-                self.rand_rpi,
-                offset,
-                || Value::known(rand_rpi),
-            )?;
-            self.q_not_end.enable(region, offset)?;
-        }
-
-        // First row
-        rpi_rlc_acc *= rand_rpi;
-        rpi_rlc_acc += raw_pi_vals[0];
-        let rpi_rlc = region.assign_advice(
-            || "rpi_rlc_acc",
-            self.rpi_rlc_acc,
-            0,
-            || Value::known(rpi_rlc_acc),
-        )?;
-        let rpi_rand =
-            region.assign_advice(|| "rand_rpi", self.rand_rpi, 0, || Value::known(rand_rpi))?;
-        self.q_not_end.enable(region, 0)?;
-        Ok((rpi_rand, rpi_rlc))
+        self.compress_circuit
+            .assign(layouter, rand_cpi, raw_pi_vals)
     }
 }
 
@@ -1144,6 +1057,7 @@ impl<F: Field> SubCircuit<F> for PiCircuit<F> {
     }
 
     /// Compute the public inputs for this circuit.
+    // TODO: use compressed_rlc_public_inputs
     fn instance(&self) -> Vec<Vec<F>> {
         let rlc_rpi_col = raw_public_inputs_col::<F>(
             self.max_txs,
@@ -1206,7 +1120,7 @@ impl<F: Field> SubCircuit<F> for PiCircuit<F> {
                 Ok(())
             },
         )?;
-        let pi_cells = layouter.assign_region(
+        let (pi_cells, raw_pi_vals) = layouter.assign_region(
             || "region 0",
             |mut region| {
                 let circuit_len = config.circuit_len();
@@ -1358,22 +1272,17 @@ impl<F: Field> SubCircuit<F> for PiCircuit<F> {
                 let tx_table_len = TX_LEN * self.max_txs + 1;
                 config.assign_tx_empty_row(&mut region, tx_table_len + offset)?;
 
-                // rpi_rlc and rand_rpi cols
-                let (rpi_rand, rpi_rlc) =
-                    config.assign_rlc_pi(&mut region, self.rand_rpi, raw_pi_vals)?;
-
-                Ok(vec![
-                    rpi_rand,
-                    rpi_rlc,
-                    chain_id,
-                    state_root,
-                    prev_state_root,
-                ])
+                Ok((vec![chain_id, state_root, prev_state_root], raw_pi_vals))
             },
         )?;
-
+        // cpi_rlc and rand_cpi cols
+        let (cpi_rand, cpi_rlc) = config.assign_rlc_pi(layouter, self.rand_rpi, raw_pi_vals)?;
         // Constrain raw_public_input cells to public inputs
-        for (i, pi_cell) in pi_cells.iter().enumerate() {
+        for (i, pi_cell) in [cpi_rand, cpi_rlc]
+            .iter()
+            .chain(pi_cells.iter())
+            .enumerate()
+        {
             layouter.constrain_instance(pi_cell.cell(), config.pi, i)?;
         }
 
