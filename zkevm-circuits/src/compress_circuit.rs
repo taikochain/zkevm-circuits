@@ -13,6 +13,7 @@ use lazy_static::lazy_static;
 use std::marker::PhantomData;
 
 lazy_static! {
+    // TODO: maybe fixed huffman table will get from witness
     static ref FIXED_HUFFMAN_TABLE: [BitVec; 256] = [(); 256].map(|_| BitVec::new());
 }
 
@@ -265,7 +266,7 @@ impl<F: Field> CompressCircuitConfig<F> {
                     || Value::known(rand_cpi),
                 )?;
                 self.q_end.enable(&mut region, offset)?;
-
+                self.q_enable.enable(&mut region, offset)?;
                 // Next rows
                 for offset in (1..offset).rev() {
                     cpi_rlc_acc *= rand_cpi;
@@ -282,6 +283,7 @@ impl<F: Field> CompressCircuitConfig<F> {
                         offset,
                         || Value::known(rand_cpi),
                     )?;
+                    self.q_enable.enable(&mut region, offset)?;
                 }
 
                 // First row
@@ -299,6 +301,7 @@ impl<F: Field> CompressCircuitConfig<F> {
                     0,
                     || Value::known(rand_cpi),
                 )?;
+                self.q_enable.enable(&mut region, 0)?;
                 Ok((cpi_rand, cpi_rlc))
             },
         )
