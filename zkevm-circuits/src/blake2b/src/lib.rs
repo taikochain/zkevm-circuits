@@ -127,9 +127,11 @@ pub fn digest(hash :&mut [u8], msg: &[u8], key: &[u8]) {
     h[0] ^= 0x0101_0000 ^ ((key.len() as u64) << 8) ^ (hash.len() as u64);
 
     let mut t = 0u128;
-    let s = key.len() > 0;
-    let e = msg.len() == 0;
-    let mut b = [0u64; 16];
+    
+    
+    let s = key.len() > 0;    // "Secret key is used" flag
+    let e = msg.len() == 0;   // "Empty message" flag
+    let mut b = [0u64; 16];   // Buffer to store the data passed to "compress"
 
     if s { 
         save_bytes(&mut b, key);
