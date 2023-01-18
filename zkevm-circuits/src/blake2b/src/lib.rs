@@ -125,14 +125,12 @@ pub fn digest(hash :&mut [u8], msg: &[u8], key: &[u8]) {
     let mut h = IV;
 
     h[0] ^= 0x0101_0000 ^ ((key.len() as u64) << 8) ^ (hash.len() as u64);
-
-    let mut t = 0u128;
-    
-    
+   
     let with_key = key.len() > 0;
     let no_msg = msg.len() == 0;
     let mut b = [0u64; 16];
-
+    let mut t = 0u128; 
+    
     if with_key { 
         save_bytes(&mut b, key);
         t += 128;
