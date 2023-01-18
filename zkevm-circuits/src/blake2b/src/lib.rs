@@ -129,20 +129,20 @@ pub fn digest(hash :&mut [u8], msg: &[u8], key: &[u8]) {
     let mut t = 0u128;
     
     
-    let s = key.len() > 0;    // "Secret key is used" flag
-    let e = msg.len() == 0;   // "Empty message" flag
-    let mut b = [0u64; 16];   // Buffer to store the data passed to "compress"
+    let with_key = key.len() > 0;
+    let no_msg = msg.len() == 0;
+    let mut b = [0u64; 16];
 
-    if s { 
+    if with_key { 
         save_bytes(&mut b, key);
         t += 128;
     }
 
-    if s || e  { 
-        compress(&mut h, &b, t, e, R); 
+    if with_key || no_msg { 
+        compress(&mut h, &b, t, no_msg, R); 
     }              
 
-    if !e {
+    if !no_msg {
         let mut n = msg.len() / 128;
         if msg.len() % 128 == 0 { n -= 1; }
 
