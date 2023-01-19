@@ -1,6 +1,6 @@
 //! The compress circuit implementation.
 
-use crate::evm_circuit::util::from_bytes;
+use crate::evm_circuit::util::{from_bytes, rlc};
 use crate::util::{Expr, SubCircuitConfig};
 use bit_vec::BitVec;
 use eth_types::Field;
@@ -43,140 +43,206 @@ mod compress {
     }
 }
 
-mod rlc {
-    use crate::util::Expr;
-    use eth_types::Field;
-    use halo2_proofs::plonk::Expression;
+// mod rlc {
+//     use crate::util::Expr;
+//     use eth_types::Field;
+//     use halo2_proofs::plonk::Expression;
 
-    pub(crate) fn expr<F: Field>(
-        parts: [Expression<F>; 32],
-        randomness: Expression<F>,
-    ) -> Expression<F> {
-        parts
-            .into_iter()
-            .rev()
-            .fold(0.expr(), |acc, part| acc * randomness.clone() + part)
-    }
+//     pub(crate) fn expr<F: Field>(
+//         parts: [Expression<F>; 32],
+//         randomness: Expression<F>,
+//     ) -> Expression<F> {
+//         parts
+//             .into_iter()
+//             .rev()
+//             .fold(0.expr(), |acc, part| acc * randomness.clone() + part)
+//     }
 
-    pub(crate) fn value<F: Field>(src: [F; 32], randomness: F) -> F {
-        src.into_iter()
-            .rev()
-            .fold(F::zero(), |acc, part| acc * randomness + part)
-    }
-}
+//     pub(crate) fn value<F: Field>(src: [F; 32], randomness: F) -> F {
+//         src.into_iter()
+//             .rev()
+//             .fold(F::zero(), |acc, part| acc * randomness + part)
+//     }
+// }
 
 // layout
 // ```
-// | q_enable | q_end | rand_rpi | rpi0 | rpi1 | ... | rpi31 | cpi0 | cpi1 | ... | cpi31 |  cpi_rlc_acc | huffman_value | huffman_code |
-// ------------------------------------------------------------------------------------------------------------------------------------
-// | 1        | 0     | rand     |rpi[0]|rpi[1]| ... |rpc[31]|cpi[0]|cpi[1]| ... |cpi[31]| ........... | ............. | ............ |
-// | 1        | 1     | rand     |rpi[0]|rpi[1]| ... |rpc[31]|cpi[0]|cpi[1]| ... |cpi[31]| ........... | ............. | ............ |
+// | q_enable | q_first | q_origin_end |q_end | randomness | origin_rpi_rlc_acc | raw_public_inputs | rpi_rlc_acc      | compressed_public_inputs | cpi_rlc_acc      |cpi_code_length | cpi_rlc_length | huffman_value | huffman_code | code_length |
+// --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+// | 1        | 1       | 0            | 0    | rand       | origin_rpi_rlc     | rpi[0]            | rlc = next*r+rpi | cpi[0]                   | rlc = next*r+cpi |   1            |                |      0        |      01      |      2      |
+// | 1        | 0       | 1            | 0    | rand       |                    | rpi[1]            | next             | cpi[1]                   | next             |   0            |                |      1        |      110     |      3      |
 // ```
 
 /// Config for compress circuit
 #[derive(Clone, Debug)]
 pub struct CompressCircuitConfig<F: Field> {
     q_enable: Selector,
-    q_end: Selector,
-    raw_public_inputs: [Column<Advice>; 32],
-    compressed_public_inputs: [Column<Advice>; 32],
-    cpi_rlc_acc: Column<Advice>,
-    rand_cpi: Column<Advice>,
-    huffman_table: [TableColumn; 2],
+    q_first: Selector,      // the start row for both origin and split rpi/cpi
+    q_origin_end: Selector, // the last row for origin rpi
+    q_end: Selector,        // the last row for split rpi/cpi
+    origin_rpi_rlc_acc: Column<Advice>, // the raw_public_inputs
+    raw_public_inputs: Column<Advice>,
+    rpi_rlc_acc: Column<Advice>, // rlc = next*randomness + rpi
+    compressed_public_inputs: Column<Advice>,
+    cpi_rlc_acc: Column<Advice>,     // rlc = next*randomness + cpi
+    cpi_code_length: Column<Advice>, // compressed public inputs's huffman code length
+    cpi_rlc_length: Column<Advice>,  // how much bits have been rlc encoded
+    randomness: Column<Advice>,
+    huffman_table: [TableColumn; 3], // [value, code, code_length]
     _marker: PhantomData<F>,
 }
 
 /// Circuit configuration arguments
 pub struct CompressCircuitConfigArgs {
-    /// uncompressed raw public inputs
-    pub raw_public_inputs: Column<Advice>,
+    /// uncompressed raw public inputs from pi-circuit
+    pub origin_rpi: Column<Advice>,
 }
 
 impl<F: Field> SubCircuitConfig<F> for CompressCircuitConfig<F> {
     type ConfigArgs = CompressCircuitConfigArgs;
 
-    fn new(meta: &mut ConstraintSystem<F>, args: Self::ConfigArgs) -> Self {
+    fn new(
+        meta: &mut ConstraintSystem<F>,
+        Self::ConfigArgs { origin_rpi }: Self::ConfigArgs,
+    ) -> Self {
         let q_enable = meta.selector();
+        let q_first = meta.selector();
+        let q_origin_end = meta.selector();
         let q_end = meta.selector();
-        let raw_public_inputs = [(); 32].map(|_| meta.advice_column());
-        let compressed_public_inputs = [(); 32].map(|_| meta.advice_column());
+        let origin_rpi_rlc_acc = meta.advice_column();
+        let raw_public_inputs = meta.advice_column();
+        let rpi_rlc_acc = meta.advice_column();
+        let compressed_public_inputs = meta.advice_column();
         let cpi_rlc_acc = meta.advice_column();
-        let rand_cpi = meta.advice_column();
-        let huffman_table = [(); 2].map(|_| meta.lookup_table_column());
+        let cpi_code_length = meta.advice_column();
+        let cpi_rlc_length = meta.advice_column();
+        let randomness = meta.advice_column();
+        let huffman_table = [(); 3].map(|_| meta.lookup_table_column());
 
+        meta.enable_equality(origin_rpi_rlc_acc);
+        meta.enable_equality(rpi_rlc_acc);
         meta.enable_equality(cpi_rlc_acc);
-        meta.enable_equality(rand_cpi);
+        meta.enable_equality(randomness);
+        meta.enable_equality(raw_public_inputs);
+        meta.enable_equality(compressed_public_inputs);
+        meta.enable_equality(cpi_code_length);
 
         // lookup huffman table
-        for (rpi, cpi) in raw_public_inputs
-            .into_iter()
-            .zip(compressed_public_inputs.into_iter())
-        {
-            meta.enable_equality(rpi);
-            meta.enable_equality(cpi);
-
-            meta.lookup("huffman_table", |meta| {
-                let rpi = meta.query_advice(rpi, Rotation::cur());
-                let cpi = meta.query_advice(cpi, Rotation::cur());
-                vec![(rpi, huffman_table[0]), (cpi, huffman_table[1])]
-            });
-        }
-
-        // rpi from pi-circuit will be unfolded into 32 bytes
-        meta.create_gate("origin_rpi = rpi0 + rpi1 + ... + rpi31", |meta| {
-            let q_enable = meta.query_selector(q_enable);
-            let origin_rpi = meta.query_advice(args.raw_public_inputs, Rotation::cur());
-            let rpi = raw_public_inputs.map(|rpi| meta.query_advice(rpi, Rotation::cur()));
-            vec![q_enable * (origin_rpi - combine::expr(rpi))]
+        meta.lookup("huffman_table", |meta| {
+            let raw_public_inputs = meta.query_advice(raw_public_inputs, Rotation::cur());
+            let compressed_public_inputs =
+                meta.query_advice(compressed_public_inputs, Rotation::cur());
+            let cpi_code_length = meta.query_advice(cpi_code_length, Rotation::cur());
+            vec![
+                (raw_public_inputs, huffman_table[0]),        // value
+                (compressed_public_inputs, huffman_table[1]), // code
+                (cpi_code_length, huffman_table[2]),          // length
+            ]
         });
 
-        // cpi_rlc_acc
-        // TODO: use 32 bytes per rlc item
+        // origin_rpi_rlc_acc[0] = rpi_rlc_acc[0]
+        meta.create_gate("origin_rpi_rlc_acc[0] = rpi_rlc_acc[i*32]", |meta| {
+            let q_enable = meta.query_selector(q_enable);
+            let q_first = meta.query_selector(q_first);
+            let origin_rpi_rlc_acc = meta.query_advice(origin_rpi_rlc_acc, Rotation::cur());
+            let rpi_rlc_acc = meta.query_advice(rpi_rlc_acc, Rotation::cur());
+            vec![q_enable * q_first * (origin_rpi_rlc_acc - rpi_rlc_acc)]
+        });
+
+        // origin_rpi_rlc_acc = next_origin_rpi_rlc_acc * randomness + origin_rpi
         meta.create_gate(
-            "cpi_rlc_acc[0] = next_cpi_rlc_acc * rand_rpi + rlc(cpi0, ..., cpi31)",
+            "origin_rpi_rlc_acc = next_origin_rpi_rlc_acc * randomness + rlc(orpi0, ..., orpi31)",
             |meta| {
-                let q_not_end = 1.expr() - meta.query_selector(q_end);
-                let cur_cpi_rlc_acc = meta.query_advice(cpi_rlc_acc, Rotation::cur());
-                let next_cpi_rlc_acc = meta.query_advice(cpi_rlc_acc, Rotation::next());
-                let rand_cpi = meta.query_advice(rand_cpi, Rotation::cur());
+                let q_enable = meta.query_selector(q_enable);
+                let q_not_origin_end = 1.expr() - meta.query_selector(q_origin_end);
+                let origin_rpi = meta.query_advice(origin_rpi, Rotation::cur());
+                let cur_origin_rpi_rlc_acc = meta.query_advice(origin_rpi_rlc_acc, Rotation::cur());
+                let next_origin_rpi_rlc_acc =
+                    meta.query_advice(origin_rpi_rlc_acc, Rotation::next());
+                let randomness = meta.query_advice(randomness, Rotation::cur());
 
-                let rlc_cpi = rlc::expr(
-                    compressed_public_inputs.map(|cpi| meta.query_advice(cpi, Rotation::cur())),
-                    rand_cpi.clone(),
-                );
-
-                vec![q_not_end * (next_cpi_rlc_acc * rand_cpi + rlc_cpi - cur_cpi_rlc_acc)]
+                vec![
+                    q_enable
+                        * q_not_origin_end
+                        * (next_origin_rpi_rlc_acc * randomness + origin_rpi
+                            - cur_origin_rpi_rlc_acc),
+                ]
             },
         );
 
-        meta.create_gate("cpi_rlc_acc[last] = rlc(cpi0, ..., cpi31)", |meta| {
+        // rpi_rlc_acc = next_rpi_rlc_acc * randomness + rpi
+        meta.create_gate(
+            "rpi_rlc_acc[0] = next_rpi_rlc_acc * randomness + rpi",
+            |meta| {
+                let q_enable = meta.query_selector(q_enable);
+                let q_not_end = 1.expr() - meta.query_selector(q_end);
+                let cur_rpi_rlc_acc = meta.query_advice(rpi_rlc_acc, Rotation::cur());
+                let next_rpi_rlc_acc = meta.query_advice(rpi_rlc_acc, Rotation::next());
+                let rpi = meta.query_advice(raw_public_inputs, Rotation::cur());
+                let randomness = meta.query_advice(randomness, Rotation::cur());
+
+                vec![q_enable * q_not_end * (next_rpi_rlc_acc * randomness + rpi - cur_rpi_rlc_acc)]
+            },
+        );
+
+        // cpi_rlc_acc = next_cpi_rlc_acc * randomness + cpi
+        meta.create_gate(
+            "cpi_rlc_acc[0] = next_cpi_rlc_acc * randomness + cpi",
+            |meta| {
+                let q_enable = meta.query_selector(q_enable);
+                let q_not_end = 1.expr() - meta.query_selector(q_end);
+                let cur_cpi_rlc_acc = meta.query_advice(cpi_rlc_acc, Rotation::cur());
+                let next_cpi_rlc_acc = meta.query_advice(cpi_rlc_acc, Rotation::next());
+                let cpi = meta.query_advice(compressed_public_inputs, Rotation::cur());
+                let randomness = meta.query_advice(randomness, Rotation::cur());
+
+                vec![q_enable * q_not_end * (next_cpi_rlc_acc * randomness + cpi - cur_cpi_rlc_acc)]
+            },
+        );
+
+        // rpi_rlc_acc[last] = rpi
+        meta.create_gate("rpi_rlc_acc[last] = rpi", |meta| {
+            let q_enable = meta.query_selector(q_enable);
             let q_end = meta.query_selector(q_end);
-            let rand_rpi = meta.query_advice(rand_cpi, Rotation::cur());
-            let rlc_cpi = rlc::expr(
-                compressed_public_inputs.map(|cpi| meta.query_advice(cpi, Rotation::cur())),
-                rand_rpi,
-            );
+            let randomness = meta.query_advice(randomness, Rotation::cur());
+            let rpi_rlc_acc = meta.query_advice(rpi_rlc_acc, Rotation::cur());
+            let rpi = meta.query_advice(raw_public_inputs, Rotation::cur());
+            vec![q_enable * q_end * (rpi_rlc_acc - rpi)]
+        });
+
+        // cpi_rlc_acc[last] = cpi
+        meta.create_gate("cpi_rlc_acc[last] = cpi", |meta| {
+            let q_enable = meta.query_selector(q_enable);
+            let q_end = meta.query_selector(q_end);
+            let randomness = meta.query_advice(randomness, Rotation::cur());
             let cpi_rlc_acc = meta.query_advice(cpi_rlc_acc, Rotation::cur());
-            vec![q_end * (rlc_cpi - cpi_rlc_acc)]
+            let cpi = meta.query_advice(compressed_public_inputs, Rotation::cur());
+            vec![q_enable * q_end * (cpi_rlc_acc - cpi)]
         });
 
         // rand_rpi[i] == rand_rpi[j]
-        meta.create_gate("rand_pi = rand_rpi.next", |meta| {
+        meta.create_gate("randomness = randomness.next", |meta| {
             // q_not_end * row.rand_rpi == q_not_end * row_next.rand_rpi
             let q_not_end = 1.expr() - meta.query_selector(q_end);
-            let cur_rand_cpi = meta.query_advice(rand_cpi, Rotation::cur());
-            let next_rand_cpi = meta.query_advice(rand_cpi, Rotation::next());
+            let cur_randomness = meta.query_advice(randomness, Rotation::cur());
+            let next_randomness = meta.query_advice(randomness, Rotation::next());
 
-            vec![q_not_end * (cur_rand_cpi - next_rand_cpi)]
+            vec![q_not_end * (cur_randomness - next_randomness)]
         });
 
         Self {
             q_enable,
+            q_first,
+            q_origin_end,
             q_end,
+            origin_rpi_rlc_acc,
             raw_public_inputs,
+            rpi_rlc_acc,
             compressed_public_inputs,
             cpi_rlc_acc,
-            rand_cpi,
+            cpi_code_length,
+            cpi_rlc_length,
+            randomness,
             huffman_table,
             _marker: PhantomData,
         }
@@ -216,7 +282,7 @@ impl<F: Field> CompressCircuitConfig<F> {
         region: &mut Region<'_, F>,
         raw_pi_vals: &[F],
         offset: usize,
-        rand_cpi: F,
+        randomness: F,
     ) -> Result<F, Error> {
         let rpi_val = raw_pi_vals[offset];
         // compress rpi value
@@ -233,7 +299,7 @@ impl<F: Field> CompressCircuitConfig<F> {
                 || Value::known(cpi_value),
             )?;
         }
-        Ok(rlc::value(compressed_vals, rand_cpi))
+        Ok(rlc::value(compressed_vals, randomness))
     }
 
     /// assign the raw public inputs into compressed columns
