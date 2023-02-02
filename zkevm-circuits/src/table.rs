@@ -85,6 +85,8 @@ pub enum TxFieldTag {
     TxSignHash,
     /// CallData
     CallData,
+    /// Enable skipping invalid tx
+    EnableSkippingInvalidTx,
     /// Invalid tx
     TxInvalid,
     /// AccessListGasCost

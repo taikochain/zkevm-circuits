@@ -649,7 +649,7 @@ mod test {
                     .to(to)
                     .from(from)
                     .nonce(Word::from(0))
-                    .invalid_tx(Word::from(1));
+                    .enable_skipping_invalid_tx(Word::from(0));
             },
             |block, _| block,
         )
@@ -686,7 +686,7 @@ mod test {
                     .gas_price(gwei(1))
                     .gas(Word::from(10u64.pow(5)))
                     .value(gwei(1))
-                    .invalid_tx(Word::from(1));
+                    .enable_skipping_invalid_tx(Word::from(1));
             },
             |block, _| block,
         )
@@ -721,7 +721,7 @@ mod test {
                     .gas_price(gwei(1))
                     .gas(Word::from(1))
                     .value(gwei(1))
-                    .invalid_tx(Word::from(1));
+                    .enable_skipping_invalid_tx(Word::from(1));
             },
             |block, _| block,
         )

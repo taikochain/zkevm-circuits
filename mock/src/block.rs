@@ -36,6 +36,7 @@ pub struct MockBlock {
     // Also, the field is stored in the block_table since we don't have a chain_config
     // structure/table.
     pub(crate) chain_id: Word,
+    pub(crate) enable_skipping_invalid_id: Word,
 }
 
 impl Default for MockBlock {
@@ -64,6 +65,7 @@ impl Default for MockBlock {
             mix_hash: Hash::zero(),
             nonce: H64::zero(),
             chain_id: *MOCK_CHAIN_ID,
+            enable_skipping_invalid_id: Word::from(1),
         }
     }
 }

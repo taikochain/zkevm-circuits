@@ -398,6 +398,8 @@ pub struct ResultGethExecTrace {
 /// before the step is executed.
 #[derive(Deserialize, Serialize, Clone, Debug, Eq, PartialEq)]
 pub struct GethExecTrace {
+    /// True when skipping invalid tx is enabled
+    pub enable_skipping_invalid_tx: bool,
     /// True when the tx could not execute
     pub invalid: bool,
     /// Used gas
@@ -455,6 +457,8 @@ mod tests {
     fn deserialize_geth_exec_trace2() {
         let trace_json = r#"
   {
+    "enable_skipping_invalid_tx": true,
+    "invalid": false,
     "gas": 26809,
     "failed": false,
     "returnValue": "",
@@ -518,6 +522,7 @@ mod tests {
         assert_eq!(
             trace,
             GethExecTrace {
+                enable_skipping_invalid_tx: true,
                 invalid: false,
                 gas: Gas(26809),
                 failed: false,

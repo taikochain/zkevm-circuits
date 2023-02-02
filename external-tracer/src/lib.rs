@@ -10,6 +10,8 @@ use std::collections::HashMap;
 /// Configuration structure for `geth_utlis::trace`
 #[derive(Debug, Default, Clone, Serialize)]
 pub struct TraceConfig {
+    /// 
+    pub enable_skipping_invalid_tx: Word,
     /// chain id
     pub chain_id: Word,
     /// history hashes contains most recent 256 block hashes in history, where
@@ -75,12 +77,12 @@ pub fn trace(config: &TraceConfig) -> Result<Vec<GethExecTrace>, Error> {
         serde_json::from_str(&trace_string).map_err(Error::SerdeError)?;
     // Don't throw only for specific invalid transactions we support.
     for trace in trace.iter() {
-        if trace.invalid && !(trace.return_value.starts_with("nonce too low")
+        if config.enable_skipping_invalid_tx.eq(&Word::from(0)) || (trace.invalid && !(trace.return_value.starts_with("nonce too low")
                 || trace.return_value.starts_with("nonce too high")
                 || trace.return_value.starts_with("intrinsic gas too low")
                 || trace
                     .return_value
-                    .starts_with("insufficient funds for gas * price + value")) {
+                    .starts_with("insufficient funds for gas * price + value"))) {
             return Err(Error::TracingError(trace.return_value.clone()));
         }
     }
