@@ -207,8 +207,8 @@ impl<const NACC: usize, const NTX: usize> TestContext<NACC, NTX> {
         FAcc: FnOnce([&mut MockAccount; NACC]),
     {
 
-        let enable_skipping_invalid_tx = Word::from(0);
-        
+        let enable_skipping_invalid_tx = Word::from(1);
+
         Self::new_with_logger_config(
             enable_skipping_invalid_tx,
             history_hashes,

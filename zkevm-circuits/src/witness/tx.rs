@@ -33,8 +33,6 @@ pub struct Transaction {
     pub call_data_length: usize,
     /// The gas cost for transaction call data
     pub call_data_gas_cost: u64,
-    /// Enable skipping invalid tx
-    pub enable_skipping_invalid_tx: bool,
     /// Invalid tx
     pub invalid_tx: bool,
     /// AccessListGasCost
@@ -119,12 +117,6 @@ impl Transaction {
                 ],
                 [
                     Value::known(F::from(self.id as u64)),
-                    Value::known(F::from(TxContextFieldTag::EnableSkippingInvalidTx as u64)),
-                    Value::known(F::zero()),
-                    Value::known(F::from(self.enable_skipping_invalid_tx)),
-                ],
-                [
-                    Value::known(F::from(self.id as u64)),
                     Value::known(F::from(TxContextFieldTag::TxInvalid as u64)),
                     Value::known(F::zero()),
                     Value::known(F::from(self.invalid_tx)),
@@ -169,7 +161,6 @@ pub(super) fn tx_convert(tx: &circuit_input_builder::Transaction, id: usize) -> 
             .input
             .iter()
             .fold(0, |acc, byte| acc + if *byte == 0 { 4 } else { 16 }),
-        enable_skipping_invalid_tx: tx.enable_skipping_invalid_tx,
         invalid_tx: tx.invalid_tx,
         access_list_gas_cost: tx.access_list_gas_cost,
         calls: tx
