@@ -20,12 +20,11 @@ import (
 // while replaying a transaction in debug mode as well as transaction
 // execution status, the amount of gas used and the return value
 type ExecutionResult struct {
-	EnableSkippingInvalidTx bool           `json:"enable_skipping_invalid_tx"`
-	Invalid                 bool           `json:"invalid"`
-	Gas                     uint64         `json:"gas"`
-	Failed                  bool           `json:"failed"`
-	ReturnValue             string         `json:"returnValue"`
-	StructLogs              []StructLogRes `json:"structLogs"`
+	Invalid     bool           `json:"invalid"`
+	Gas         uint64         `json:"gas"`
+	Failed      bool           `json:"failed"`
+	ReturnValue string         `json:"returnValue"`
+	StructLogs  []StructLogRes `json:"structLogs"`
 }
 
 // StructLogRes stores a structured log emitted by the EVM while replaying a
@@ -222,23 +221,21 @@ func Trace(config TraceConfig) ([]*ExecutionResult, error) {
 		result, err := core.ApplyMessage(evm, message, new(core.GasPool).AddGas(message.Gas()))
 		if err != nil {
 			executionResults[i] = &ExecutionResult{
-				EnableSkippingInvalidTx: false,
-				Invalid:                 true,
-				Gas:                     0,
-				Failed:                  false,
-				ReturnValue:             fmt.Sprintf("%v", err),
-				StructLogs:              []StructLogRes{},
+				Invalid:     true,
+				Gas:         0,
+				Failed:      false,
+				ReturnValue: fmt.Sprintf("%v", err),
+				StructLogs:  []StructLogRes{},
 			}
 		} else {
 			stateDB.Finalise(true)
 
 			executionResults[i] = &ExecutionResult{
-				EnableSkippingInvalidTx: true,
-				Invalid:                 false,
-				Gas:                     result.UsedGas,
-				Failed:                  result.Failed(),
-				ReturnValue:             fmt.Sprintf("%x", result.ReturnData),
-				StructLogs:              FormatLogs(tracer.StructLogs()),
+				Invalid:     false,
+				Gas:         result.UsedGas,
+				Failed:      result.Failed(),
+				ReturnValue: fmt.Sprintf("%x", result.ReturnData),
+				StructLogs:  FormatLogs(tracer.StructLogs()),
 			}
 		}
 

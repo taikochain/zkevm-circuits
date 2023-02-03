@@ -262,7 +262,7 @@ impl<'a> CircuitInputBuilder {
         is_last_tx: bool,
     ) -> Result<(), Error> {
 
-        let mut tx = self.new_tx(eth_tx, !geth_trace.failed, geth_trace.enable_skipping_invalid_tx, geth_trace.invalid)?;
+        let mut tx = self.new_tx(eth_tx, !geth_trace.failed, true, geth_trace.invalid)?;
         let mut tx_ctx = TransactionContext::new(eth_tx, geth_trace, is_last_tx)?;
 
         // TODO: Move into gen_associated_steps with
