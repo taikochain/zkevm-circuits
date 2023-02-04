@@ -455,7 +455,6 @@ mod tests {
     fn deserialize_geth_exec_trace2() {
         let trace_json = r#"
   {
-    "invalid": false,
     "gas": 26809,
     "failed": false,
     "returnValue": "",

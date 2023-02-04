@@ -407,7 +407,6 @@ pub mod test {
         let mut builder =
             BlockData::new_from_geth_data_with_params(block.clone(), CircuitsParams::default())
                 .new_circuit_input_builder();
-
         builder
             .handle_block(&block.eth_block, &block.geth_traces)
             .unwrap();

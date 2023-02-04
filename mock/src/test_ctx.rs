@@ -177,7 +177,7 @@ impl<const NACC: usize, const NTX: usize> TestContext<NACC, NTX> {
         )?;
 
         for (transaction, geth_trace) in transactions.iter().zip(geth_traces.iter()) {
-            if transaction.enable_skipping_invalid_tx.eq(&Word::from(0)) && geth_trace.invalid {
+            if !transaction.enable_skipping_invalid_tx && geth_trace.invalid {
                 panic!(
                     "{:?}",
                     Error::TracingError(geth_trace.return_value.clone()).to_string()
@@ -259,7 +259,6 @@ fn gen_geth_traces<const NACC: usize, const NTX: usize>(
             .collect(),
         logger_config,
     };
-
     let traces = trace(&trace_config)?;
     let result: [GethExecTrace; NTX] = traces.try_into().expect("Unexpected len mismatch");
     Ok(result)

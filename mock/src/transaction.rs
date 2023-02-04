@@ -131,7 +131,7 @@ pub struct MockTransaction {
     pub max_priority_fee_per_gas: Word,
     pub max_fee_per_gas: Word,
     pub chain_id: Word,
-    pub enable_skipping_invalid_tx: Word,
+    pub enable_skipping_invalid_tx: bool,
 }
 
 impl Default for MockTransaction {
@@ -156,7 +156,7 @@ impl Default for MockTransaction {
             max_priority_fee_per_gas: Word::zero(),
             max_fee_per_gas: Word::zero(),
             chain_id: *MOCK_CHAIN_ID,
-            enable_skipping_invalid_tx: Word::zero(),
+            enable_skipping_invalid_tx: true,
         }
     }
 }
@@ -277,7 +277,7 @@ impl MockTransaction {
     }
 
     /// Set invalid_tx field for the MockTransaction.
-    pub fn enable_skipping_invalid_tx(&mut self, enable_skipping_invalid_tx: Word) -> &mut Self {
+    pub fn enable_skipping_invalid_tx(&mut self, enable_skipping_invalid_tx: bool) -> &mut Self {
         self.enable_skipping_invalid_tx = enable_skipping_invalid_tx;
         self
     }

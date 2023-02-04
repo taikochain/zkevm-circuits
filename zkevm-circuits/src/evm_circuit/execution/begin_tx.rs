@@ -735,29 +735,29 @@ mod test {
     #[test]
     #[should_panic]
     fn begin_tx_not_enable_skipping_invalid_tx_invalid_nonce() {
-        begin_tx_invalid_nonce(Word::from(0));
+        begin_tx_invalid_nonce(false);
     }
 
     #[test]
     #[should_panic]
     fn begin_tx_not_enable_skipping_invalid_tx_not_enough_eth() {
-        begin_tx_not_enough_eth(Word::from(0));
+        begin_tx_not_enough_eth(false);
     }
 
     #[test]
     #[should_panic]
     fn begin_tx_not_enable_skipping_invalid_tx_insufficient_gas() {
-        begin_tx_insufficient_gas(Word::from(0));
+        begin_tx_insufficient_gas(false);
     }
 
     #[test]
     fn begin_tx_enable_skipping_invalid_tx() {
-        begin_tx_invalid_nonce(Word::from(1));
-        begin_tx_not_enough_eth(Word::from(1));
-        begin_tx_insufficient_gas(Word::from(1));
+        begin_tx_invalid_nonce(true);
+        begin_tx_not_enough_eth(true);
+        begin_tx_insufficient_gas(true);
     }
 
-    fn begin_tx_invalid_nonce(enable_skipping_invalid_tx: Word) {
+    fn begin_tx_invalid_nonce(enable_skipping_invalid_tx: bool) {
         // The nonce of the account doing the transaction is not correct
         // Use the same nonce value for two transactions.
         let multibyte_nonce = Word::from(1);
@@ -790,7 +790,7 @@ mod test {
         assert_eq!(run_test_circuit_geth_data_default::<Fr>(block), Ok(()));
     }
 
-    fn begin_tx_not_enough_eth(enable_skipping_invalid_tx: Word) {
+    fn begin_tx_not_enough_eth(enable_skipping_invalid_tx: bool) {
         // The account does not have enough ETH to pay for eth_value + tx_gas *
         // tx_gas_price.
         let multibyte_nonce = Word::from(1);
@@ -826,7 +826,7 @@ mod test {
         assert_eq!(run_test_circuit_geth_data_default::<Fr>(block), Ok(()));
     }
 
-    fn begin_tx_insufficient_gas(enable_skipping_invalid_tx: Word) {
+    fn begin_tx_insufficient_gas(enable_skipping_invalid_tx: bool) {
         let multibyte_nonce = Word::from(1);
 
         let to = MOCK_ACCOUNTS[0];
