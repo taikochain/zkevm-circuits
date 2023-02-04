@@ -519,7 +519,6 @@ mod tests {
         assert_eq!(
             trace,
             GethExecTrace {
-                enable_skipping_invalid_tx: true,
                 invalid: false,
                 gas: Gas(26809),
                 failed: false,

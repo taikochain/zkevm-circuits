@@ -105,7 +105,6 @@ impl<const NACC: usize, const NTX: usize> From<TestContext<NACC, NTX>> for GethD
 
 impl<const NACC: usize, const NTX: usize> TestContext<NACC, NTX> {
     pub fn new_with_logger_config<FAcc, FTx, Fb>(
-        enable_skipping_invalid_tx: Word,
         history_hashes: Option<Vec<Word>>,
         acc_fns: FAcc,
         func_tx: FTx,
@@ -157,9 +156,8 @@ impl<const NACC: usize, const NTX: usize> TestContext<NACC, NTX> {
         // Build Block modifiers
         let mut block = MockBlock::default();
         block.transactions.extend_from_slice(&transactions);
-        func_block(&mut block, transactions).build();
+        func_block(&mut block, transactions.clone()).build();
 
-        let enable_skipping_invalid_id = block.enable_skipping_invalid_id;
         let chain_id = block.chain_id;
         let block = Block::<Transaction>::from(block);
         let accounts: [Account; NACC] = accounts
@@ -170,15 +168,22 @@ impl<const NACC: usize, const NTX: usize> TestContext<NACC, NTX> {
             .try_into()
             .expect("Mismatched acc len");
 
-
         let geth_traces = gen_geth_traces(
-            enable_skipping_invalid_tx,
             chain_id,
             block.clone(),
             accounts.clone(),
             history_hashes.clone(),
             logger_config,
         )?;
+
+        for (transaction, geth_trace) in transactions.iter().zip(geth_traces.iter()) {
+            if transaction.enable_skipping_invalid_tx.eq(&Word::from(0)) && geth_trace.invalid {
+                panic!(
+                    "{:?}",
+                    Error::TracingError(geth_trace.return_value.clone()).to_string()
+                )
+            }
+        }
 
         Ok(Self {
             chain_id,
@@ -206,11 +211,7 @@ impl<const NACC: usize, const NTX: usize> TestContext<NACC, NTX> {
         Fb: FnOnce(&mut MockBlock, Vec<MockTransaction>) -> &mut MockBlock,
         FAcc: FnOnce([&mut MockAccount; NACC]),
     {
-
-        let enable_skipping_invalid_tx = Word::from(1);
-
         Self::new_with_logger_config(
-            enable_skipping_invalid_tx,
             history_hashes,
             acc_fns,
             func_tx,
@@ -237,7 +238,6 @@ impl<const NACC: usize, const NTX: usize> TestContext<NACC, NTX> {
 /// Generates execution traces for the transactions included in the provided
 /// Block
 fn gen_geth_traces<const NACC: usize, const NTX: usize>(
-    enable_skipping_invalid_tx: Word,
     chain_id: Word,
     block: Block<Transaction>,
     accounts: [Account; NACC],
@@ -245,7 +245,6 @@ fn gen_geth_traces<const NACC: usize, const NTX: usize>(
     logger_config: LoggerConfig,
 ) -> Result<[GethExecTrace; NTX], Error> {
     let trace_config = TraceConfig {
-        enable_skipping_invalid_tx,
         chain_id,
         history_hashes: history_hashes.unwrap_or_default(),
         block_constants: BlockConstants::try_from(&block)?,

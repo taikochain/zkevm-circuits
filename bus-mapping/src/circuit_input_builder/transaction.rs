@@ -197,8 +197,6 @@ pub struct Transaction {
     pub input: Vec<u8>,
     /// Signature
     pub signature: Signature,
-    /// Enable skipping invalid tx
-    pub enable_skipping_invalid_tx: bool,
     /// Invalid tx
     pub invalid_tx: bool,
     /// AccessListGasCost
@@ -243,7 +241,6 @@ impl Transaction {
                 s: Word::zero(),
                 v: 0,
             },
-            enable_skipping_invalid_tx: true,
             invalid_tx: false,
             access_list_gas_cost: 0,
             calls: Vec::new(),
@@ -258,7 +255,6 @@ impl Transaction {
         code_db: &mut CodeDB,
         eth_tx: &eth_types::Transaction,
         is_success: bool,
-        enable_skipping_invalid_tx: bool,
         is_invalid: bool,
     ) -> Result<Self, Error> {
         let (found, _) = sdb.get_account(&eth_tx.from);
@@ -325,7 +321,6 @@ impl Transaction {
                 r: eth_tx.r,
                 s: eth_tx.s,
             },
-            enable_skipping_invalid_tx: enable_skipping_invalid_tx,
             invalid_tx: is_invalid,
             access_list_gas_cost: 0, // TODO: support (EIP 2930) type TX
         })

@@ -136,7 +136,6 @@ impl<'a> CircuitInputBuilder {
         &mut self,
         eth_tx: &eth_types::Transaction,
         is_success: bool,
-        enable_skipping_invalid_tx: bool,
         is_invalid: bool,
     ) -> Result<Transaction, Error> {
         let call_id = self.block_ctx.rwc.0;
@@ -158,7 +157,6 @@ impl<'a> CircuitInputBuilder {
             &mut self.code_db,
             eth_tx,
             is_success,
-            enable_skipping_invalid_tx,
             is_invalid,
         )
     }
@@ -191,7 +189,6 @@ impl<'a> CircuitInputBuilder {
         eth_block: &EthBlock,
         geth_traces: &[eth_types::GethExecTrace],
     ) -> Result<(), Error> {
-
         // accumulates gas across all txs in the block
         for (tx_index, tx) in eth_block.transactions.iter().enumerate() {
             let geth_trace = &geth_traces[tx_index];
@@ -261,8 +258,7 @@ impl<'a> CircuitInputBuilder {
         geth_trace: &GethExecTrace,
         is_last_tx: bool,
     ) -> Result<(), Error> {
-
-        let mut tx = self.new_tx(eth_tx, !geth_trace.failed, true, geth_trace.invalid)?;
+        let mut tx = self.new_tx(eth_tx, !geth_trace.failed, geth_trace.invalid)?;
         let mut tx_ctx = TransactionContext::new(eth_tx, geth_trace, is_last_tx)?;
 
         // TODO: Move into gen_associated_steps with
