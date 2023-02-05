@@ -193,7 +193,7 @@ pub(crate) struct ExecutionConfig<F> {
     q_step_last: Selector,
     advices: [Column<Advice>; STEP_WIDTH],
     step: Step<F>,
-    height_map: HashMap<ExecutionState, usize>,
+    pub(crate) height_map: HashMap<ExecutionState, usize>,
     stored_expressions_map: HashMap<ExecutionState, Vec<StoredExpression<F>>>,
     // internal state gadgets
     begin_tx_gadget: BeginTxGadget<F>,
@@ -421,8 +421,6 @@ impl<F: Field> ExecutionConfig<F> {
         let mut stored_expressions_map = HashMap::new();
 
         let step_next = Step::new(meta, advices, MAX_STEP_HEIGHT, true);
-        let word_powers_of_randomness = challenges.evm_word_powers_of_randomness();
-        let lookup_powers_of_randomness = challenges.lookup_input_powers_of_randomness();
         macro_rules! configure_gadget {
             () => {
                 Self::configure_gadget(
@@ -434,8 +432,6 @@ impl<F: Field> ExecutionConfig<F> {
                     q_step_first,
                     q_step_last,
                     &challenges,
-                    &word_powers_of_randomness,
-                    &lookup_powers_of_randomness,
                     &step_curr,
                     &step_next,
                     &mut height_map,
@@ -569,15 +565,6 @@ impl<F: Field> ExecutionConfig<F> {
         config
     }
 
-    pub fn get_step_height_option(&self, execution_state: ExecutionState) -> Option<usize> {
-        self.height_map.get(&execution_state).copied()
-    }
-
-    pub fn get_step_height(&self, execution_state: ExecutionState) -> usize {
-        self.get_step_height_option(execution_state)
-            .unwrap_or_else(|| panic!("Execution state unknown: {:?}", execution_state))
-    }
-
     #[allow(clippy::too_many_arguments)]
     fn configure_gadget<G: ExecutionGadget<F>>(
         meta: &mut ConstraintSystem<F>,
@@ -588,8 +575,6 @@ impl<F: Field> ExecutionConfig<F> {
         q_step_first: Selector,
         q_step_last: Selector,
         challenges: &Challenges<Expression<F>>,
-        word_powers_of_randomness: &[Expression<F>; 31],
-        lookup_powers_of_randomness: &[Expression<F>; 12],
         step_curr: &Step<F>,
         step_next: &Step<F>,
         height_map: &mut HashMap<ExecutionState, usize>,
@@ -602,8 +587,6 @@ impl<F: Field> ExecutionConfig<F> {
                 step_curr.clone(),
                 step_next.clone(),
                 challenges,
-                word_powers_of_randomness,
-                lookup_powers_of_randomness,
                 G::EXECUTION_STATE,
             );
             G::configure(&mut cb);
@@ -617,8 +600,6 @@ impl<F: Field> ExecutionConfig<F> {
             step_curr.clone(),
             step_next.clone(),
             challenges,
-            word_powers_of_randomness,
-            lookup_powers_of_randomness,
             G::EXECUTION_STATE,
         );
 
@@ -753,8 +734,6 @@ impl<F: Field> ExecutionConfig<F> {
         challenges: &Challenges<Expression<F>>,
         cell_manager: &CellManager<F>,
     ) {
-        let lookup_powers_of_randomness: [Expression<F>; 31] =
-            challenges.lookup_input_powers_of_randomness();
         for column in cell_manager.columns().iter() {
             if let CellType::Lookup(table) = column.cell_type {
                 let name = format!("{:?}", table);
@@ -772,7 +751,7 @@ impl<F: Field> ExecutionConfig<F> {
                     .table_exprs(meta);
                     vec![(
                         column.expr(),
-                        rlc::expr(&table_expressions, &lookup_powers_of_randomness),
+                        rlc::expr(&table_expressions, challenges.lookup_input()),
                     )]
                 });
             }
@@ -871,7 +850,7 @@ impl<F: Field> ExecutionConfig<F> {
                     if next.is_none() {
                         break;
                     }
-                    let height = self.get_step_height(step.execution_state);
+                    let height = step.execution_state.get_step_height();
 
                     // Assign the step witness
                     self.assign_exec_step(
@@ -902,7 +881,7 @@ impl<F: Field> ExecutionConfig<F> {
                         );
                         return Err(Error::Synthesis);
                     }
-                    let height = self.get_step_height(ExecutionState::EndBlock);
+                    let height = ExecutionState::EndBlock.get_step_height();
                     debug_assert_eq!(height, 1);
                     let last_row = evm_rows - 1;
                     log::trace!(
@@ -929,7 +908,7 @@ impl<F: Field> ExecutionConfig<F> {
                 }
 
                 // part3: assign the last EndBlock at offset `evm_rows - 1`
-                let height = self.get_step_height(ExecutionState::EndBlock);
+                let height = ExecutionState::EndBlock.get_step_height();
                 debug_assert_eq!(height, 1);
                 log::trace!("assign last EndBlock at offset {}", offset);
                 self.assign_exec_step(
