@@ -35,7 +35,6 @@ libsecp256k1 = "0.7"
 num-bigint = { version = "0.4" }
 subtle = "2.4"
 rand_chacha = "0.3"
-bit-vec = "0.6.3"
 
 [dev-dependencies]
 bus-mapping = { path = "../bus-mapping", features = ["test"] }
