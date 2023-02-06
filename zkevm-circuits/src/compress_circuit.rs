@@ -127,33 +127,31 @@ impl<F: Field> SubCircuitConfig<F> for CompressCircuitConfig<F> {
 
         meta.enable_equality(data_rlc);
 
-        let mut parts = vec![];
-        meta.create_gate("split parts", |meta| {
-            // next 4 rows as 4 parts
-            for i in 0..MAX_PARTS as i32 {
-                let data = meta.query_advice(data, Rotation(i));
-                let num_bits = meta.query_advice(num_bits, Rotation(i));
-                let r_multi = meta.query_advice(r_multi, Rotation(i));
-                let shift_factor = meta.query_advice(shift_factor, Rotation(i));
-                let decode_factor = meta.query_advice(decode_factor, Rotation(i));
-
-                parts.push(Part {
-                    data,
-                    num_bits,
-                    r_multi,
-                    shift_factor,
-                    decode_factor,
-                });
-            }
-            vec![0.expr()]
-        });
-
         meta.lookup("huffman table", |meta| {
             // lookups:
             //  1. input = huffman_value
             //  2. data0 * decode_factor0 + data1 * decode_factor1 + data2 * decode_factor2
             //      + data3 * decode_factor3 = huffman_code
             //  3. num_bits0 + num_bits1 + num_bits2 + num_bits3 = huffman_code_length
+
+            // next 4 rows as 4 parts
+            let parts = (0..MAX_PARTS)
+                .map(|i| {
+                    let i = i as i32;
+                    let data = meta.query_advice(data, Rotation(i));
+                    let num_bits = meta.query_advice(num_bits, Rotation(i));
+                    let r_multi = meta.query_advice(r_multi, Rotation(i));
+                    let shift_factor = meta.query_advice(shift_factor, Rotation(i));
+                    let decode_factor = meta.query_advice(decode_factor, Rotation(i));
+                    Part {
+                        data,
+                        num_bits,
+                        r_multi,
+                        shift_factor,
+                        decode_factor,
+                    }
+                })
+                .collect::<Vec<_>>();
             let input = meta.query_advice(input, Rotation::cur());
             let code = decode::data_expr(&parts);
             let q_word_start = meta.query_selector(q_word_start);
@@ -167,7 +165,7 @@ impl<F: Field> SubCircuitConfig<F> for CompressCircuitConfig<F> {
             ]
         });
 
-        meta.create_gate("do RLC over parts last row", |meta| {
+        meta.create_gate("data_rlc[last] = data[last] * shift_factor[last]", |meta| {
             let mut cb = BaseConstraintBuilder::new(MAX_DEGREE);
             let data_rlc = meta.query_advice(data_rlc, Rotation::cur());
             let data = meta.query_advice(data, Rotation::cur());
@@ -178,23 +176,26 @@ impl<F: Field> SubCircuitConfig<F> for CompressCircuitConfig<F> {
             cb.gate(meta.query_selector(q_end))
         });
 
-        meta.create_gate("do RLC over parts", |meta| {
-            let mut cb = BaseConstraintBuilder::new(MAX_DEGREE);
-            let data_rlc_cur = meta.query_advice(data_rlc, Rotation::cur());
-            let data_rlc_next = meta.query_advice(data_rlc, Rotation::next());
-            let data = meta.query_advice(data, Rotation::cur());
-            let shift_factor = meta.query_advice(shift_factor, Rotation::cur());
-            let r_multi = meta.query_advice(r_multi, Rotation::cur());
-            cb.require_boolean("r_multi", r_multi.clone());
-            let multi = select::expr(r_multi, randomness.clone(), 1.expr());
-            cb.require_equal(
-                "data_rlc",
-                data_rlc_cur,
-                data_rlc_next * multi + data * shift_factor,
-            );
+        meta.create_gate(
+            "data_rlc[i] = data_rlc[i+1] * multi[i] + data[i] * shift_factor[i]",
+            |meta| {
+                let mut cb = BaseConstraintBuilder::new(MAX_DEGREE);
+                let data_rlc_cur = meta.query_advice(data_rlc, Rotation::cur());
+                let data_rlc_next = meta.query_advice(data_rlc, Rotation::next());
+                let data = meta.query_advice(data, Rotation::cur());
+                let shift_factor = meta.query_advice(shift_factor, Rotation::cur());
+                let r_multi = meta.query_advice(r_multi, Rotation::cur());
+                cb.require_boolean("r_multi", r_multi.clone());
+                let multi = select::expr(r_multi, randomness.clone(), 1.expr());
+                cb.require_equal(
+                    "data_rlc",
+                    data_rlc_cur,
+                    data_rlc_next * multi + data * shift_factor,
+                );
 
-            cb.gate(meta.query_selector(q_not_end))
-        });
+                cb.gate(meta.query_selector(q_not_end))
+            },
+        );
 
         Self {
             q_not_end,
