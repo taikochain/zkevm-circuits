@@ -59,26 +59,28 @@ mod decode {
 }
 
 // input:
-//      A = 1011101(7)
+//      A = 1011110(7)
 //      ~ = 1111111111101(13)
 // circuit:
 // ```
 // input | data     | num_bits | r_multi | shift_factor | decode_factor | data_rlc
 // ------|----------|--------- |---------|--------------|---------------|---------------------------------
-//  'A'  | 1011101  | 7        | 0       | 2^1          | 2^0           | 1011101
-//  'A'  |          | 0        | 0       | 0            | 0             | 1011101
-//  'A'  |          | 0        | 0       | 0            | 0             | 1011101
-//  'A'  |          | 0        | 0       | 0            | 0             | 1011101
-//  '~'  | 1        | 1        | 1       | 2^0          | 2^12          | 10111011
-//  '~'  | 11111111 | 8        | 1       | 2^0          | 2^4           | 10111011*r+11111111
-//  '~'  | 1101     | 4        | 0       | 2^4          | 2^0           | (10111011*r+11111111)*r+11010000
-//  '~'  |          | 0        | 0       | 0            | 0             | (10111011*r+11111111)*r+11010000
+//  '~'  | 0        | 0        | 0       | 0            | 0             | (10111101*r+11111111)*r+11010000
+//  '~'  | 1101     | 4        | 0       | 2^4          | 2^0           | (10111101*r+11111111)*r+11010000
+//  '~'  | 11111111 | 8        | 1       | 2^0          | 2^4           | 10111101*r+11111111
+//  '~'  | 1        | 1        | 1       | 2^0          | 2^12          | 1011110
+//  'B'  | 0        | 0        | 0       | 0            | 0             | 1011110
+//  'B'  | 0        | 0        | 0       | 0            | 0             | 1011110
+//  'B'  | 0        | 0        | 0       | 0            | 0             | 1011110
+//  'B'  | 1011110  | 7        | 0       | 2^1          | 2^0           | 1011110
 // ```
 // N.B. we can use one row represent all 4 parts
 #[derive(Debug, Clone)]
 pub struct CompressCircuitConfig<F: Field> {
-    q_enable: Selector,
-    input: Column<Advice>, // input bitstream byte/row
+    q_end: Selector,
+    q_not_end: Selector,
+    q_word_start: Selector, // enable when word starts
+    input: Column<Advice>,  // input bitstream byte/row
     // output parts:
     // encoded value
     data: Column<Advice>,
@@ -93,7 +95,7 @@ pub struct CompressCircuitConfig<F: Field> {
     // we decode it
     decode_factor: Column<Advice>,
     // fixed huffman table
-    huffman_table: [TableColumn; 3], // [value, code, code_length]
+    huffman_table: [TableColumn; 3], // [enable, value, code, code_length]
 
     _marker: PhantomData<F>,
 }
@@ -111,7 +113,9 @@ impl<F: Field> SubCircuitConfig<F> for CompressCircuitConfig<F> {
         meta: &mut ConstraintSystem<F>,
         CompressCircuitConfigArgs { randomness }: Self::ConfigArgs,
     ) -> Self {
-        let q_enable = meta.selector();
+        let q_end = meta.selector();
+        let q_not_end = meta.selector();
+        let q_word_start = meta.complex_selector();
         let r_multi = meta.advice_column();
         let input = meta.advice_column();
         let data = meta.advice_column();
@@ -152,39 +156,50 @@ impl<F: Field> SubCircuitConfig<F> for CompressCircuitConfig<F> {
             //  3. num_bits0 + num_bits1 + num_bits2 + num_bits3 = huffman_code_length
             let input = meta.query_advice(input, Rotation::cur());
             let code = decode::data_expr(&parts);
+            let q_word_start = meta.query_selector(q_word_start);
             vec![
-                (input, huffman_table[0]),
-                (code, huffman_table[1]),
-                (decode::num_bits_expr(&parts), huffman_table[2]),
+                (q_word_start.clone() * input, huffman_table[0]),
+                (q_word_start.clone() * code, huffman_table[1]),
+                (
+                    q_word_start * decode::num_bits_expr(&parts),
+                    huffman_table[2],
+                ),
             ]
+        });
+
+        meta.create_gate("do RLC over parts last row", |meta| {
+            let mut cb = BaseConstraintBuilder::new(MAX_DEGREE);
+            let data_rlc = meta.query_advice(data_rlc, Rotation::cur());
+            let data = meta.query_advice(data, Rotation::cur());
+            let shift_factor = meta.query_advice(shift_factor, Rotation::cur());
+            let r_multi = meta.query_advice(r_multi, Rotation::cur());
+            cb.require_boolean("r_multi", r_multi);
+            cb.require_equal("last data_rlc", data * shift_factor, data_rlc);
+            cb.gate(meta.query_selector(q_end))
         });
 
         meta.create_gate("do RLC over parts", |meta| {
             let mut cb = BaseConstraintBuilder::new(MAX_DEGREE);
-            let mut data_rlc_prev = meta.query_advice(data_rlc, Rotation::prev());
-            for part in parts.iter() {
-                // 1. TODO: range check(lookup):
-                //      part.data(0..2^8)
-                //      part.num_bits(0..32)
-                //      part.r_multi(bool)
-                //      part.shift_factor(0..2^32) 2.pow(0..32)
-                //      part.decode_factor(0..2^32) 2.pow(0..32)
-                cb.require_boolean("r_multi", part.r_multi.clone());
-                // 2. Add the part to the rlc
-                let multi = select::expr(part.r_multi.clone(), randomness.clone(), 1.expr());
-                data_rlc_prev =
-                    data_rlc_prev * multi + part.data.clone() * part.shift_factor.clone();
-            }
+            let data_rlc_cur = meta.query_advice(data_rlc, Rotation::cur());
+            let data_rlc_next = meta.query_advice(data_rlc, Rotation::next());
+            let data = meta.query_advice(data, Rotation::cur());
+            let shift_factor = meta.query_advice(shift_factor, Rotation::cur());
+            let r_multi = meta.query_advice(r_multi, Rotation::cur());
+            cb.require_boolean("r_multi", r_multi.clone());
+            let multi = select::expr(r_multi, randomness.clone(), 1.expr());
             cb.require_equal(
                 "data_rlc",
-                data_rlc_prev,
-                meta.query_advice(data_rlc, Rotation::cur()),
+                data_rlc_cur,
+                data_rlc_next * multi + data * shift_factor,
             );
-            cb.gate(meta.query_selector(q_enable))
+
+            cb.gate(meta.query_selector(q_not_end))
         });
 
         Self {
-            q_enable,
+            q_not_end,
+            q_end,
+            q_word_start,
             input,
             data,
             data_rlc,
@@ -203,24 +218,43 @@ impl<F: Field> CompressCircuitConfig<F> {
         layouter.assign_table(
             || "fixed huffman table",
             |mut table| {
+                table.assign_cell(
+                    || "huffman table value",
+                    self.huffman_table[0],
+                    0,
+                    || Value::known(F::zero()),
+                )?;
+                table.assign_cell(
+                    || "huffman table code",
+                    self.huffman_table[1],
+                    0,
+                    || Value::known(F::zero()),
+                )?;
+                table.assign_cell(
+                    || "huffman table code length",
+                    self.huffman_table[2],
+                    0,
+                    || Value::known(F::zero()),
+                )?;
                 for value in 0..256 {
+                    let offset = value + 1;
                     table.assign_cell(
                         || "huffman table value",
                         self.huffman_table[0],
-                        value,
+                        offset,
                         || Value::known(F::from(value as u64)),
                     )?;
                     let (code, code_len) = lookup_huffman_table(value as u8);
                     table.assign_cell(
                         || "huffman table code",
                         self.huffman_table[1],
-                        value,
+                        offset,
                         || Value::known(F::from(code as u64)),
                     )?;
                     table.assign_cell(
                         || "huffman table code length",
                         self.huffman_table[2],
-                        value,
+                        offset,
                         || Value::known(F::from(code_len as u64)),
                     )?;
                 }
@@ -239,25 +273,35 @@ impl<F: Field> CompressCircuitConfig<F> {
     ) -> Result<Option<AssignedCell<F, F>>, Error> {
         self.load_huffman_table(layouter)?;
         layouter.assign_region(
-            || "compress public inputs",
+            || "compress data",
             |mut region| {
                 // next byte needs bits
                 let mut remaining = 8;
                 let mut r_multi = false;
                 let mut rlc = F::zero();
                 let mut rlc_cell = None;
+                let mut offset = (input.len() * MAX_PARTS) - 1;
 
-                for (offset, byte) in input.iter().enumerate() {
+                self.q_end.enable(&mut region, offset)?;
+
+                for byte in input.iter() {
                     let byte = *byte;
-                    region.assign_advice(
-                        || "load input",
-                        self.input,
-                        offset,
-                        || Value::known(F::from(byte as u64)),
-                    )?;
                     let (code, mut code_len) = lookup_huffman_table(byte);
+                    for idx in 0..MAX_PARTS {
+                        region.assign_advice(
+                            || "load input",
+                            self.input,
+                            offset,
+                            || Value::known(F::from(byte as u64)),
+                        )?;
+                        if idx == MAX_PARTS - 1 {
+                            self.q_word_start.enable(&mut region, offset)?;
+                        }
 
-                    for _ in 0..MAX_PARTS {
+                        if offset != (input.len() * MAX_PARTS) - 1 {
+                            self.q_not_end.enable(&mut region, offset)?;
+                        }
+
                         let mut data = 0;
                         let mut num_bits = 0;
                         let mut next_byte_begin = false;
@@ -270,7 +314,7 @@ impl<F: Field> CompressCircuitConfig<F> {
                             match code_len.cmp(&remaining) {
                                 std::cmp::Ordering::Less => {
                                     num_bits = code_len;
-                                    shift_factor = 2 ^ (remaining - num_bits);
+                                    shift_factor = 2u8.pow((remaining - num_bits) as u32);
                                     decode_factor = 1;
                                     remaining -= code_len;
                                     code_len = 0;
@@ -286,22 +330,18 @@ impl<F: Field> CompressCircuitConfig<F> {
                                 std::cmp::Ordering::Greater => {
                                     num_bits = remaining;
                                     shift_factor = 1;
-                                    decode_factor = 2 ^ (code_len - num_bits) as u32;
+                                    decode_factor = 2u32.pow((code_len - num_bits) as u32);
+                                    code_len -= remaining;
                                     remaining = 8; // next byte begin
                                     next_byte_begin = true;
-                                    code_len -= remaining;
                                 }
                             }
-                            data = (code >> decode_factor) & 0xff;
+                            data = (code / decode_factor) & (0xff >> (8 - num_bits));
                         }
 
                         let randomness = if r_multi { randomness } else { F::one() };
 
-                        // if next byte begin combines, then next part needs multiply randomness
-                        r_multi = next_byte_begin;
-
                         rlc = rlc * randomness + F::from((data * shift_factor as u32) as u64);
-
                         region.assign_advice(
                             || "load data",
                             self.data,
@@ -338,7 +378,13 @@ impl<F: Field> CompressCircuitConfig<F> {
                             offset,
                             || Value::known(rlc),
                         )?);
-                        self.q_enable.enable(&mut region, offset)?;
+
+                        // if next byte begin combines, then next part needs multiply randomness
+                        r_multi = next_byte_begin;
+
+                        if offset > 0 {
+                            offset -= 1;
+                        }
                     }
                 }
                 Ok(rlc_cell)
@@ -420,19 +466,22 @@ mod tests {
             let (code, mut code_len) = lookup_huffman_table(*byte);
 
             while code_len > 0 {
+                let num_bits;
                 let shift_factor;
                 let decode_factor;
                 let next_byte_begin;
 
                 match code_len.cmp(&remaining) {
                     std::cmp::Ordering::Less => {
-                        shift_factor = 2 ^ (remaining - code_len);
+                        num_bits = code_len;
+                        shift_factor = 2u8.pow((remaining - num_bits) as u32);
                         decode_factor = 1;
                         remaining -= code_len;
                         next_byte_begin = false;
                         code_len = 0;
                     }
                     std::cmp::Ordering::Equal => {
+                        num_bits = code_len;
                         shift_factor = 1;
                         decode_factor = 1;
                         remaining = 8; // next byte begin
@@ -440,14 +489,15 @@ mod tests {
                         code_len = 0;
                     }
                     std::cmp::Ordering::Greater => {
+                        num_bits = remaining;
                         shift_factor = 1;
-                        decode_factor = 2 ^ (code_len - remaining) as u32;
+                        decode_factor = 2u32.pow((code_len - num_bits) as u32);
+                        code_len -= remaining;
                         remaining = 8; // next byte begin
                         next_byte_begin = true;
-                        code_len -= remaining;
                     }
                 }
-                let data = (code >> decode_factor) & 0xff;
+                let data = (code / decode_factor) & (0xff >> (8 - num_bits));
 
                 let randomness = if ri_multi { randomness } else { F::one() };
                 rlc = rlc * randomness + F::from((data * shift_factor as u32) as u64);
@@ -459,10 +509,12 @@ mod tests {
 
     #[test]
     fn test() {
-        let input = vec![0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09];
+        let input = vec![
+            b'H', b'e', b'l', b'l', b'o', b' ', b'W', b'o', b'r', b'l', b'd',
+        ];
         let pi = compress_and_rlc(&input, Fr::from(100));
         let circuit = TestCircuit::<Fr>::new(input);
-        let prover = MockProver::run(10, &circuit, vec![vec![pi]]).unwrap();
+        let prover = MockProver::run(17, &circuit, vec![vec![pi]]).unwrap();
         assert_eq!(prover.verify(), Ok(()));
     }
 }
