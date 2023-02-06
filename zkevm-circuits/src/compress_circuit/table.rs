@@ -41,6 +41,30 @@ const HUFFMAN_CODE_LEN: [u8; 256] = [
     22, 25, 25, 24, 24, 26, 23, 26, 27, 26, 26, 27, 27, 27, 27, 27, 28, 27, 27, 27, 27, 27, 26,
 ];
 
+pub(crate) struct Code {
+    pub value: u8,
+    pub code: u32,
+    pub code_len: u8,
+}
+
+pub(crate) fn huffman_table() -> Vec<Code> {
+    let mut table = Vec::with_capacity(257);
+    for i in 0..=255 {
+        let (code, code_len) = lookup_huffman_table(i);
+        table.push(Code {
+            value: i,
+            code,
+            code_len,
+        });
+    }
+    table.push(Code {
+        value: 0,
+        code: 0,
+        code_len: 0,
+    });
+    table
+}
+
 pub(crate) const MAX_CODE_LEN: u32 = u32::BITS;
 
 /// lookup huffman code and code length by value

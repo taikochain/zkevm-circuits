@@ -13,7 +13,7 @@ use halo2_proofs::{
 };
 
 use std::marker::PhantomData;
-use table::lookup_huffman_table;
+use table::{huffman_table, lookup_huffman_table};
 
 const MAX_PARTS: usize = 4;
 const WORD_SIZE: usize = 8;
@@ -218,44 +218,24 @@ impl<F: Field> CompressCircuitConfig<F> {
         layouter.assign_table(
             || "fixed huffman table",
             |mut table| {
-                table.assign_cell(
-                    || "huffman table value",
-                    self.huffman_table[0],
-                    0,
-                    || Value::known(F::zero()),
-                )?;
-                table.assign_cell(
-                    || "huffman table code",
-                    self.huffman_table[1],
-                    0,
-                    || Value::known(F::zero()),
-                )?;
-                table.assign_cell(
-                    || "huffman table code length",
-                    self.huffman_table[2],
-                    0,
-                    || Value::known(F::zero()),
-                )?;
-                for value in 0..256 {
-                    let offset = value + 1;
+                for (offset, code) in huffman_table().iter().enumerate() {
                     table.assign_cell(
                         || "huffman table value",
                         self.huffman_table[0],
                         offset,
-                        || Value::known(F::from(value as u64)),
+                        || Value::known(F::from(code.value as u64)),
                     )?;
-                    let (code, code_len) = lookup_huffman_table(value as u8);
                     table.assign_cell(
                         || "huffman table code",
                         self.huffman_table[1],
                         offset,
-                        || Value::known(F::from(code as u64)),
+                        || Value::known(F::from(code.code as u64)),
                     )?;
                     table.assign_cell(
                         || "huffman table code length",
                         self.huffman_table[2],
                         offset,
-                        || Value::known(F::from(code_len as u64)),
+                        || Value::known(F::from(code.code_len as u64)),
                     )?;
                 }
                 Ok(())
