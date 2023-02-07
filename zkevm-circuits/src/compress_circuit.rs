@@ -34,13 +34,13 @@ pub(crate) struct Part<F: Field> {
 struct PartValue<F: Field> {
     idx: usize,
     limb_idx: usize,
-    input: u8,
-    data: u8,
+    input: F,
+    data: F,
     data_rlc: F,
-    num_bits: u8,
-    r_multi: bool,
-    shift_factor: u8,
-    decode_factor: u32,
+    num_bits: F,
+    r_multi: F,
+    shift_factor: F,
+    decode_factor: F,
 }
 
 #[derive(Debug)]
@@ -73,7 +73,7 @@ impl FixedTableTag {
     }
 }
 
-fn compress_and_rlc<F: Field, T: FnMut(PartValue<F>) -> Result<(), Error>>(
+fn compress<F: Field, T: FnMut(PartValue<F>) -> Result<(), Error>>(
     input: &[u8],
     randomness: F,
     mut handle: T,
@@ -125,13 +125,13 @@ fn compress_and_rlc<F: Field, T: FnMut(PartValue<F>) -> Result<(), Error>>(
             handle(PartValue {
                 idx,
                 limb_idx,
-                input: *byte,
-                data: data as u8,
+                input: F::from(*byte as u64),
+                data: F::from(data as u64),
                 data_rlc,
-                num_bits,
-                r_multi,
-                shift_factor,
-                decode_factor,
+                num_bits: F::from(num_bits as u64),
+                r_multi: F::from(r_multi as u64),
+                shift_factor: F::from(shift_factor as u64),
+                decode_factor: F::from(decode_factor as u64),
             })?;
             r_multi = next_byte_begin;
         }
@@ -181,8 +181,8 @@ pub struct CompressCircuitConfig<F: Field> {
     q_enable: Selector,
     q_end: Selector,
     q_not_end: Selector,
-    q_word_start: Selector, // enable when word starts
-    input: Column<Advice>,  // input bitstream byte/row
+    q_word_end: Selector,  // enable when word starts
+    input: Column<Advice>, // input bitstream byte/row
     // output parts:
     // encoded value
     data: Column<Advice>,
@@ -219,7 +219,7 @@ impl<F: Field> SubCircuitConfig<F> for CompressCircuitConfig<F> {
         let q_enable = meta.complex_selector();
         let q_end = meta.selector();
         let q_not_end = meta.selector();
-        let q_word_start = meta.complex_selector();
+        let q_word_end = meta.complex_selector();
         let r_multi = meta.advice_column();
         let input = meta.advice_column();
         let data = meta.advice_column();
@@ -235,7 +235,7 @@ impl<F: Field> SubCircuitConfig<F> for CompressCircuitConfig<F> {
         // range check
         // input(0..256)
         // data(0..256)
-        // num_bits(0..256)
+        // num_bits(0..32)
         // r_multi(bool)
         // shift_factor 2.pow(0..8)
         // decode_factor 2.pow(0..32)
@@ -289,14 +289,11 @@ impl<F: Field> SubCircuitConfig<F> for CompressCircuitConfig<F> {
                 .collect::<Vec<_>>();
             let input = meta.query_advice(input, Rotation::cur());
             let code = decode::data_expr(&parts);
-            let q_word_start = meta.query_selector(q_word_start);
+            let q_word_end = meta.query_selector(q_word_end);
             vec![
-                (q_word_start.clone() * input, huffman_table[0]),
-                (q_word_start.clone() * code, huffman_table[1]),
-                (
-                    q_word_start * decode::num_bits_expr(&parts),
-                    huffman_table[2],
-                ),
+                (q_word_end.clone() * input, huffman_table[0]),
+                (q_word_end.clone() * code, huffman_table[1]),
+                (q_word_end * decode::num_bits_expr(&parts), huffman_table[2]),
             ]
         });
 
@@ -336,7 +333,7 @@ impl<F: Field> SubCircuitConfig<F> for CompressCircuitConfig<F> {
             q_enable,
             q_not_end,
             q_end,
-            q_word_start,
+            q_word_end,
             input,
             data,
             data_rlc,
@@ -380,7 +377,7 @@ impl<F: Field> CompressCircuitConfig<F> {
                             FixedTableTag::Range32,
                         ]
                         .iter()
-                        .flat_map(|tag| tag.build::<F>()),
+                        .flat_map(|tag| tag.build()),
                     )
                     .enumerate()
                 {
@@ -412,56 +409,34 @@ impl<F: Field> CompressCircuitConfig<F> {
 
                 self.q_end.enable(&mut region, offset)?;
 
-                compress_and_rlc(input, randomness, |part| {
-                    region.assign_advice(
-                        || "load input",
-                        self.input,
-                        offset,
-                        || Value::known(F::from(part.input as u64)),
-                    )?;
+                compress(input, randomness, |part| {
                     self.q_enable.enable(&mut region, offset)?;
                     if part.limb_idx == MAX_PARTS - 1 {
-                        self.q_word_start.enable(&mut region, offset)?;
+                        self.q_word_end.enable(&mut region, offset)?;
                     }
                     if offset != last_offset {
                         self.q_not_end.enable(&mut region, offset)?;
                     }
-                    region.assign_advice(
-                        || "load data",
-                        self.data,
-                        offset,
-                        || Value::known(F::from(part.data as u64)),
-                    )?;
-                    region.assign_advice(
-                        || "load num_bits",
-                        self.num_bits,
-                        offset,
-                        || Value::known(F::from(part.num_bits as u64)),
-                    )?;
-                    region.assign_advice(
-                        || "load r_multi",
-                        self.r_multi,
-                        offset,
-                        || Value::known(F::from(part.r_multi as u64)),
-                    )?;
-                    region.assign_advice(
-                        || "load shift_factor",
-                        self.shift_factor,
-                        offset,
-                        || Value::known(F::from(part.shift_factor as u64)),
-                    )?;
-                    region.assign_advice(
-                        || "load decode_factor",
-                        self.decode_factor,
-                        offset,
-                        || Value::known(F::from(part.decode_factor as u64)),
-                    )?;
-                    rlc_cell = Some(region.assign_advice(
-                        || "load data_rlc",
-                        self.data_rlc,
-                        offset,
-                        || Value::known(part.data_rlc),
-                    )?);
+
+                    macro_rules! assign_part {
+                        ($part:ident) => {
+                            region.assign_advice(
+                                || concat!("load ", stringify!($part)),
+                                self.$part,
+                                offset,
+                                || Value::known(part.$part),
+                            )?
+                        };
+                    }
+
+                    assign_part!(input);
+                    assign_part!(data);
+                    assign_part!(num_bits);
+                    assign_part!(r_multi);
+                    assign_part!(shift_factor);
+                    assign_part!(decode_factor);
+                    rlc_cell = Some(assign_part!(data_rlc));
+
                     if offset > 0 {
                         offset -= 1;
                     }
@@ -544,7 +519,7 @@ mod tests {
         let input = vec![
             b'H', b'e', b'l', b'l', b'o', b' ', b'W', b'o', b'r', b'l', b'd',
         ];
-        let pi = compress_and_rlc(&input, Fr::from(100), |_| Ok(())).unwrap();
+        let pi = compress(&input, Fr::from(100), |_| Ok(())).unwrap();
         let circuit = TestCircuit::<Fr>::new(input);
         let prover = MockProver::run(17, &circuit, vec![vec![pi]]).unwrap();
         assert_eq!(prover.verify(), Ok(()));
