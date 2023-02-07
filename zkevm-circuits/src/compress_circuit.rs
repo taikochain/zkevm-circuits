@@ -2,6 +2,7 @@
 
 mod table;
 use crate::evm_circuit::util::constraint_builder::BaseConstraintBuilder;
+use crate::impl_expr;
 use crate::util::{Expr, SubCircuitConfig};
 
 use eth_types::Field;
@@ -11,12 +12,13 @@ use halo2_proofs::{
     plonk::{Advice, Column, ConstraintSystem, Error, Expression, Selector, TableColumn},
     poly::Rotation,
 };
+use itertools::Itertools;
 
 use std::marker::PhantomData;
 use table::{huffman_table, lookup_huffman_table};
 
 const MAX_PARTS: usize = 4;
-const WORD_SIZE: usize = 8;
+const WORD_SIZE: u8 = 8;
 const MAX_DEGREE: usize = 10;
 
 #[derive(Debug)]
@@ -41,6 +43,36 @@ struct PartValue<F: Field> {
     decode_factor: u32,
 }
 
+#[derive(Debug)]
+enum FixedTableTag {
+    Exponent8,
+    Exponent32,
+    Range32,
+    Byte,
+    Bool,
+}
+
+impl_expr!(FixedTableTag);
+
+impl FixedTableTag {
+    pub fn build<F: Field>(&self) -> Box<dyn Iterator<Item = [F; 2]>> {
+        let tag = F::from(*self as u64);
+        match self {
+            FixedTableTag::Exponent8 => Box::new(
+                std::iter::once([tag, F::zero()])
+                    .chain((0..8).map(move |i| [tag, 2u64.pow(i).into()])),
+            ),
+            FixedTableTag::Exponent32 => Box::new(
+                std::iter::once([tag, F::zero()])
+                    .chain((0..32).map(move |i| [tag, 2u64.pow(i).into()])),
+            ),
+            FixedTableTag::Bool => Box::new(vec![[tag, F::zero()], [tag, F::one()]].into_iter()),
+            FixedTableTag::Byte => Box::new((0..256).map(move |i| [tag, i.into()])),
+            FixedTableTag::Range32 => Box::new((0..32).map(move |i| [tag, i.into()])),
+        }
+    }
+}
+
 fn compress_and_rlc<F: Field, T: FnMut(PartValue<F>) -> Result<(), Error>>(
     input: &[u8],
     randomness: F,
@@ -48,7 +80,7 @@ fn compress_and_rlc<F: Field, T: FnMut(PartValue<F>) -> Result<(), Error>>(
 ) -> Result<F, Error> {
     let mut data_rlc = F::zero();
     // how many bits need to be combined into 1 word
-    let mut word_remaining = 8;
+    let mut word_remaining = WORD_SIZE;
     let mut r_multi = false;
     for (idx, byte) in input.iter().enumerate() {
         let (code, code_len) = lookup_huffman_table(*byte);
@@ -72,7 +104,7 @@ fn compress_and_rlc<F: Field, T: FnMut(PartValue<F>) -> Result<(), Error>>(
                         num_bits = remaining_code_len;
                         shift_factor = 1;
                         decode_factor = 1;
-                        word_remaining = 8;
+                        word_remaining = WORD_SIZE;
                         next_byte_begin = true;
                         remaining_code_len = 0;
                     }
@@ -81,7 +113,7 @@ fn compress_and_rlc<F: Field, T: FnMut(PartValue<F>) -> Result<(), Error>>(
                         shift_factor = 1;
                         decode_factor = 2u32.pow((remaining_code_len - num_bits) as u32);
                         remaining_code_len -= word_remaining;
-                        word_remaining = 8;
+                        word_remaining = WORD_SIZE;
                         next_byte_begin = true;
                     }
                 }
@@ -129,7 +161,7 @@ mod decode {
 }
 
 // input:
-//      A = 1011110(7)
+//      B = 1011110(7)
 //      ~ = 1111111111101(13)
 // circuit:
 // ```
@@ -144,9 +176,9 @@ mod decode {
 //  'B'  | 0        | 0        | 0       | 0            | 0             | 1011110
 //  'B'  | 1011110  | 7        | 0       | 2^1          | 2^0           | 1011110
 // ```
-// N.B. we can use one row represent all 4 parts
 #[derive(Debug, Clone)]
 pub struct CompressCircuitConfig<F: Field> {
+    q_enable: Selector,
     q_end: Selector,
     q_not_end: Selector,
     q_word_start: Selector, // enable when word starts
@@ -165,7 +197,8 @@ pub struct CompressCircuitConfig<F: Field> {
     // we decode it
     decode_factor: Column<Advice>,
     // fixed huffman table
-    huffman_table: [TableColumn; 3], // [enable, value, code, code_length]
+    huffman_table: [TableColumn; 3], // [value, code, code_length]
+    fixed_table: [TableColumn; 2],   // [tag, or(exponent(2**0..8), exponent(2**0..32), bool(0,1))]
 
     _marker: PhantomData<F>,
 }
@@ -183,6 +216,7 @@ impl<F: Field> SubCircuitConfig<F> for CompressCircuitConfig<F> {
         meta: &mut ConstraintSystem<F>,
         CompressCircuitConfigArgs { randomness }: Self::ConfigArgs,
     ) -> Self {
+        let q_enable = meta.complex_selector();
         let q_end = meta.selector();
         let q_not_end = meta.selector();
         let q_word_start = meta.complex_selector();
@@ -194,16 +228,39 @@ impl<F: Field> SubCircuitConfig<F> for CompressCircuitConfig<F> {
         let shift_factor = meta.advice_column();
         let decode_factor = meta.advice_column();
         let huffman_table = array_init::array_init(|_| meta.lookup_table_column());
+        let fixed_table = array_init::array_init(|_| meta.lookup_table_column());
 
         meta.enable_equality(data_rlc);
 
-        // TODO: add lookup table to check
-        // input(0..2^8)
-        // part.data(0..2^8)
-        // part.num_bits(0..2^8)
-        // part.r_multi(bool)
-        // part.shift_factor(0..2^8)
-        // part.decode_factor(0..2^32) 2.pow(0..32)
+        // range check
+        // input(0..256)
+        // data(0..256)
+        // num_bits(0..256)
+        // r_multi(bool)
+        // shift_factor 2.pow(0..8)
+        // decode_factor 2.pow(0..32)
+        macro_rules! range_check {
+            ($column:ident, $range:ident) => {
+                meta.lookup(concat!(stringify!($column), " range check"), |meta| {
+                    let column = meta.query_advice($column, Rotation::cur());
+                    let q_enable = meta.query_selector(q_enable);
+                    vec![
+                        (
+                            q_enable.clone() * FixedTableTag::$range.expr(),
+                            fixed_table[0],
+                        ),
+                        (q_enable * column, fixed_table[1]),
+                    ]
+                });
+            };
+        }
+
+        range_check!(input, Byte);
+        range_check!(data, Byte);
+        range_check!(num_bits, Range32);
+        range_check!(r_multi, Bool);
+        range_check!(shift_factor, Exponent8);
+        range_check!(decode_factor, Exponent32);
 
         meta.lookup("huffman table", |meta| {
             // lookups:
@@ -276,6 +333,7 @@ impl<F: Field> SubCircuitConfig<F> for CompressCircuitConfig<F> {
         );
 
         Self {
+            q_enable,
             q_not_end,
             q_end,
             q_word_start,
@@ -287,6 +345,7 @@ impl<F: Field> SubCircuitConfig<F> for CompressCircuitConfig<F> {
             shift_factor,
             decode_factor,
             huffman_table,
+            fixed_table,
             _marker: PhantomData,
         }
     }
@@ -297,25 +356,37 @@ impl<F: Field> CompressCircuitConfig<F> {
         layouter.assign_table(
             || "fixed huffman table",
             |mut table| {
-                for (offset, code) in huffman_table().iter().enumerate() {
-                    table.assign_cell(
-                        || "huffman table value",
-                        self.huffman_table[0],
-                        offset,
-                        || Value::known(F::from(code.value as u64)),
-                    )?;
-                    table.assign_cell(
-                        || "huffman table code",
-                        self.huffman_table[1],
-                        offset,
-                        || Value::known(F::from(code.code as u64)),
-                    )?;
-                    table.assign_cell(
-                        || "huffman table code length",
-                        self.huffman_table[2],
-                        offset,
-                        || Value::known(F::from(code.code_len as u64)),
-                    )?;
+                for (offset, row) in huffman_table::<F>().iter().enumerate() {
+                    for (column, value) in self.huffman_table.iter().zip_eq(row) {
+                        table.assign_cell(|| "", *column, offset, || Value::known(value))?;
+                    }
+                }
+                Ok(())
+            },
+        )
+    }
+
+    fn load_fixed_table(&self, layouter: &mut impl Layouter<F>) -> Result<(), Error> {
+        layouter.assign_table(
+            || "fixed table",
+            |mut table| {
+                for (offset, row) in std::iter::once([F::zero(); 2])
+                    .chain(
+                        [
+                            FixedTableTag::Exponent8,
+                            FixedTableTag::Exponent32,
+                            FixedTableTag::Bool,
+                            FixedTableTag::Byte,
+                            FixedTableTag::Range32,
+                        ]
+                        .iter()
+                        .flat_map(|tag| tag.build::<F>()),
+                    )
+                    .enumerate()
+                {
+                    for (column, value) in self.fixed_table.iter().zip_eq(row) {
+                        table.assign_cell(|| "", *column, offset, || Value::known(value))?;
+                    }
                 }
                 Ok(())
             },
@@ -331,6 +402,7 @@ impl<F: Field> CompressCircuitConfig<F> {
         randomness: F,
     ) -> Result<Option<AssignedCell<F, F>>, Error> {
         self.load_huffman_table(layouter)?;
+        self.load_fixed_table(layouter)?;
         layouter.assign_region(
             || "compress data",
             |mut region| {
@@ -347,6 +419,7 @@ impl<F: Field> CompressCircuitConfig<F> {
                         offset,
                         || Value::known(F::from(part.input as u64)),
                     )?;
+                    self.q_enable.enable(&mut region, offset)?;
                     if part.limb_idx == MAX_PARTS - 1 {
                         self.q_word_start.enable(&mut region, offset)?;
                     }

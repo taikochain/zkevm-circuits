@@ -1,3 +1,5 @@
+use eth_types::Field;
+
 // fixed huffman codes for byte
 const HUFFMAN_CODES: [u32; 256] = [
     0x1ff8, 0x7fffd8, 0xfffffe2, 0xfffffe3, 0xfffffe4, 0xfffffe5, 0xfffffe6, 0xfffffe7, 0xfffffe8,
@@ -41,27 +43,17 @@ const HUFFMAN_CODE_LEN: [u8; 256] = [
     22, 25, 25, 24, 24, 26, 23, 26, 27, 26, 26, 27, 27, 27, 27, 27, 28, 27, 27, 27, 27, 27, 26,
 ];
 
-pub(crate) struct Code {
-    pub value: u8,
-    pub code: u32,
-    pub code_len: u8,
-}
-
-pub(crate) fn huffman_table() -> Vec<Code> {
+pub(crate) fn huffman_table<F: Field>() -> Vec<[F; 3]> {
     let mut table = Vec::with_capacity(257);
     for i in 0..=255 {
         let (code, code_len) = lookup_huffman_table(i);
-        table.push(Code {
-            value: i,
-            code,
-            code_len,
-        });
+        table.push([
+            F::from(i as u64),
+            F::from(code as u64),
+            F::from(code_len as u64),
+        ]);
     }
-    table.push(Code {
-        value: 0,
-        code: 0,
-        code_len: 0,
-    });
+    table.push([F::zero(); 3]);
     table
 }
 
