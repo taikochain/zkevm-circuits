@@ -29,12 +29,82 @@ pub(crate) struct Part<F: Field> {
 }
 
 #[derive(Debug, Default)]
-pub(crate) struct PartValue {
+struct PartValue<F: Field> {
+    idx: usize,
+    limb_idx: usize,
+    input: u8,
     data: u8,
+    data_rlc: F,
     num_bits: u8,
     r_multi: bool,
     shift_factor: u8,
     decode_factor: u32,
+}
+
+fn compress_and_rlc<F: Field, T: FnMut(PartValue<F>) -> Result<(), Error>>(
+    input: &[u8],
+    randomness: F,
+    mut handle: T,
+) -> Result<F, Error> {
+    let mut data_rlc = F::zero();
+    // how many bits need to be combined into 1 word
+    let mut word_remaining = 8;
+    let mut r_multi = false;
+    for (idx, byte) in input.iter().enumerate() {
+        let (code, code_len) = lookup_huffman_table(*byte);
+        let mut remaining_code_len = code_len;
+        for limb_idx in 0..MAX_PARTS {
+            let mut data = 0;
+            let mut num_bits = 0;
+            let mut shift_factor = 0;
+            let mut decode_factor = 0;
+            let mut next_byte_begin = false;
+            if remaining_code_len != 0 {
+                match remaining_code_len.cmp(&word_remaining) {
+                    std::cmp::Ordering::Less => {
+                        num_bits = remaining_code_len;
+                        shift_factor = 2u8.pow((word_remaining - num_bits) as u32);
+                        decode_factor = 1;
+                        word_remaining -= remaining_code_len;
+                        remaining_code_len = 0;
+                    }
+                    std::cmp::Ordering::Equal => {
+                        num_bits = remaining_code_len;
+                        shift_factor = 1;
+                        decode_factor = 1;
+                        word_remaining = 8;
+                        next_byte_begin = true;
+                        remaining_code_len = 0;
+                    }
+                    std::cmp::Ordering::Greater => {
+                        num_bits = word_remaining;
+                        shift_factor = 1;
+                        decode_factor = 2u32.pow((remaining_code_len - num_bits) as u32);
+                        remaining_code_len -= word_remaining;
+                        word_remaining = 8;
+                        next_byte_begin = true;
+                    }
+                }
+                data = (code / decode_factor) & (0xff >> (8 - num_bits));
+            }
+            let randomness = if r_multi { randomness } else { F::one() };
+            data_rlc = data_rlc * randomness + F::from((data * shift_factor as u32) as u64);
+
+            handle(PartValue {
+                idx,
+                limb_idx,
+                input: *byte,
+                data: data as u8,
+                data_rlc,
+                num_bits,
+                r_multi,
+                shift_factor,
+                decode_factor,
+            })?;
+            r_multi = next_byte_begin;
+        }
+    }
+    Ok(data_rlc)
 }
 
 mod decode {
@@ -126,6 +196,14 @@ impl<F: Field> SubCircuitConfig<F> for CompressCircuitConfig<F> {
         let huffman_table = array_init::array_init(|_| meta.lookup_table_column());
 
         meta.enable_equality(data_rlc);
+
+        // TODO: add lookup table to check
+        // input(0..2^8)
+        // part.data(0..2^8)
+        // part.num_bits(0..2^8)
+        // part.r_multi(bool)
+        // part.shift_factor(0..2^8)
+        // part.decode_factor(0..2^32) 2.pow(0..32)
 
         meta.lookup("huffman table", |meta| {
             // lookups:
@@ -256,118 +334,67 @@ impl<F: Field> CompressCircuitConfig<F> {
         layouter.assign_region(
             || "compress data",
             |mut region| {
-                // next byte needs bits
-                let mut remaining = 8;
-                let mut r_multi = false;
-                let mut rlc = F::zero();
                 let mut rlc_cell = None;
-                let mut offset = (input.len() * MAX_PARTS) - 1;
+                let last_offset = input.len() * MAX_PARTS - 1;
+                let mut offset = last_offset;
 
                 self.q_end.enable(&mut region, offset)?;
 
-                for byte in input.iter() {
-                    let byte = *byte;
-                    let (code, mut code_len) = lookup_huffman_table(byte);
-                    for idx in 0..MAX_PARTS {
-                        region.assign_advice(
-                            || "load input",
-                            self.input,
-                            offset,
-                            || Value::known(F::from(byte as u64)),
-                        )?;
-                        if idx == MAX_PARTS - 1 {
-                            self.q_word_start.enable(&mut region, offset)?;
-                        }
-
-                        if offset != (input.len() * MAX_PARTS) - 1 {
-                            self.q_not_end.enable(&mut region, offset)?;
-                        }
-
-                        let mut data = 0;
-                        let mut num_bits = 0;
-                        let mut next_byte_begin = false;
-                        let mut shift_factor = 0;
-                        let mut decode_factor = 0;
-
-                        if code_len != 0 {
-                            // 1. front part of 1bytes
-                            // 2. back part of 1bytes
-                            match code_len.cmp(&remaining) {
-                                std::cmp::Ordering::Less => {
-                                    num_bits = code_len;
-                                    shift_factor = 2u8.pow((remaining - num_bits) as u32);
-                                    decode_factor = 1;
-                                    remaining -= code_len;
-                                    code_len = 0;
-                                }
-                                std::cmp::Ordering::Equal => {
-                                    num_bits = code_len;
-                                    shift_factor = 1;
-                                    decode_factor = 1;
-                                    remaining = 8; // next byte begin
-                                    next_byte_begin = true;
-                                    code_len = 0;
-                                }
-                                std::cmp::Ordering::Greater => {
-                                    num_bits = remaining;
-                                    shift_factor = 1;
-                                    decode_factor = 2u32.pow((code_len - num_bits) as u32);
-                                    code_len -= remaining;
-                                    remaining = 8; // next byte begin
-                                    next_byte_begin = true;
-                                }
-                            }
-                            data = (code / decode_factor) & (0xff >> (8 - num_bits));
-                        }
-
-                        let randomness = if r_multi { randomness } else { F::one() };
-
-                        rlc = rlc * randomness + F::from((data * shift_factor as u32) as u64);
-                        region.assign_advice(
-                            || "load data",
-                            self.data,
-                            offset,
-                            || Value::known(F::from(data as u64)),
-                        )?;
-                        region.assign_advice(
-                            || "load num_bits",
-                            self.num_bits,
-                            offset,
-                            || Value::known(F::from(num_bits as u64)),
-                        )?;
-                        region.assign_advice(
-                            || "load r_multi",
-                            self.r_multi,
-                            offset,
-                            || Value::known(F::from(r_multi as u64)),
-                        )?;
-                        region.assign_advice(
-                            || "load shift_factor",
-                            self.shift_factor,
-                            offset,
-                            || Value::known(F::from(shift_factor as u64)),
-                        )?;
-                        region.assign_advice(
-                            || "load decode_factor",
-                            self.decode_factor,
-                            offset,
-                            || Value::known(F::from(decode_factor as u64)),
-                        )?;
-                        rlc_cell = Some(region.assign_advice(
-                            || "load data_rlc",
-                            self.data_rlc,
-                            offset,
-                            || Value::known(rlc),
-                        )?);
-
-                        // if next byte begin combines, then next part needs multiply randomness
-                        r_multi = next_byte_begin;
-
-                        if offset > 0 {
-                            offset -= 1;
-                        }
+                compress_and_rlc(input, randomness, |part| {
+                    region.assign_advice(
+                        || "load input",
+                        self.input,
+                        offset,
+                        || Value::known(F::from(part.input as u64)),
+                    )?;
+                    if part.limb_idx == MAX_PARTS - 1 {
+                        self.q_word_start.enable(&mut region, offset)?;
                     }
-                }
+                    if offset != last_offset {
+                        self.q_not_end.enable(&mut region, offset)?;
+                    }
+                    region.assign_advice(
+                        || "load data",
+                        self.data,
+                        offset,
+                        || Value::known(F::from(part.data as u64)),
+                    )?;
+                    region.assign_advice(
+                        || "load num_bits",
+                        self.num_bits,
+                        offset,
+                        || Value::known(F::from(part.num_bits as u64)),
+                    )?;
+                    region.assign_advice(
+                        || "load r_multi",
+                        self.r_multi,
+                        offset,
+                        || Value::known(F::from(part.r_multi as u64)),
+                    )?;
+                    region.assign_advice(
+                        || "load shift_factor",
+                        self.shift_factor,
+                        offset,
+                        || Value::known(F::from(part.shift_factor as u64)),
+                    )?;
+                    region.assign_advice(
+                        || "load decode_factor",
+                        self.decode_factor,
+                        offset,
+                        || Value::known(F::from(part.decode_factor as u64)),
+                    )?;
+                    rlc_cell = Some(region.assign_advice(
+                        || "load data_rlc",
+                        self.data_rlc,
+                        offset,
+                        || Value::known(part.data_rlc),
+                    )?);
+                    if offset > 0 {
+                        offset -= 1;
+                    }
+                    Ok(())
+                })?;
+
                 Ok(rlc_cell)
             },
         )
@@ -439,61 +466,12 @@ mod tests {
         }
     }
 
-    fn compress_and_rlc<F: Field>(input: &[u8], randomness: F) -> F {
-        let mut rlc = F::zero();
-        let mut remaining = 8;
-        let mut ri_multi = false;
-        for byte in input {
-            let (code, mut code_len) = lookup_huffman_table(*byte);
-
-            while code_len > 0 {
-                let num_bits;
-                let shift_factor;
-                let decode_factor;
-                let next_byte_begin;
-
-                match code_len.cmp(&remaining) {
-                    std::cmp::Ordering::Less => {
-                        num_bits = code_len;
-                        shift_factor = 2u8.pow((remaining - num_bits) as u32);
-                        decode_factor = 1;
-                        remaining -= code_len;
-                        next_byte_begin = false;
-                        code_len = 0;
-                    }
-                    std::cmp::Ordering::Equal => {
-                        num_bits = code_len;
-                        shift_factor = 1;
-                        decode_factor = 1;
-                        remaining = 8; // next byte begin
-                        next_byte_begin = true;
-                        code_len = 0;
-                    }
-                    std::cmp::Ordering::Greater => {
-                        num_bits = remaining;
-                        shift_factor = 1;
-                        decode_factor = 2u32.pow((code_len - num_bits) as u32);
-                        code_len -= remaining;
-                        remaining = 8; // next byte begin
-                        next_byte_begin = true;
-                    }
-                }
-                let data = (code / decode_factor) & (0xff >> (8 - num_bits));
-
-                let randomness = if ri_multi { randomness } else { F::one() };
-                rlc = rlc * randomness + F::from((data * shift_factor as u32) as u64);
-                ri_multi = next_byte_begin;
-            }
-        }
-        rlc
-    }
-
     #[test]
     fn test() {
         let input = vec![
             b'H', b'e', b'l', b'l', b'o', b' ', b'W', b'o', b'r', b'l', b'd',
         ];
-        let pi = compress_and_rlc(&input, Fr::from(100));
+        let pi = compress_and_rlc(&input, Fr::from(100), |_| Ok(())).unwrap();
         let circuit = TestCircuit::<Fr>::new(input);
         let prover = MockProver::run(17, &circuit, vec![vec![pi]]).unwrap();
         assert_eq!(prover.verify(), Ok(()));
