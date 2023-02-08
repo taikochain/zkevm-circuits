@@ -256,11 +256,8 @@ impl<F: Field> SubCircuitConfig<F> for CompressCircuitConfig<F> {
         }
 
         range_check!(input, Byte);
-        range_check!(data, Byte);
-        range_check!(num_bits, Range32);
         range_check!(r_multi, Bool);
         range_check!(shift_factor, Exponent8);
-        range_check!(decode_factor, Exponent32);
 
         meta.lookup("huffman table", |meta| {
             // lookups:
@@ -317,7 +314,6 @@ impl<F: Field> SubCircuitConfig<F> for CompressCircuitConfig<F> {
                 let data = meta.query_advice(data, Rotation::cur());
                 let shift_factor = meta.query_advice(shift_factor, Rotation::cur());
                 let r_multi = meta.query_advice(r_multi, Rotation::cur());
-                cb.require_boolean("r_multi", r_multi.clone());
                 let multi = select::expr(r_multi, randomness.clone(), 1.expr());
                 cb.require_equal(
                     "data_rlc",
@@ -419,12 +415,12 @@ impl<F: Field> CompressCircuitConfig<F> {
                     }
 
                     macro_rules! assign_part {
-                        ($part:ident) => {
+                        ($member:ident) => {
                             region.assign_advice(
-                                || concat!("load ", stringify!($part)),
-                                self.$part,
+                                || concat!("load ", stringify!($member)),
+                                self.$member,
                                 offset,
-                                || Value::known(part.$part),
+                                || Value::known(part.$member),
                             )?
                         };
                     }
