@@ -356,15 +356,21 @@ pub fn gen_begin_tx_ops(state: &mut CircuitInputStateRef) -> Result<ExecStep, Er
         state.call_context_write(&mut exec_step, call.call_id, field, value);
     }
 
-    // Increase caller's nonce
     let caller_address = call.caller_address;
-    let nonce_prev = state.sdb.get_account(&caller_address).1.nonce;
+    let nonce_prev = state.sdb.get_account(&caller_address).1.nonce.as_u64();
+    // Increase caller's nonce when the tx is not invalid
+    let nonce = if !state.tx.invalid_tx {
+        // state.sdb.increase_nonce(&caller_address) + 1
+        nonce_prev + 1
+    } else {
+        nonce_prev
+    };
     state.account_write(
         &mut exec_step,
         caller_address,
         AccountField::Nonce,
-        nonce_prev + 1,
-        nonce_prev,
+        nonce.into(),
+        nonce_prev.into(),
     )?;
 
     // Add caller and callee into access list
@@ -390,15 +396,28 @@ pub fn gen_begin_tx_ops(state: &mut CircuitInputStateRef) -> Result<ExecStep, Er
     } else {
         GasCost::TX.as_u64()
     } + call_data_gas_cost;
-    exec_step.gas_cost = GasCost(intrinsic_gas_cost);
+
+    // Don't pay any fee or transfer any ETH for invalid transactions
+    let (gas_cost, value, fee) = if !state.tx.invalid_tx {
+        (
+            intrinsic_gas_cost,
+            call.value,
+            state.tx.gas_price * state.tx.gas,
+        )
+    } else {
+        (0, Word::zero(), Word::zero())
+    };
+
+    // Set the gas cost
+    exec_step.gas_cost = GasCost(gas_cost);
 
     // Transfer with fee
     state.transfer_with_fee(
         &mut exec_step,
         call.caller_address,
         call.address,
-        call.value,
-        state.tx.gas_price * state.tx.gas,
+        value,
+        fee,
     )?;
 
     // Get code_hash of callee
@@ -417,7 +436,7 @@ pub fn gen_begin_tx_ops(state: &mut CircuitInputStateRef) -> Result<ExecStep, Er
     match (
         call.is_create(),
         state.is_precompiled(&call.address),
-        is_empty_code_hash,
+        is_empty_code_hash || state.tx.invalid_tx,
     ) {
         // 1. Creation transaction.
         (true, _, _) => {
@@ -454,7 +473,7 @@ pub fn gen_begin_tx_ops(state: &mut CircuitInputStateRef) -> Result<ExecStep, Er
             evm_unimplemented!("Call to precompiled is left unimplemented");
             Ok(exec_step)
         }
-        (_, _, is_empty_code_hash) => {
+        (_, _, do_not_run_code) => {
             state.account_read(
                 &mut exec_step,
                 call.address,
@@ -463,8 +482,8 @@ pub fn gen_begin_tx_ops(state: &mut CircuitInputStateRef) -> Result<ExecStep, Er
                 callee_code_hash_word,
             )?;
 
-            // 3. Call to account with empty code.
-            if is_empty_code_hash {
+            // 3. Call to account with empty code/invalid tx.
+            if do_not_run_code {
                 return Ok(exec_step);
             }
 
@@ -503,6 +522,7 @@ pub fn gen_begin_tx_ops(state: &mut CircuitInputStateRef) -> Result<ExecStep, Er
 
 pub fn gen_end_tx_ops(state: &mut CircuitInputStateRef) -> Result<ExecStep, Error> {
     let mut exec_step = state.new_end_tx_step();
+
     let call = state.tx.calls()[0].clone();
 
     state.call_context_read(
@@ -554,6 +574,7 @@ pub fn gen_end_tx_ops(state: &mut CircuitInputStateRef) -> Result<ExecStep, Erro
     let coinbase_balance_prev = coinbase_account.balance;
     let coinbase_balance =
         coinbase_balance_prev + effective_tip * (state.tx.gas - exec_step.gas_left.0);
+
     state.account_write(
         &mut exec_step,
         state.block.coinbase,
