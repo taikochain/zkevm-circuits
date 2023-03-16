@@ -35,17 +35,9 @@ impl Parse for Ast {
     }
 }
 
-#[derive(Debug)]
+#[derive(Default, Debug)]
 struct Model {
     expr: TokenStream,
-}
-
-impl Default for Model {
-    fn default() -> Self {
-        Self {
-            expr: TokenStream::new(),
-        }
-    }
 }
 
 impl<'ast> Visit<'ast> for Model {
