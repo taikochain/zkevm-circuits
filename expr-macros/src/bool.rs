@@ -15,13 +15,19 @@ impl Parse for Ast {
             syn::Expr::Binary(ref expr) => match expr.op {
                 // only support && and ||
                 syn::BinOp::And(_) | syn::BinOp::Or(_) => (),
-                _ => return Err(syn::Error::new_spanned(expr, "unsupported binop")),
+                _ => {
+                    let message = format!("unsupported binop: {:?}", expr.op);
+                    return Err(syn::Error::new_spanned(expr, message));
+                }
             },
             // 2. !selectorA
             syn::Expr::Unary(ref expr) => match expr.op {
                 // only support !
                 syn::UnOp::Not(_) => (),
-                _ => return Err(syn::Error::new_spanned(expr, "unsupported unop")),
+                _ => {
+                    let message = format!("unsupported unop: {:?}", expr.op);
+                    return Err(syn::Error::new_spanned(expr, message));
+                }
             },
             // 3. (selectorA && selectorB)
             // 4. selectorA

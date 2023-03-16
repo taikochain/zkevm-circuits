@@ -14,5 +14,5 @@ quote = "1.0.23"
 
 [dev-dependencies]
 trybuild = "1.0.77"
-halo2_proofs = { git = "https://github.com/privacy-scaling-explorations/halo2.git", tag = "v2022_09_10" }
+halo2_proofs = { git = "https://github.com/privacy-scaling-explorations/halo2.git", tag = "v2023_02_02" }
 gadgets = { path = "../gadgets" }
