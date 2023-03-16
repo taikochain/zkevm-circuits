@@ -203,13 +203,6 @@ impl<F: Field> SubCircuitConfig<F> for CopyCircuitConfig<F> {
                 },
             );
 
-            let rw_diff = and::expr([
-                or::expr([
-                    tag.value_equals(CopyDataType::Memory, Rotation::cur())(meta),
-                    tag.value_equals(CopyDataType::TxLog, Rotation::cur())(meta),
-                ]),
-                not::expr(meta.query_advice(is_pad, Rotation::cur())),
-            ]);
             cb.condition(
                 not::expr(meta.query_advice(is_last, Rotation::cur())),
                 |cb| {

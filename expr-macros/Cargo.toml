@@ -1,0 +1,18 @@
+[package]
+name = "expr-macros"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = { version = "1.0.107", features = ["full", "extra-traits"] }
+proc-macro2 = "1.0.50"
+quote = "1.0.23"
+
+[dev-dependencies]
+trybuild = "1.0.77"
+halo2_proofs = { git = "https://github.com/privacy-scaling-explorations/halo2.git", tag = "v2022_09_10" }
+gadgets = { path = "../gadgets" }
