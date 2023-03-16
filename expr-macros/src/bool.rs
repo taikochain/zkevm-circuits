@@ -60,7 +60,6 @@ impl<'ast> Visit<'ast> for Model {
             }
             syn::BinOp::Or(_) => {
                 self.expr = quote! {or::expr([#left_expr, #right_expr])};
-                println!("or: {}", self.expr);
             }
             _ => unreachable!(),
         }
@@ -86,6 +85,18 @@ impl<'ast> Visit<'ast> for Model {
     }
 
     fn visit_expr_path(&mut self, node: &'ast syn::ExprPath) {
+        self.expr = node.to_token_stream();
+    }
+
+    fn visit_expr_field(&mut self, node: &'ast syn::ExprField) {
+        self.expr = node.to_token_stream();
+    }
+
+    fn visit_expr_reference(&mut self, node: &'ast syn::ExprReference) {
+        self.expr = node.to_token_stream();
+    }
+
+    fn visit_expr_index(&mut self, node: &'ast syn::ExprIndex) {
         self.expr = node.to_token_stream();
     }
 }
