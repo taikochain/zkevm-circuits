@@ -68,26 +68,32 @@ impl<'ast> Visit<'ast> for Model {
         }
     }
 
+    // a.expr()
     fn visit_expr_method_call(&mut self, node: &'ast syn::ExprMethodCall) {
         self.expr = node.to_token_stream();
     }
 
+    // a()
     fn visit_expr_call(&mut self, node: &'ast syn::ExprCall) {
         self.expr = node.to_token_stream();
     }
 
+    // a
     fn visit_expr_path(&mut self, node: &'ast syn::ExprPath) {
         self.expr = node.to_token_stream();
     }
 
+    // a.b
     fn visit_expr_field(&mut self, node: &'ast syn::ExprField) {
         self.expr = node.to_token_stream();
     }
 
+    // &a
     fn visit_expr_reference(&mut self, node: &'ast syn::ExprReference) {
         self.expr = node.to_token_stream();
     }
 
+    // a[0]
     fn visit_expr_index(&mut self, node: &'ast syn::ExprIndex) {
         self.expr = node.to_token_stream();
     }
