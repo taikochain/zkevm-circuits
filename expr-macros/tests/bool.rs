@@ -20,7 +20,7 @@ fn test_bool_with_call_expr() {
 #[test]
 fn test_index() {
     let a: [Expression<Fr>; 2] = [1.expr(), 0.expr()];
-    println!("in struct: {:?}", expr_macros::bool!(!a[0].expr()));
+    println!("in index: {:?}", expr_macros::bool!(!a[0].expr()));
 }
 
 #[test]
@@ -37,7 +37,7 @@ fn test_call() {
     fn a() -> Expression<Fr> {
         1.expr()
     }
-    println!("in struct {:?}", expr_macros::bool!(!a()));
+    println!("call {:?}", expr_macros::bool!(!a()));
 }
 
 #[test]
@@ -51,7 +51,7 @@ fn test_method_call() {
         }
     }
     let a = A { a: 1.expr() };
-    println!("in struct {:?}", expr_macros::bool!(!a.foo()));
+    println!("method call {:?}", expr_macros::bool!(!a.foo()));
 }
 
 #[test]

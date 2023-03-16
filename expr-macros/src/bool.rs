@@ -25,7 +25,13 @@ impl Parse for Ast {
             },
             // 3. (selectorA && selectorB)
             // 4. selectorA
-            syn::Expr::Paren(_) | syn::Expr::Path(_) | syn::Expr::MethodCall(_) => (),
+            syn::Expr::Paren(_)
+            | syn::Expr::Path(_)
+            | syn::Expr::MethodCall(_)
+            | syn::Expr::Call(_)
+            | syn::Expr::Reference(_)
+            | syn::Expr::Field(_)
+            | syn::Expr::Index(_) => (),
             _ => {
                 let message = format!("unsupported expr: {:?}", ast);
                 return Err(syn::Error::new_spanned(ast, message));
