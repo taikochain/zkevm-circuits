@@ -1,6 +1,5 @@
 use gadgets::util::{and, not, or, Expr};
-use halo2_proofs::halo2curves::bn256::Fr;
-use halo2_proofs::plonk::Expression;
+use halo2_proofs::{halo2curves::bn256::Fr, plonk::Expression};
 #[test]
 fn test_bool_with_call_expr() {
     let a: Expression<Fr> = 1.expr();
