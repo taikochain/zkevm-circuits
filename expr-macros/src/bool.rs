@@ -1,9 +1,6 @@
 use proc_macro2::TokenStream;
-use quote::quote;
-use quote::ToTokens;
-use syn::parse::Parse;
-use syn::parse_macro_input;
-use syn::visit::Visit;
+use quote::{quote, ToTokens};
+use syn::{parse::Parse, parse_macro_input, visit::Visit};
 
 struct Ast(syn::Expr);
 
@@ -54,9 +51,9 @@ struct Model {
 
 impl<'ast> Visit<'ast> for Model {
     fn visit_expr_binary(&mut self, node: &'ast syn::ExprBinary) {
-        self.visit_expr(&*node.left);
+        self.visit_expr(&node.left);
         let left_expr = self.expr.clone();
-        self.visit_expr(&*node.right);
+        self.visit_expr(&node.right);
         let right_expr = self.expr.clone();
         match node.op {
             syn::BinOp::And(_) => {
@@ -70,7 +67,7 @@ impl<'ast> Visit<'ast> for Model {
     }
 
     fn visit_expr_unary(&mut self, node: &'ast syn::ExprUnary) {
-        self.visit_expr(&*node.expr);
+        self.visit_expr(&node.expr);
         let expr = self.expr.clone();
         match node.op {
             syn::UnOp::Not(_) => {
