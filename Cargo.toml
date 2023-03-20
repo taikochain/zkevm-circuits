@@ -10,7 +10,8 @@ members = [
     "eth-types",
     "external-tracer",
     "mock",
-    "testool"
+    "expr-macros",
+    "testool",
 ]
 
 [patch.crates-io]
