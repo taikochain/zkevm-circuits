@@ -62,15 +62,16 @@ pub struct PublicData {
     pub signal_root: Word,
     /// extra message
     pub graffiti: Word,
-    /// Prover address
-    pub prover: Address,
-    /// parent block gas used
-    pub parent_gas_used: u32,
-    /// block gas used
-    pub gas_used: u32,
+    /// union field
+    pub field9: Word, // prover[96:256]+parentGasUsed[64:96]+gasUsed[32:64]
 
-    // private
-    field8: Word, // prover[96:256]+parentGasUsed[64:96]+gasUsed[32:64]
+    // privates
+    // Prover address
+    prover: Address,
+    // parent block gas used
+    parent_gas_used: u32,
+    // block gas used
+    gas_used: u32,
 
     block_constants: BlockConstants,
     chain_id: Word,
@@ -105,7 +106,7 @@ impl PublicData {
             (
                 "prover+parentGasUsed+gasUsed",
                 None,
-                self.field8.to_be_bytes(),
+                self.field9.to_be_bytes(),
             ),
         ]
     }
@@ -120,7 +121,7 @@ impl PublicData {
             .chain(self.block_hash.to_be_bytes())
             .chain(self.signal_root.to_be_bytes())
             .chain(self.graffiti.to_be_bytes())
-            .chain(self.field8.to_be_bytes())
+            .chain(self.field9.to_be_bytes())
             .collect()
     }
 
@@ -130,7 +131,7 @@ impl PublicData {
 
     /// create PublicData from block and taiko
     pub fn new<F>(block: &witness::Block<F>, taiko: &witness::Taiko) -> Self {
-        let field8 = taiko.prover.to_word() * Word::from(2u128.pow(96))
+        let field9 = taiko.prover.to_word() * Word::from(2u128.pow(96))
             + Word::from(taiko.parent_gas_used as u64) * Word::from(2u128.pow(64))
             + block.eth_block.gas_used * Word::from(2u128.pow(32));
 
@@ -146,7 +147,7 @@ impl PublicData {
             prover: taiko.prover,
             parent_gas_used: taiko.parent_gas_used,
             gas_used: block.eth_block.gas_used.as_u32(),
-            field8,
+            field9,
             block_constants: BlockConstants {
                 coinbase: block.context.coinbase,
                 timestamp: block.context.timestamp,
