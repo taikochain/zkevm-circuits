@@ -2,14 +2,14 @@
 
 use crate::evm_circuit::util::constraint_builder::BaseConstraintBuilder;
 use crate::table::{BlockTable, KeccakTable};
-use crate::util::Expr;
 use crate::util::{random_linear_combine_word as rlc, Challenges, SubCircuit, SubCircuitConfig};
 use crate::witness;
 use eth_types::ToWord;
 use eth_types::{geth_types::BlockConstants, H256};
 use eth_types::{Address, Field, ToBigEndian, ToLittleEndian, ToScalar, Word};
 use ethers_core::utils::keccak256;
-use halo2_proofs::plonk::{Expression, Instance};
+use gadgets::util::{or, Expr};
+use halo2_proofs::plonk::{Expression, Fixed, Instance, SecondPhase};
 use halo2_proofs::{
     circuit::{AssignedCell, Layouter, Region, SimpleFloorPlanner, Value},
     plonk::{Advice, Circuit, Column, ConstraintSystem, Error, Selector},
@@ -195,6 +195,8 @@ pub struct PiCircuitConfig<F: Field> {
     q_start: Selector,
     q_not_end: Selector,
 
+    is_byte: Column<Fixed>,
+
     pi: Column<Instance>, // keccak_hi, keccak_lo
 
     q_keccak: Selector,
@@ -228,16 +230,17 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
             challenges,
         }: Self::ConfigArgs,
     ) -> Self {
-        let rpi = meta.advice_column();
+        let rpi = meta.advice_column_in(SecondPhase);
         let rpi_field_bytes = meta.advice_column();
-        let rpi_field_bytes_acc = meta.advice_column();
-        let rpi_rlc_acc = meta.advice_column();
+        let rpi_field_bytes_acc = meta.advice_column_in(SecondPhase);
+        let rpi_rlc_acc = meta.advice_column_in(SecondPhase);
         let rpi_len_acc = meta.advice_column();
         let q_field_start = meta.selector();
         let q_field_step = meta.selector();
         let q_field_end = meta.selector();
         let q_start = meta.selector();
         let q_not_end = meta.selector();
+        let is_byte = meta.fixed_column();
 
         let pi = meta.instance_column();
 
@@ -251,11 +254,14 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
 
         // rpi
         meta.create_gate("rpi_next = rpi", |meta| {
+            let mut cb = BaseConstraintBuilder::new(MAX_DEGREE);
+
             let q_field_step = meta.query_selector(q_field_step);
             let rpi_next = meta.query_advice(rpi, Rotation::next());
             let rpi = meta.query_advice(rpi, Rotation::cur());
 
-            vec![q_field_step * (rpi_next - rpi)]
+            cb.require_equal("rpi_next = rpi", rpi_next, rpi);
+            cb.gate(q_field_step)
         });
         meta.create_gate("rpi_rlc_acc[i+1] = rpi_rlc_acc[i] * r + rpi[i+1]", |meta| {
             let mut cb = BaseConstraintBuilder::new(MAX_DEGREE);
@@ -265,7 +271,11 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
             let rpi_next = meta.query_advice(rpi, Rotation::next());
             let r = challenges.evm_word();
 
-            cb.require_equal("left=right", rpi_rlc_acc_next, rpi_rlc_acc * r + rpi_next);
+            cb.require_equal(
+                "rpi_rlc_acc[i+1] = rpi_rlc_acc[i] * r + rpi[i+1]",
+                rpi_rlc_acc_next,
+                rpi_rlc_acc * r + rpi_next,
+            );
             cb.gate(q_not_end)
         });
         meta.create_gate("rpi_rlc_acc[0] = rpi[0]", |meta| {
@@ -274,8 +284,7 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
             let rpi_rlc_acc = meta.query_advice(rpi_rlc_acc, Rotation::cur());
             let rpi = meta.query_advice(rpi, Rotation::cur());
 
-            cb.require_equal("", rpi_rlc_acc, rpi);
-
+            cb.require_equal("rpi_rlc_acc[0] = rpi[0]", rpi_rlc_acc, rpi);
             cb.gate(q_start)
         });
 
@@ -283,28 +292,46 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
         meta.create_gate(
             "rpi_field_bytes_acc[i+1] = rpi_field_bytes_acc[i] * t + rpi_bytes[i+1]",
             |meta| {
+                let mut cb = BaseConstraintBuilder::new(MAX_DEGREE);
+
                 let q_field_step = meta.query_selector(q_field_step);
-                let bytes_acc_next = meta.query_advice(rpi_field_bytes_acc, Rotation::next());
-                let bytes_acc = meta.query_advice(rpi_field_bytes_acc, Rotation::cur());
-                let bytes_next = meta.query_advice(rpi_field_bytes, Rotation::next());
+                let rpi_field_bytes_acc_next =
+                    meta.query_advice(rpi_field_bytes_acc, Rotation::next());
+                let rpi_field_bytes_acc = meta.query_advice(rpi_field_bytes_acc, Rotation::cur());
+                let rpi_field_bytes_next = meta.query_advice(rpi_field_bytes, Rotation::next());
                 let randomness = challenges.evm_word();
 
-                vec![q_field_step * (bytes_acc_next - (bytes_acc * randomness + bytes_next))]
+                cb.require_equal(
+                    "rpi_field_bytes_acc[i+1] = rpi_field_bytes_acc[i] * t + rpi_bytes[i+1]",
+                    rpi_field_bytes_acc_next,
+                    rpi_field_bytes_acc * randomness + rpi_field_bytes_next,
+                );
+                cb.gate(q_field_step)
             },
         );
         meta.create_gate("rpi_field_bytes_acc[0] = rpi_field_bytes[0]", |meta| {
+            let mut cb = BaseConstraintBuilder::new(MAX_DEGREE);
+
             let q_field_start = meta.query_selector(q_field_start);
             let rpi_field_bytes_acc = meta.query_advice(rpi_field_bytes_acc, Rotation::cur());
             let rpi_field_bytes = meta.query_advice(rpi_field_bytes, Rotation::cur());
 
-            vec![q_field_start * (rpi_field_bytes_acc - rpi_field_bytes)]
+            cb.require_equal(
+                "rpi_field_bytes_acc[0] = rpi_field_bytes[0]",
+                rpi_field_bytes_acc,
+                rpi_field_bytes,
+            );
+            cb.gate(q_field_start)
         });
         meta.create_gate("rpi_field_bytes_acc[last] = rpi", |meta| {
+            let mut cb = BaseConstraintBuilder::new(MAX_DEGREE);
+
             let q_field_end = meta.query_selector(q_field_end);
             let rpi_field_bytes_acc = meta.query_advice(rpi_field_bytes_acc, Rotation::cur());
             let rpi = meta.query_advice(rpi, Rotation::cur());
 
-            vec![q_field_end * (rpi - rpi_field_bytes_acc)]
+            cb.require_equal("rpi_field_bytes_acc[last] = rpi", rpi_field_bytes_acc, rpi);
+            cb.gate(q_field_end)
         });
 
         // keccak in rpi
@@ -327,6 +354,17 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
             ]
         });
 
+        // is byte
+        meta.lookup_any("is_byte", |meta| {
+            let q_field_step = meta.query_selector(q_field_start);
+            let q_field_end = meta.query_selector(q_field_end);
+            let is_field = or::expr([q_field_step, q_field_end]);
+            let rpi_field_bytes = meta.query_advice(rpi_field_bytes, Rotation::cur());
+
+            let is_byte = meta.query_fixed(is_byte, Rotation::cur());
+            vec![(is_field * rpi_field_bytes, is_byte)]
+        });
+
         Self {
             rpi,
             rpi_field_bytes,
@@ -339,6 +377,7 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
 
             q_start,
             q_not_end,
+            is_byte,
 
             pi, // keccak_hi, keccak_lo
 
@@ -642,6 +681,21 @@ impl<F: Field> SubCircuit<F> for PiCircuit<F> {
         challenges: &Challenges<Value<F>>,
         layouter: &mut impl Layouter<F>,
     ) -> Result<(), Error> {
+        layouter.assign_region(
+            || "is_byte table",
+            |mut region| {
+                for i in 0..(1 << 8) {
+                    region.assign_fixed(
+                        || format!("row_{}", i),
+                        config.is_byte,
+                        i,
+                        || Value::known(F::from(i as u64)),
+                    )?;
+                }
+
+                Ok(())
+            },
+        )?;
         config.assign(layouter, &self.public_data, challenges)
     }
 }
@@ -708,8 +762,6 @@ mod pi_circuit_test {
         halo2curves::bn256::Fr,
     };
     use pretty_assertions::assert_eq;
-    use rand::SeedableRng;
-    use rand_chacha::ChaCha20Rng;
 
     fn run<F: Field>(
         k: u32,
