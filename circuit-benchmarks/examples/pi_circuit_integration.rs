@@ -41,11 +41,7 @@ mod test {
         const MAX_CALLDATA: usize = 65536 * 16;
 
         let public_data = generate_publicdata::<MAX_TXS, MAX_CALLDATA>();
-        let circuit = PiTestCircuit::<Fr, MAX_TXS, MAX_CALLDATA>(PiCircuit::<Fr>::new(
-            MAX_TXS,
-            MAX_CALLDATA,
-            randomness,
-        ));
+        let circuit = PiTestCircuit::<Fr>(PiCircuit::<Fr>::new(public_data));
         let public_inputs = circuit.0.instance();
         let instance: Vec<&[Fr]> = public_inputs.iter().map(|input| &input[..]).collect();
         let instances = &[&instance[..]][..];
@@ -186,11 +182,7 @@ mod test {
     fn new_pi_circuit<const MAX_TXS: usize, const MAX_CALLDATA: usize>(
     ) -> PiTestCircuit<Fr, MAX_TXS, MAX_CALLDATA> {
         let public_data = generate_publicdata::<MAX_TXS, MAX_CALLDATA>();
-        let circuit = PiTestCircuit::<Fr, MAX_TXS, MAX_CALLDATA>(PiCircuit::<Fr>::new(
-            MAX_TXS,
-            MAX_CALLDATA,
-            randomness,
-        ));
+        let circuit = PiTestCircuit::<Fr>(PiCircuit::<Fr>::new(public_data));
         circuit
     }
 }
@@ -255,9 +247,7 @@ trait InstancesExport {
     fn instances(&self) -> Vec<Vec<Fr>>;
 }
 
-impl<const MAX_TXS: usize, const MAX_CALLDATA: usize> InstancesExport
-    for PiTestCircuit<Fr, MAX_TXS, MAX_CALLDATA>
-{
+impl InstancesExport for PiTestCircuit<Fr> {
     fn num_instance() -> Vec<usize> {
         vec![2]
     }
@@ -418,7 +408,7 @@ use bus_mapping::Error;
 use clap::Parser;
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
-use zkevm_circuits::evm_circuit::witness::block_convert;
+use zkevm_circuits::evm_circuit::witness::{block_convert, Taiko};
 use zkevm_circuits::tx_circuit::PrimeField;
 
 #[cfg(feature = "http_provider")]
@@ -553,16 +543,9 @@ async fn main() -> Result<(), Error> {
     select_circuit_config!(
         txs,
         {
-            let public_data = PublicData::new(&block, prover, txs_rlp);
+            let public_data = PublicData::new(&block, &Taiko::default());
             log::info!("using CIRCUIT_CONFIG = {:?}", CIRCUIT_CONFIG);
-            let circuit =
-                PiTestCircuit::<Fr, { CIRCUIT_CONFIG.max_txs }, { CIRCUIT_CONFIG.max_calldata }>(
-                    PiCircuit::new(
-                        CIRCUIT_CONFIG.max_txs,
-                        CIRCUIT_CONFIG.max_calldata,
-                        public_data,
-                    ),
-                );
+            let circuit = PiTestCircuit::<Fr>(PiCircuit::new(public_data));
             assert!(block.txs.len() <= CIRCUIT_CONFIG.max_txs);
 
             let params = get_circuit_params::<0>(CIRCUIT_CONFIG.min_k as usize);
@@ -579,15 +562,11 @@ async fn main() -> Result<(), Error> {
 
             let deployment_code = if config.yul_output.is_some() {
                 gen_evm_verifier(
-                        &params,
-                        pk.get_vk(),
-                        PiTestCircuit::<
-                            Fr,
-                            { CIRCUIT_CONFIG.max_txs },
-                            { CIRCUIT_CONFIG.max_calldata },
-                        >::num_instance(),
-                        config.yul_output
-                    )
+                    &params,
+                    pk.get_vk(),
+                    PiTestCircuit::<Fr>::num_instance(),
+                    config.yul_output,
+                )
             } else {
                 vec![]
             };

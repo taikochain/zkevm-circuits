@@ -68,6 +68,7 @@ pub fn trace(config: &TraceConfig) -> Result<Vec<GethExecTrace>, Error> {
     let trace_string = geth_utils::trace(&serde_json::to_string(&config).unwrap()).map_err(
         |error| match error {
             geth_utils::Error::TracingError(error) => Error::TracingError(error),
+            _ => unreachable!(),
         },
     )?;
 

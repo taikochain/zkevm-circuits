@@ -1,12 +1,39 @@
 //! Connection to external EVM tracer.
 
 use core::fmt::{Display, Formatter, Result as FmtResult};
+use ethers_core::types::{Block, Transaction};
+use serde_json;
 use std::ffi::{CStr, CString};
 use std::os::raw::c_char;
 
 extern "C" {
     fn CreateTrace(str: *const c_char) -> *const c_char;
     fn FreeString(str: *const c_char);
+    fn BlockRlp(str: *const c_char) -> *const c_char;
+}
+
+pub fn block_rlp(block: &Block<Transaction>) -> Result<Vec<u8>, Error> {
+    let input = serde_json::to_string(block).map_err(|e| Error::BlockRlpError(e.to_string()))?;
+    let c_input = CString::new(input).expect("invalid input");
+    let result = unsafe { BlockRlp(c_input.as_ptr()) };
+    let c_result = unsafe { CStr::from_ptr(result) };
+    let result = c_result
+        .to_str()
+        .expect("Error translating EVM block from library")
+        .to_string();
+
+    // We can now free the returned string (memory managed by Go)
+    unsafe { FreeString(c_result.as_ptr()) };
+
+    // Return the trace
+    match result.is_empty() || result.starts_with("Failed") {
+        true => Err(Error::BlockRlpError(result)),
+        false => {
+            let result = result.trim_start_matches("0x");
+            let result = result.trim_start_matches("0X");
+            hex::decode(result).map_err(|e| Error::BlockRlpError(e.to_string()))
+        }
+    }
 }
 
 /// Creates the trace
@@ -40,6 +67,7 @@ pub fn trace(config: &str) -> Result<String, Error> {
 pub enum Error {
     /// Error while tracing.
     TracingError(String),
+    BlockRlpError(String),
 }
 
 impl Display for Error {
@@ -51,6 +79,12 @@ impl Display for Error {
 #[cfg(test)]
 mod test {
     use crate::trace;
+
+    #[test]
+    fn test_trim() {
+        let result = "0xx".trim_start_matches("0x");
+        assert_eq!(result, "x");
+    }
 
     #[test]
     fn valid_tx() {
