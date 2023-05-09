@@ -24,7 +24,6 @@ rand_xorshift = "0.3"
 rand = "0.8"
 itertools = "0.10.3"
 lazy_static = "1.4"
-once_cell = "1.17.1"
 keccak256 = { path = "../keccak256" }
 geth-utils = { path = "../geth-utils" }
 log = "0.4"

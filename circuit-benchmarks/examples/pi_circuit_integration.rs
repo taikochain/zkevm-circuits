@@ -1,6 +1,6 @@
 //! PI circuit benchmarks
 use ark_std::{end_timer, start_timer};
-use eth_types::{Bytes, U256};
+use eth_types::{Bytes, H256, U256};
 use halo2_proofs::plonk::{create_proof, keygen_pk, keygen_vk, verify_proof};
 use halo2_proofs::poly::kzg::commitment::{KZGCommitmentScheme, ParamsKZG};
 use halo2_proofs::{
@@ -402,7 +402,6 @@ fn load_circuit_pk<C: Circuit<Fr>>(
 }
 
 use bus_mapping::circuit_input_builder::{BuilderClient, CircuitsParams};
-use bus_mapping::public_input_builder::get_txs_rlp;
 use bus_mapping::rpc::GethClient;
 use bus_mapping::Error;
 use clap::Parser;
@@ -419,20 +418,57 @@ use ethers_providers::Ws;
 #[derive(Parser, Debug)]
 #[clap(version, about)]
 pub(crate) struct ProverCmdConfig {
-    /// l1_geth_url
-    l1_geth_url: Option<String>,
-    /// propose tx hash
-    propose_tx_hash: Option<String>,
     /// l2_geth_url
     l2_geth_url: Option<String>,
     /// block_num
     block_num: Option<u64>,
     /// prover address
-    address: Option<String>,
+    prover: Option<String>,
+
+    /// l1 signal service address
+    l1_signal_service: Option<String>,
+    /// l2 signal service address
+    l2_signal_service: Option<String>,
+    /// l2 contract address
+    l2_contract: Option<String>,
+    /// meta hash
+    meta_hash: Option<String>,
+    /// signal root
+    signal_root: Option<String>,
+    /// extra message
+    graffiti: Option<String>,
+    /// parent gas used
+    parent_gas_used: Option<u32>,
+
     /// generate yul
     yul_output: Option<String>,
     /// output_file
     output: Option<String>,
+}
+
+impl ProverCmdConfig {
+    fn as_taiko_witness(&self) -> Taiko {
+        Taiko {
+            l1_signal_service: parse_address(&self.l1_signal_service),
+            l2_signal_service: parse_address(&self.l2_signal_service),
+            l2_contract: parse_address(&self.l2_contract),
+            meta_hash: parse_hash(&self.meta_hash),
+            signal_root: parse_hash(&self.signal_root),
+            graffiti: parse_hash(&self.graffiti),
+            prover: parse_address(&self.prover),
+            parent_gas_used: self.parent_gas_used.unwrap(),
+        }
+    }
+}
+
+fn parse_hash(input: &Option<String>) -> H256 {
+    H256::from_slice(&hex::decode(input.as_ref().unwrap().as_bytes()).expect("parse_hash"))
+}
+
+fn parse_address(input: &Option<String>) -> Address {
+    eth_types::Address::from_slice(
+        &hex::decode(input.as_ref().unwrap().as_bytes()).expect("parse_address"),
+    )
 }
 
 #[derive(Clone, Default, Debug, Serialize, Deserialize)]
@@ -497,24 +533,9 @@ async fn main() -> Result<(), Error> {
 
     let config = ProverCmdConfig::parse();
     let block_num = config.block_num.map_or_else(|| 1, |n| n);
-    let prover = eth_types::Address::from_slice(
-        &hex::decode(config.address.expect("needs prover").as_bytes()).expect("parse_address"),
-    );
 
     #[cfg(feature = "http_provider")]
-    let l1_provider = Http::from_str(&config.l1_geth_url.unwrap()).expect("Http geth url");
-    #[cfg(not(feature = "http_provider"))]
-    let l1_provider = Ws::connect(&config.l1_geth_url.unwrap())
-        .await
-        .expect("l1 ws rpc connected");
-    let l1_geth_client = GethClient::new(l1_provider);
-    let propose_tx_hash = eth_types::H256::from_slice(
-        &hex::decode(config.propose_tx_hash.unwrap().as_bytes()).expect("parse_hash"),
-    );
-    let txs_rlp = get_txs_rlp(&l1_geth_client, propose_tx_hash).await?;
-
-    #[cfg(feature = "http_provider")]
-    let l2_provider = Http::from_str(&config.l2_geth_url.unwrap()).expect("Http geth url");
+    let l2_provider = Http::from_str(config.l2_geth_url.as_ref().unwrap()).expect("Http geth url");
     #[cfg(not(feature = "http_provider"))]
     let l2_provider = Ws::connect(&config.l2_geth_url.unwrap())
         .await
@@ -540,10 +561,11 @@ async fn main() -> Result<(), Error> {
     let builder = BuilderClient::new(l2_geth_client, circuit_params.clone()).await?;
     let (builder, _) = builder.gen_inputs(block_num).await?;
     let block = block_convert(&builder.block, &builder.code_db).unwrap();
+    let taiko = config.as_taiko_witness();
     select_circuit_config!(
         txs,
         {
-            let public_data = PublicData::new(&block, &Taiko::default());
+            let public_data = PublicData::new(&block, &taiko);
             log::info!("using CIRCUIT_CONFIG = {:?}", CIRCUIT_CONFIG);
             let circuit = PiTestCircuit::<Fr>(PiCircuit::new(public_data));
             assert!(block.txs.len() <= CIRCUIT_CONFIG.max_txs);
@@ -598,8 +620,7 @@ async fn main() -> Result<(), Error> {
             let output_file = if let Some(output) = config.output {
                 output
             } else {
-                let l1_tx_hash = propose_tx_hash.to_string();
-                format!("./block-{}_proof-new.json", &l1_tx_hash)
+                format!("./block-{}_proof-new.json", config.block_num.unwrap())
             };
             File::create(output_file)
                 .expect("open output_file")

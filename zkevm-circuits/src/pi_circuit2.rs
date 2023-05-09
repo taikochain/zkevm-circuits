@@ -15,7 +15,6 @@ use halo2_proofs::{
     plonk::{Advice, Circuit, Column, ConstraintSystem, Error, Selector},
     poly::Rotation,
 };
-use once_cell::sync::Lazy;
 use std::{iter, marker::PhantomData};
 
 const BLOCK_LEN: usize = 8;
