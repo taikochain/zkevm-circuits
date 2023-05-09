@@ -8,7 +8,7 @@ use eth_types::ToWord;
 use eth_types::{geth_types::BlockConstants, H256};
 use eth_types::{Address, Field, ToBigEndian, ToLittleEndian, ToScalar, Word};
 use ethers_core::utils::keccak256;
-use gadgets::util::{or, Expr};
+use gadgets::util::{or, select, Expr};
 use halo2_proofs::plonk::{Expression, Fixed, Instance, SecondPhase};
 use halo2_proofs::{
     circuit::{AssignedCell, Layouter, Region, SimpleFloorPlanner, Value},
@@ -23,12 +23,6 @@ const MAX_DEGREE: usize = 10;
 const RPI_CELL_IDX: usize = 0;
 const RPI_RLC_ACC_CELL_IDX: usize = 1;
 const BYTE_POW_BASE: u64 = 1 << 8;
-
-static OMMERS_HASH: Lazy<H256> = Lazy::new(|| {
-    H256::from_slice(
-        &hex::decode("1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347").unwrap(),
-    )
-});
 
 /// Values of the block table (as in the spec)
 #[derive(Clone, Default, Debug)]
@@ -99,8 +93,8 @@ impl PublicData {
             ),
             ("l2_contract", None, self.l2_contract.to_be_bytes()),
             ("meta_hash", None, self.meta_hash.to_be_bytes()),
-            ("block_hash", BlockHash, self.block_hash.to_be_bytes()),
             ("parent_hash", None, self.parent_hash.to_be_bytes()),
+            ("block_hash", BlockHash, self.block_hash.to_be_bytes()),
             ("signal_root", None, self.signal_root.to_be_bytes()),
             ("graffiti", None, self.graffiti.to_be_bytes()),
             (
@@ -140,7 +134,7 @@ impl PublicData {
             l2_signal_service: taiko.l2_signal_service.to_word(),
             l2_contract: taiko.l2_contract.to_word(),
             meta_hash: taiko.meta_hash.to_word(),
-            block_hash: block.eth_block.hash.unwrap().to_word(),
+            block_hash: block.eth_block.hash.unwrap_or_default().to_word(),
             parent_hash: block.eth_block.parent_hash.to_word(),
             signal_root: taiko.signal_root.to_word(),
             graffiti: taiko.graffiti.to_word(),
@@ -192,6 +186,7 @@ pub struct PiCircuitConfig<F: Field> {
     q_field_start: Selector,
     q_field_step: Selector,
     q_field_end: Selector,
+    is_field_rlc: Column<Fixed>,
 
     q_start: Selector,
     q_not_end: Selector,
@@ -236,16 +231,17 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
         let rpi_field_bytes_acc = meta.advice_column_in(SecondPhase);
         let rpi_rlc_acc = meta.advice_column_in(SecondPhase);
         let rpi_len_acc = meta.advice_column();
-        let q_field_start = meta.selector();
-        let q_field_step = meta.selector();
-        let q_field_end = meta.selector();
-        let q_start = meta.selector();
-        let q_not_end = meta.selector();
+        let q_field_start = meta.complex_selector();
+        let q_field_step = meta.complex_selector();
+        let q_field_end = meta.complex_selector();
+        let q_start = meta.complex_selector();
+        let q_not_end = meta.complex_selector();
         let is_byte = meta.fixed_column();
+        let is_field_rlc = meta.fixed_column();
 
         let pi = meta.instance_column();
 
-        let q_keccak = meta.selector();
+        let q_keccak = meta.complex_selector();
 
         meta.enable_equality(rpi);
         meta.enable_equality(rpi_field_bytes);
@@ -300,12 +296,13 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
                     meta.query_advice(rpi_field_bytes_acc, Rotation::next());
                 let rpi_field_bytes_acc = meta.query_advice(rpi_field_bytes_acc, Rotation::cur());
                 let rpi_field_bytes_next = meta.query_advice(rpi_field_bytes, Rotation::next());
+                let is_field_rlc = meta.query_fixed(is_field_rlc, Rotation::next());
                 let randomness = challenges.evm_word();
-
+                let t = select::expr(is_field_rlc, randomness, BYTE_POW_BASE.expr());
                 cb.require_equal(
                     "rpi_field_bytes_acc[i+1] = rpi_field_bytes_acc[i] * t + rpi_bytes[i+1]",
                     rpi_field_bytes_acc_next,
-                    rpi_field_bytes_acc * randomness + rpi_field_bytes_next,
+                    rpi_field_bytes_acc * t + rpi_field_bytes_next,
                 );
                 cb.gate(q_field_step)
             },
@@ -379,6 +376,7 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
             q_start,
             q_not_end,
             is_byte,
+            is_field_rlc,
 
             pi, // keccak_hi, keccak_lo
 
@@ -403,19 +401,37 @@ impl<F: Field> PiCircuitConfig<F> {
         rpi_rlc_acc: &mut Value<F>,
         rpi_len_acc: &mut u64,
         challenges: &Challenges<Value<F>>,
+        keccak_hi_lo: bool,
     ) -> Result<Vec<AssignedCell<F, F>>, Error> {
+        let len = field_bytes.len();
         let mut field_rlc_acc = Value::known(F::zero());
-        let randomness = challenges.evm_word();
+        let (use_rlc, t) = if len * 8 > F::CAPACITY as usize {
+            (F::one(), challenges.evm_word())
+        } else {
+            (F::zero(), Value::known(F::from(BYTE_POW_BASE)))
+        };
+
+        let randomness = if keccak_hi_lo {
+            challenges.evm_word()
+        } else {
+            challenges.keccak_input()
+        };
         let rpi = field_bytes
             .iter()
             .fold(Value::known(F::zero()), |acc, byte| {
-                acc.zip(randomness).and_then(|(acc, randomness)| {
-                    Value::known(acc * randomness + F::from(*byte as u64))
-                })
+                acc.zip(t)
+                    .and_then(|(acc, t)| Value::known(acc * t + F::from(*byte as u64)))
             });
         let mut cells = vec![None; field_bytes.len() + 2];
         for (i, byte) in field_bytes.iter().enumerate() {
             let row_offset = *offset + i;
+
+            region.assign_fixed(
+                || "is_field_rlc",
+                self.is_field_rlc,
+                row_offset,
+                || Value::known(use_rlc),
+            )?;
 
             // assign field bytes
             let field_byte_cell = region.assign_advice(
@@ -424,9 +440,9 @@ impl<F: Field> PiCircuitConfig<F> {
                 row_offset,
                 || Value::known(F::from(*byte as u64)),
             )?;
-            field_rlc_acc = field_rlc_acc.zip(randomness).and_then(|(acc, randomness)| {
-                Value::known(acc * randomness + F::from(*byte as u64))
-            });
+            field_rlc_acc = field_rlc_acc
+                .zip(t)
+                .and_then(|(acc, t)| Value::known(acc * t + F::from(*byte as u64)));
             region.assign_advice(
                 || "field bytes acc",
                 self.rpi_field_bytes_acc,
@@ -538,9 +554,13 @@ impl<F: Field> PiCircuitConfig<F> {
                         &mut rpi_rlc_acc,
                         &mut rpi_len_acc,
                         challenges,
+                        false,
                     )?;
                     if field_type == FieldType::BlockHash {
-                        region.constrain_equal(block_table_hash_cell.cell(), cells[1].cell())?;
+                        region.constrain_equal(
+                            block_table_hash_cell.cell(),
+                            cells[RPI_CELL_IDX].cell(),
+                        )?;
                     }
                     rpi_rlc_acc_cell = Some(cells[RPI_RLC_ACC_CELL_IDX].clone());
                 }
@@ -562,9 +582,10 @@ impl<F: Field> PiCircuitConfig<F> {
                         .to_fixed_bytes()
                         .iter()
                         .fold(Value::known(F::zero()), |acc, byte| {
-                            acc.zip(challenges.keccak_input()).and_then(|(acc, rand)| {
-                                Value::known(acc * rand + F::from(*byte as u64))
-                            })
+                            acc.zip(challenges.keccak_input())
+                                .and_then(|(acc, randomness)| {
+                                    Value::known(acc * randomness + F::from(*byte as u64))
+                                })
                         });
                 region.assign_advice(
                     || "rpi_len_acc",
@@ -591,6 +612,7 @@ impl<F: Field> PiCircuitConfig<F> {
                     &mut rpi_rlc_acc,
                     &mut rpi_len_acc,
                     challenges,
+                    true,
                 )?;
                 let keccak_hi_cell = cells[RPI_CELL_IDX].clone();
 
@@ -603,6 +625,7 @@ impl<F: Field> PiCircuitConfig<F> {
                     &mut rpi_rlc_acc,
                     &mut rpi_len_acc,
                     challenges,
+                    true,
                 )?;
                 let keccak_lo_cell = cells[RPI_CELL_IDX].clone();
 
@@ -638,8 +661,6 @@ impl<F: Field> PiCircuit<F> {
     }
 
     /// create a new PiCircuit with extra data
-    /// prover: for l2
-    /// txs_rlp: get from l1 contract
     pub fn new_from_block_with_extra(block: &witness::Block<F>, taiko: &witness::Taiko) -> Self {
         PiCircuit::new(PublicData::new(block, taiko))
     }
@@ -844,9 +865,6 @@ mod pi_circuit_test {
 
     #[test]
     fn test_simple_pi() {
-        const MAX_TXS: usize = 8;
-        const MAX_CALLDATA: usize = 200;
-
         let mut public_data = PublicData::default::<Fr>();
         let chain_id = 1337u64;
         public_data.chain_id = Word::from(chain_id);
@@ -857,17 +875,21 @@ mod pi_circuit_test {
 
     #[test]
     fn test_verify() {
+        let ommers_hash = H256::from_slice(
+            &hex::decode("1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347")
+                .unwrap(),
+        );
         let prover =
             Address::from_slice(&hex::decode("Df08F82De32B8d460adbE8D72043E3a7e25A3B39").unwrap());
 
         let logs_bloom:[u8;256] = hex::decode("112d60abc05141f1302248e0f4329627f002380f1413820692911863e7d0871261aa07e90cc01a10c3ce589153570dc2db27b8783aa52bc19a5a4a836722e813190401b4214c3908cb8b468b510c3fe482603b00ca694c806206bf099279919c334541094bd2e085210373c0b064083242d727790d2eecdb2e0b90353b66461050447626366328f0965602e8a9802d25740ad4a33162142b08a1b15292952de423fac45d235622bb0ef3b2d2d4c21690d280a0b948a8a3012136542c1c4d0955a501a022e1a1a4582220d1ae50ba475d88ce0310721a9076702d29a27283e68c2278b93a1c60d8f812069c250042cc3180a8fd54f034a2da9a03098c32b03445").unwrap().try_into().unwrap();
 
         let mut block = witness::Block::<Fr>::default();
-        block.eth_block.parent_hash = *OMMERS_HASH;
+        block.eth_block.parent_hash = ommers_hash;
         block.eth_block.author = Some(prover);
-        block.eth_block.state_root = *OMMERS_HASH;
-        block.eth_block.transactions_root = *OMMERS_HASH;
-        block.eth_block.receipts_root = *OMMERS_HASH;
+        block.eth_block.state_root = ommers_hash;
+        block.eth_block.transactions_root = ommers_hash;
+        block.eth_block.receipts_root = ommers_hash;
         block.eth_block.logs_bloom = Some(logs_bloom.into());
         block.eth_block.difficulty = U256::from(0);
         block.eth_block.number = Some(U64::from(0));
@@ -875,7 +897,7 @@ mod pi_circuit_test {
         block.eth_block.gas_used = U256::from(0);
         block.eth_block.timestamp = U256::from(0);
         block.eth_block.extra_data = eth_types::Bytes::from([0; 0]);
-        block.eth_block.mix_hash = Some(*OMMERS_HASH);
+        block.eth_block.mix_hash = Some(ommers_hash);
         block.eth_block.nonce = Some(H64::from([0, 0, 0, 0, 0, 0, 0, 0]));
         block.eth_block.base_fee_per_gas = Some(U256::from(0));
 
