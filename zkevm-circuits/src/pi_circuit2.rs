@@ -581,7 +581,7 @@ impl<F: Field> PiCircuitConfig<F> {
                         .to_fixed_bytes()
                         .iter()
                         .fold(Value::known(F::zero()), |acc, byte| {
-                            acc.zip(challenges.keccak_input())
+                            acc.zip(challenges.evm_word())
                                 .and_then(|(acc, randomness)| {
                                     Value::known(acc * randomness + F::from(*byte as u64))
                                 })
@@ -734,7 +734,7 @@ pub struct PiTestCircuit<F: Field>(pub PiCircuit<F>);
 
 #[cfg(any(feature = "test", test))]
 impl<F: Field> Circuit<F> for PiTestCircuit<F> {
-    type Config = PiCircuitConfig<F>;
+    type Config = (PiCircuitConfig<F>, Challenges);
     type FloorPlanner = SimpleFloorPlanner;
 
     fn without_witnesses(&self) -> Self {
@@ -744,24 +744,27 @@ impl<F: Field> Circuit<F> for PiTestCircuit<F> {
     fn configure(meta: &mut ConstraintSystem<F>) -> Self::Config {
         let block_table = BlockTable::construct(meta);
         let keccak_table = KeccakTable::construct(meta);
-        let challenges = Challenges::mock(100.expr(), 100.expr());
-        PiCircuitConfig::new(
-            meta,
-            PiCircuitConfigArgs {
-                block_table,
-                keccak_table,
-                challenges,
-            },
+        let challenges = Challenges::construct(meta);
+        let challenge_exprs = challenges.exprs(meta);
+        (
+            PiCircuitConfig::new(
+                meta,
+                PiCircuitConfigArgs {
+                    block_table,
+                    keccak_table,
+                    challenges: challenge_exprs,
+                },
+            ),
+            challenges,
         )
     }
 
     fn synthesize(
         &self,
-        config: Self::Config,
+        (config, challenges): Self::Config,
         mut layouter: impl Layouter<F>,
     ) -> Result<(), Error> {
-        // let challenges = challenges.values(&mut layouter);
-        let challenges = Challenges::mock(Value::known(F::from(100)), Value::known(F::from(100)));
+        let challenges = challenges.values(&mut layouter);
         let public_data = &self.0.public_data;
         // assign keccak table
         config
