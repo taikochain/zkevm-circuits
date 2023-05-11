@@ -295,12 +295,11 @@ fn evm_verify(deployment_code: Vec<u8>, instances: Vec<Vec<Fr>>, proof: Vec<u8>)
         let mut evm = ExecutorBuilder::default()
             .with_gas_limit(u64::MAX.into())
             .build();
-
         let caller = Address::from_low_u64_be(0xfe);
-        let verifier = evm
-            .deploy(caller, deployment_code.into(), 0.into())
-            .address
-            .unwrap();
+        let deploy = evm.deploy(caller, deployment_code.into(), 0.into());
+        println!("deploy exit reason: {:?}", deploy.exit_reason);
+        let verifier = deploy.address.unwrap();
+
         let result = evm.call_raw(caller, verifier, calldata.into(), 0.into());
 
         dbg!(result.gas_used);
@@ -431,12 +430,15 @@ pub(crate) struct ProverCmdConfig {
     l2_signal_service: Option<String>,
     /// l2 contract address
     l2_contract: Option<String>,
+    block_hash: Option<String>,
+    parent_hash: Option<String>,
     /// meta hash
     meta_hash: Option<String>,
     /// signal root
     signal_root: Option<String>,
     /// extra message
     graffiti: Option<String>,
+    gas_used: Option<u32>,
     /// parent gas used
     parent_gas_used: Option<u32>,
 
@@ -453,10 +455,13 @@ impl ProverCmdConfig {
             l2_signal_service: parse_address(&self.l2_signal_service),
             l2_contract: parse_address(&self.l2_contract),
             meta_hash: parse_hash(&self.meta_hash),
+            block_hash: parse_hash(&self.block_hash),
+            parent_hash: parse_hash(&self.parent_hash),
             signal_root: parse_hash(&self.signal_root),
             graffiti: parse_hash(&self.graffiti),
             prover: parse_address(&self.prover),
             parent_gas_used: self.parent_gas_used.unwrap(),
+            gas_used: self.gas_used.unwrap(),
         }
     }
 }

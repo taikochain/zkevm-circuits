@@ -133,13 +133,13 @@ impl PublicData {
             l2_signal_service: taiko.l2_signal_service.to_word(),
             l2_contract: taiko.l2_contract.to_word(),
             meta_hash: taiko.meta_hash.to_word(),
-            block_hash: block.eth_block.hash.unwrap_or_default().to_word(),
-            parent_hash: block.eth_block.parent_hash.to_word(),
+            block_hash: taiko.block_hash.to_word(),
+            parent_hash: taiko.parent_hash.to_word(),
             signal_root: taiko.signal_root.to_word(),
             graffiti: taiko.graffiti.to_word(),
             prover: taiko.prover,
             parent_gas_used: taiko.parent_gas_used,
-            gas_used: block.eth_block.gas_used.as_u32(),
+            gas_used: taiko.gas_used,
             field9,
             block_constants: BlockConstants {
                 coinbase: block.context.coinbase,
@@ -745,7 +745,8 @@ impl<F: Field> Circuit<F> for PiTestCircuit<F> {
         let block_table = BlockTable::construct(meta);
         let keccak_table = KeccakTable::construct(meta);
         let challenges = Challenges::construct(meta);
-        let challenge_exprs = challenges.exprs(meta);
+        // let challenge_exprs = challenges.exprs(meta);
+        let challenge_exprs = Challenges::mock(100.expr(), 100.expr());
         (
             PiCircuitConfig::new(
                 meta,
@@ -764,7 +765,9 @@ impl<F: Field> Circuit<F> for PiTestCircuit<F> {
         (config, challenges): Self::Config,
         mut layouter: impl Layouter<F>,
     ) -> Result<(), Error> {
-        let challenges = challenges.values(&mut layouter);
+        let challenges = Challenges::mock(Value::known(F::from(100)), Value::known(F::from(100)));
+        // let challenges = challenges.values(&mut layouter);
+        // let challenges = Challenges::mock(100.expr(), 100.expr());
         let public_data = &self.0.public_data;
         // assign keccak table
         config
