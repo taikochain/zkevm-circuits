@@ -17,7 +17,6 @@ use halo2_proofs::{
 };
 use std::marker::PhantomData;
 
-const BLOCK_LEN: usize = 8;
 const MAX_DEGREE: usize = 10;
 const RPI_CELL_IDX: usize = 0;
 const RPI_RLC_ACC_CELL_IDX: usize = 1;
@@ -420,7 +419,7 @@ impl<F: Field> PiCircuitConfig<F> {
     ) -> Result<AssignedCell<F, F>, Error> {
         let block_values = public_data.get_block_table_values();
         let randomness = challenges.evm_word();
-        let mut cells = vec![];
+        let mut block_hash_cell = None;
         for (offset, (name, val)) in [
             (
                 "coinbase",
@@ -446,13 +445,11 @@ impl<F: Field> PiCircuitConfig<F> {
         .into_iter()
         .enumerate()
         {
-            let val_cell = region.assign_advice(|| name, self.block_table.value, offset, || val)?;
-            if offset == BLOCK_LEN - 1 {
-                cells.push(val_cell);
-            }
+            block_hash_cell =
+                Some(region.assign_advice(|| name, self.block_table.value, offset, || val)?);
         }
 
-        Ok(cells[0].clone())
+        Ok(block_hash_cell.unwrap())
     }
 
     fn assign(
