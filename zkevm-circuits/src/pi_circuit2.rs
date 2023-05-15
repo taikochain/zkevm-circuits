@@ -651,8 +651,8 @@ impl<F: Field> Circuit<F> for PiTestCircuit<F> {
         let block_table = BlockTable::construct(meta);
         let keccak_table = KeccakTable::construct(meta);
         let challenges = Challenges::construct(meta);
-        // let challenge_exprs = challenges.exprs(meta);
-        let challenge_exprs = Challenges::mock(100.expr(), 100.expr());
+        let challenge_exprs = challenges.exprs(meta);
+        // let challenge_exprs = Challenges::mock(100.expr(), 100.expr());
 
         (
             PiCircuitConfig::new(
@@ -669,11 +669,12 @@ impl<F: Field> Circuit<F> for PiTestCircuit<F> {
 
     fn synthesize(
         &self,
-        (config, _challenges): Self::Config,
+        (config, challenges): Self::Config,
         mut layouter: impl Layouter<F>,
     ) -> Result<(), Error> {
-        // let challenges = challenges.values(&mut layouter);
-        let challenges = Challenges::mock(Value::known(F::from(100)), Value::known(F::from(100)));
+        let challenges = challenges.values(&mut layouter);
+        // let challenges = Challenges::mock(Value::known(F::from(100)),
+        // Value::known(F::from(100)));
 
         let public_data = &self.0.public_data;
         // assign keccak table
