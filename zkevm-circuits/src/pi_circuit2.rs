@@ -105,13 +105,7 @@ impl PublicData {
     }
 
     fn rpi_bytes(&self) -> Vec<u8> {
-        self.assignments().iter().fold(
-            Vec::with_capacity(RPI_BYTES_LEN),
-            |mut acc, (_, _, bytes)| {
-                acc.extend(bytes);
-                acc
-            },
-        )
+        self.assignments().iter().flat_map(|v| v.2).collect()
     }
 
     fn default<F: Default>() -> Self {
@@ -480,7 +474,7 @@ impl<F: Field> PiCircuitConfig<F> {
                     if field_type == FieldType::BlockHash {
                         region.constrain_equal(
                             block_table_hash_cell.cell(),
-                            cells[RPI_RLC_ACC_CELL_IDX].cell(),
+                            cells[RPI_CELL_IDX].cell(),
                         )?;
                     }
                     rpi_rlc_acc_cell = Some(cells[RPI_RLC_ACC_CELL_IDX].clone());
@@ -701,7 +695,15 @@ mod pi_circuit_test {
         dev::{MockProver, VerifyFailure},
         halo2curves::bn256::Fr,
     };
+    use lazy_static::lazy_static;
     use pretty_assertions::assert_eq;
+
+    lazy_static! {
+        static ref OMMERS_HASH: H256 = H256::from_slice(
+            &hex::decode("1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347")
+                .unwrap(),
+        );
+    }
 
     fn run<F: Field>(
         k: u32,
@@ -723,7 +725,9 @@ mod pi_circuit_test {
     fn test_default_pi() {
         const MAX_TXS: usize = 2;
         const MAX_CALLDATA: usize = 8;
-        let public_data = PublicData::default::<Fr>();
+        let mut public_data = PublicData::default::<Fr>();
+        public_data.meta_hash = OMMERS_HASH.to_word();
+        public_data.block_hash = OMMERS_HASH.to_word();
 
         let k = 17;
         assert_eq!(run::<Fr>(k, public_data, None), Ok(()));
@@ -793,21 +797,17 @@ mod pi_circuit_test {
 
     #[test]
     fn test_verify() {
-        let ommers_hash = H256::from_slice(
-            &hex::decode("1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347")
-                .unwrap(),
-        );
         let prover =
             Address::from_slice(&hex::decode("Df08F82De32B8d460adbE8D72043E3a7e25A3B39").unwrap());
 
         let logs_bloom:[u8;256] = hex::decode("112d60abc05141f1302248e0f4329627f002380f1413820692911863e7d0871261aa07e90cc01a10c3ce589153570dc2db27b8783aa52bc19a5a4a836722e813190401b4214c3908cb8b468b510c3fe482603b00ca694c806206bf099279919c334541094bd2e085210373c0b064083242d727790d2eecdb2e0b90353b66461050447626366328f0965602e8a9802d25740ad4a33162142b08a1b15292952de423fac45d235622bb0ef3b2d2d4c21690d280a0b948a8a3012136542c1c4d0955a501a022e1a1a4582220d1ae50ba475d88ce0310721a9076702d29a27283e68c2278b93a1c60d8f812069c250042cc3180a8fd54f034a2da9a03098c32b03445").unwrap().try_into().unwrap();
 
         let mut block = witness::Block::<Fr>::default();
-        block.eth_block.parent_hash = ommers_hash;
+        block.eth_block.parent_hash = *OMMERS_HASH;
         block.eth_block.author = Some(prover);
-        block.eth_block.state_root = ommers_hash;
-        block.eth_block.transactions_root = ommers_hash;
-        block.eth_block.receipts_root = ommers_hash;
+        block.eth_block.state_root = *OMMERS_HASH;
+        block.eth_block.transactions_root = *OMMERS_HASH;
+        block.eth_block.receipts_root = *OMMERS_HASH;
         block.eth_block.logs_bloom = Some(logs_bloom.into());
         block.eth_block.difficulty = U256::from(0);
         block.eth_block.number = Some(U64::from(0));
@@ -815,7 +815,7 @@ mod pi_circuit_test {
         block.eth_block.gas_used = U256::from(0);
         block.eth_block.timestamp = U256::from(0);
         block.eth_block.extra_data = eth_types::Bytes::from([0; 0]);
-        block.eth_block.mix_hash = Some(ommers_hash);
+        block.eth_block.mix_hash = Some(*OMMERS_HASH);
         block.eth_block.nonce = Some(H64::from([0, 0, 0, 0, 0, 0, 0, 0]));
         block.eth_block.base_fee_per_gas = Some(U256::from(0));
 
