@@ -22,7 +22,7 @@ const MAX_DEGREE: usize = 10;
 const RPI_CELL_IDX: usize = 0;
 const RPI_RLC_ACC_CELL_IDX: usize = 1;
 const BYTE_POW_BASE: u64 = 1 << 8;
-const RPI_LEN: usize = 32 * 9;
+const RPI_BYTES_LEN: usize = 32 * 9;
 
 /// Values of the block table (as in the spec)
 #[derive(Clone, Default, Debug)]
@@ -106,12 +106,13 @@ impl PublicData {
     }
 
     fn rpi_bytes(&self) -> Vec<u8> {
-        self.assignments()
-            .iter()
-            .fold(Vec::new(), |mut acc, (_, _, bytes)| {
+        self.assignments().iter().fold(
+            Vec::with_capacity(RPI_BYTES_LEN),
+            |mut acc, (_, _, bytes)| {
                 acc.extend(bytes);
                 acc
-            })
+            },
+        )
     }
 
     fn default<F: Default>() -> Self {
@@ -339,7 +340,7 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
             vec![
                 (q_keccak.expr() * 1.expr(), is_enabled),
                 (q_keccak.expr() * rpi_rlc, input_rlc),
-                (q_keccak.expr() * RPI_LEN.expr(), input_len),
+                (q_keccak.expr() * RPI_BYTES_LEN.expr(), input_len),
                 (q_keccak * output, output_rlc),
             ]
         });
@@ -557,16 +558,11 @@ impl<F: Field> PiCircuitConfig<F> {
                     keccak_row,
                 )?;
                 let keccak = public_data.get_pi();
-                let keccak_rlc =
-                    keccak
-                        .to_fixed_bytes()
-                        .iter()
-                        .fold(Value::known(F::zero()), |acc, byte| {
-                            acc.zip(challenges.evm_word())
-                                .and_then(|(acc, randomness)| {
-                                    Value::known(acc * randomness + F::from(*byte as u64))
-                                })
-                        });
+                let mut keccak_input = keccak.to_fixed_bytes();
+                keccak_input.reverse();
+                let keccak_rlc = challenges
+                    .evm_word()
+                    .map(|randomness| rlc(keccak_input, randomness));
                 let keccak_output_cell = region.assign_advice(
                     || "keccak(rpi)_output",
                     self.rpi_rlc_acc,
