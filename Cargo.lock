@@ -2019,11 +2019,8 @@ name = "geth-utils"
 version = "0.1.0"
 dependencies = [
  "env_logger",
- "ethers-core",
  "gobuild",
- "hex",
  "log",
- "serde_json",
 ]
 
 [[package]]
