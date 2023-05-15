@@ -377,9 +377,7 @@ impl<F: Field> PiCircuitConfig<F> {
                 row_offset,
                 || field_rlc_acc,
             )?;
-            *rpi_rlc_acc = rpi_rlc_acc.zip(randomness).and_then(|(acc, randomness)| {
-                Value::known(acc * randomness + F::from(*byte as u64))
-            });
+            *rpi_rlc_acc = *rpi_rlc_acc * randomness + Value::known(F::from(*byte as u64));
             let rpi_rlc_acc_cell = region.assign_advice(
                 || "rpi_rlc_acc",
                 self.rpi_rlc_acc,
