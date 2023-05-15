@@ -15,13 +15,14 @@ use halo2_proofs::{
     plonk::{Advice, Circuit, Column, ConstraintSystem, Error, Selector},
     poly::Rotation,
 };
-use std::{iter, marker::PhantomData};
+use std::marker::PhantomData;
 
 const BLOCK_LEN: usize = 8;
 const MAX_DEGREE: usize = 10;
 const RPI_CELL_IDX: usize = 0;
 const RPI_RLC_ACC_CELL_IDX: usize = 1;
 const BYTE_POW_BASE: u64 = 1 << 8;
+const RPI_LEN: usize = 32 * 9;
 
 /// Values of the block table (as in the spec)
 #[derive(Clone, Default, Debug)]
@@ -105,17 +106,12 @@ impl PublicData {
     }
 
     fn rpi_bytes(&self) -> Vec<u8> {
-        iter::empty()
-            .chain(self.l1_signal_service.to_be_bytes())
-            .chain(self.l2_signal_service.to_be_bytes())
-            .chain(self.l2_contract.to_be_bytes())
-            .chain(self.meta_hash.to_be_bytes())
-            .chain(self.parent_hash.to_be_bytes())
-            .chain(self.block_hash.to_be_bytes())
-            .chain(self.signal_root.to_be_bytes())
-            .chain(self.graffiti.to_be_bytes())
-            .chain(self.field9.to_be_bytes())
-            .collect()
+        self.assignments()
+            .iter()
+            .fold(Vec::new(), |mut acc, (_, _, bytes)| {
+                acc.extend(bytes);
+                acc
+            })
     }
 
     fn default<F: Default>() -> Self {
@@ -181,7 +177,6 @@ pub struct PiCircuitConfig<F: Field> {
     rpi_field_bytes: Column<Advice>,
     rpi_field_bytes_acc: Column<Advice>,
     rpi_rlc_acc: Column<Advice>,
-    rpi_len_acc: Column<Advice>,
     q_field_start: Selector,
     q_field_step: Selector,
     q_field_end: Selector,
@@ -229,7 +224,6 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
         let rpi_field_bytes = meta.advice_column();
         let rpi_field_bytes_acc = meta.advice_column_in(SecondPhase);
         let rpi_rlc_acc = meta.advice_column_in(SecondPhase);
-        let rpi_len_acc = meta.advice_column();
         let q_field_start = meta.complex_selector();
         let q_field_step = meta.complex_selector();
         let q_field_end = meta.complex_selector();
@@ -340,13 +334,12 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
             let q_keccak = meta.query_selector(q_keccak);
 
             let rpi_rlc = meta.query_advice(rpi, Rotation::cur());
-            let rpi_len = meta.query_advice(rpi_len_acc, Rotation::cur());
             let output = meta.query_advice(rpi_rlc_acc, Rotation::cur());
 
             vec![
                 (q_keccak.expr() * 1.expr(), is_enabled),
                 (q_keccak.expr() * rpi_rlc, input_rlc),
-                (q_keccak.expr() * rpi_len, input_len),
+                (q_keccak.expr() * RPI_LEN.expr(), input_len),
                 (q_keccak * output, output_rlc),
             ]
         });
@@ -367,7 +360,6 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
             rpi_field_bytes,
             rpi_field_bytes_acc,
             rpi_rlc_acc,
-            rpi_len_acc,
             q_field_start,
             q_field_step,
             q_field_end,
@@ -398,7 +390,6 @@ impl<F: Field> PiCircuitConfig<F> {
         _annotation: &'static str,
         field_bytes: &[u8],
         rpi_rlc_acc: &mut Value<F>,
-        rpi_len_acc: &mut u64,
         challenges: &Challenges<Value<F>>,
         keccak_hi_lo: bool,
     ) -> Result<Vec<AssignedCell<F, F>>, Error> {
@@ -458,14 +449,6 @@ impl<F: Field> PiCircuitConfig<F> {
                 row_offset,
                 || *rpi_rlc_acc,
             )?;
-            *rpi_len_acc += 1;
-            region.assign_advice(
-                || "rpi_len_acc",
-                self.rpi_len_acc,
-                row_offset,
-                || Value::known(F::from(*rpi_len_acc)),
-            )?;
-
             // setup selector
             if i == 0 {
                 self.q_field_start.enable(region, row_offset)?;
@@ -541,7 +524,6 @@ impl<F: Field> PiCircuitConfig<F> {
                 let block_table_hash_cell =
                     self.assign_block_table(region, public_data, challenges)?;
                 let mut rpi_rlc_acc = Value::known(F::zero());
-                let mut rpi_len_acc = 0;
                 let mut offset = 0;
                 let mut rpi_rlc_acc_cell = None;
                 for (annotation, field_type, field_bytes) in public_data.assignments() {
@@ -551,7 +533,6 @@ impl<F: Field> PiCircuitConfig<F> {
                         annotation,
                         &field_bytes,
                         &mut rpi_rlc_acc,
-                        &mut rpi_len_acc,
                         challenges,
                         false,
                     )?;
@@ -586,12 +567,6 @@ impl<F: Field> PiCircuitConfig<F> {
                                     Value::known(acc * randomness + F::from(*byte as u64))
                                 })
                         });
-                region.assign_advice(
-                    || "rpi_len_acc",
-                    self.rpi_len_acc,
-                    keccak_row,
-                    || Value::known(F::from(rpi_len_acc)),
-                )?;
                 let keccak_output_cell = region.assign_advice(
                     || "keccak(rpi)_output",
                     self.rpi_rlc_acc,
@@ -609,7 +584,6 @@ impl<F: Field> PiCircuitConfig<F> {
                     "high_16_bytes_of_keccak_rpi",
                     &keccak.to_fixed_bytes()[..16],
                     &mut rpi_rlc_acc,
-                    &mut rpi_len_acc,
                     challenges,
                     true,
                 )?;
@@ -622,7 +596,6 @@ impl<F: Field> PiCircuitConfig<F> {
                     "low_16_bytes_of_keccak_rpi",
                     &keccak.to_fixed_bytes()[16..],
                     &mut rpi_rlc_acc,
-                    &mut rpi_len_acc,
                     challenges,
                     true,
                 )?;
