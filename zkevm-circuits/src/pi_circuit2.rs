@@ -376,9 +376,8 @@ impl<F: Field> PiCircuitConfig<F> {
                 row_offset,
                 || Value::known(F::from(*byte as u64)),
             )?;
-            field_rlc_acc = field_rlc_acc
-                .zip(t)
-                .and_then(|(acc, t)| Value::known(acc * t + F::from(*byte as u64)));
+
+            field_rlc_acc = field_rlc_acc * t + Value::known(F::from(*byte as u64));
             let rpi_cell = region.assign_advice(
                 || "field bytes acc",
                 self.rpi_field_bytes_acc,
