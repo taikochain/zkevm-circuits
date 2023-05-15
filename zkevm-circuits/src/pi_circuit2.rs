@@ -174,7 +174,6 @@ impl PublicData {
 /// Config for PiCircuit
 #[derive(Clone, Debug)]
 pub struct PiCircuitConfig<F: Field> {
-    rpi: Column<Advice>,
     rpi_field_bytes: Column<Advice>,
     rpi_field_bytes_acc: Column<Advice>,
     rpi_rlc_acc: Column<Advice>,
@@ -221,7 +220,6 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
             challenges,
         }: Self::ConfigArgs,
     ) -> Self {
-        let rpi = meta.advice_column_in(SecondPhase);
         let rpi_field_bytes = meta.advice_column();
         let rpi_field_bytes_acc = meta.advice_column_in(SecondPhase);
         let rpi_rlc_acc = meta.advice_column_in(SecondPhase);
@@ -237,47 +235,11 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
 
         let q_keccak = meta.complex_selector();
 
-        meta.enable_equality(rpi);
         meta.enable_equality(rpi_field_bytes);
+        meta.enable_equality(rpi_field_bytes_acc);
         meta.enable_equality(rpi_rlc_acc);
         meta.enable_equality(block_table.value);
         meta.enable_equality(pi);
-
-        // rpi
-        meta.create_gate("rpi_next = rpi", |meta| {
-            let mut cb = BaseConstraintBuilder::new(MAX_DEGREE);
-
-            let q_field_step = meta.query_selector(q_field_step);
-            let rpi_next = meta.query_advice(rpi, Rotation::next());
-            let rpi = meta.query_advice(rpi, Rotation::cur());
-
-            cb.require_equal("rpi_next = rpi", rpi_next, rpi);
-            cb.gate(q_field_step)
-        });
-        meta.create_gate("rpi_rlc_acc[i+1] = rpi_rlc_acc[i] * r + rpi[i+1]", |meta| {
-            let mut cb = BaseConstraintBuilder::new(MAX_DEGREE);
-            let q_not_end = meta.query_selector(q_not_end);
-            let rpi_rlc_acc_next = meta.query_advice(rpi_rlc_acc, Rotation::next());
-            let rpi_rlc_acc = meta.query_advice(rpi_rlc_acc, Rotation::cur());
-            let rpi_next = meta.query_advice(rpi, Rotation::next());
-            let r = challenges.evm_word();
-
-            cb.require_equal(
-                "rpi_rlc_acc[i+1] = rpi_rlc_acc[i] * r + rpi[i+1]",
-                rpi_rlc_acc_next,
-                rpi_rlc_acc * r + rpi_next,
-            );
-            cb.gate(q_not_end)
-        });
-        meta.create_gate("rpi_rlc_acc[0] = rpi[0]", |meta| {
-            let mut cb = BaseConstraintBuilder::new(MAX_DEGREE);
-            let q_start = meta.query_selector(q_start);
-            let rpi_rlc_acc = meta.query_advice(rpi_rlc_acc, Rotation::cur());
-            let rpi = meta.query_advice(rpi, Rotation::cur());
-
-            cb.require_equal("rpi_rlc_acc[0] = rpi[0]", rpi_rlc_acc, rpi);
-            cb.gate(q_start)
-        });
 
         // field bytes
         meta.create_gate(
@@ -315,16 +277,6 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
             );
             cb.gate(q_field_start)
         });
-        meta.create_gate("rpi_field_bytes_acc[last] = rpi", |meta| {
-            let mut cb = BaseConstraintBuilder::new(MAX_DEGREE);
-
-            let q_field_end = meta.query_selector(q_field_end);
-            let rpi_field_bytes_acc = meta.query_advice(rpi_field_bytes_acc, Rotation::cur());
-            let rpi = meta.query_advice(rpi, Rotation::cur());
-
-            cb.require_equal("rpi_field_bytes_acc[last] = rpi", rpi_field_bytes_acc, rpi);
-            cb.gate(q_field_end)
-        });
 
         // keccak in rpi
         meta.lookup_any("keccak(rpi)", |meta| {
@@ -334,7 +286,7 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
             let output_rlc = meta.query_advice(keccak_table.output_rlc, Rotation::cur());
             let q_keccak = meta.query_selector(q_keccak);
 
-            let rpi_rlc = meta.query_advice(rpi, Rotation::cur());
+            let rpi_rlc = meta.query_advice(rpi_field_bytes_acc, Rotation::cur());
             let output = meta.query_advice(rpi_rlc_acc, Rotation::cur());
 
             vec![
@@ -357,7 +309,6 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
         });
 
         Self {
-            rpi,
             rpi_field_bytes,
             rpi_field_bytes_acc,
             rpi_rlc_acc,
@@ -407,12 +358,6 @@ impl<F: Field> PiCircuitConfig<F> {
         } else {
             challenges.keccak_input()
         };
-        let rpi = field_bytes
-            .iter()
-            .fold(Value::known(F::zero()), |acc, byte| {
-                acc.zip(t)
-                    .and_then(|(acc, t)| Value::known(acc * t + F::from(*byte as u64)))
-            });
         let mut cells = vec![None; field_bytes.len() + 2];
         for (i, byte) in field_bytes.iter().enumerate() {
             let row_offset = *offset + i;
@@ -434,13 +379,12 @@ impl<F: Field> PiCircuitConfig<F> {
             field_rlc_acc = field_rlc_acc
                 .zip(t)
                 .and_then(|(acc, t)| Value::known(acc * t + F::from(*byte as u64)));
-            region.assign_advice(
+            let rpi_cell = region.assign_advice(
                 || "field bytes acc",
                 self.rpi_field_bytes_acc,
                 row_offset,
                 || field_rlc_acc,
             )?;
-            let rpi_cell = region.assign_advice(|| "rpi", self.rpi, row_offset, || rpi)?;
             *rpi_rlc_acc = rpi_rlc_acc.zip(randomness).and_then(|(acc, randomness)| {
                 Value::known(acc * randomness + F::from(*byte as u64))
             });
@@ -518,7 +462,7 @@ impl<F: Field> PiCircuitConfig<F> {
         public_data: &PublicData,
         challenges: &Challenges<Value<F>>,
     ) -> Result<(), Error> {
-        let (keccak_hi_cell, keccak_lo_cell) = layouter.assign_region(
+        let pi = layouter.assign_region(
             || "region 0",
             |ref mut region| {
                 // Assign block table
@@ -540,13 +484,13 @@ impl<F: Field> PiCircuitConfig<F> {
                     if field_type == FieldType::BlockHash {
                         region.constrain_equal(
                             block_table_hash_cell.cell(),
-                            cells[RPI_CELL_IDX].cell(),
+                            cells[RPI_RLC_ACC_CELL_IDX].cell(),
                         )?;
                     }
                     rpi_rlc_acc_cell = Some(cells[RPI_RLC_ACC_CELL_IDX].clone());
                 }
 
-                // input_rlc in self.rpi
+                // input_rlc in self.rpi_field_bytes_acc
                 // input_len in self.rpi_len_acc
                 // output_rlc in self.rpi_rlc_acc
                 let keccak_row = offset;
@@ -554,7 +498,7 @@ impl<F: Field> PiCircuitConfig<F> {
                 rpi_rlc_acc_cell.copy_advice(
                     || "keccak(rpi)_input",
                     region,
-                    self.rpi,
+                    self.rpi_field_bytes_acc,
                     keccak_row,
                 )?;
                 let keccak = public_data.get_pi();
@@ -573,39 +517,42 @@ impl<F: Field> PiCircuitConfig<F> {
 
                 rpi_rlc_acc = Value::known(F::zero());
                 offset += 1;
-                // the high 16 bytes of keccak output
-                let mut cells = self.assign_pi_field(
-                    region,
-                    &mut offset,
-                    "high_16_bytes_of_keccak_rpi",
-                    &keccak.to_fixed_bytes()[..16],
-                    &mut rpi_rlc_acc,
-                    challenges,
-                    true,
-                )?;
-                let keccak_hi_cell = cells[RPI_CELL_IDX].clone();
+                let mut pi = Vec::with_capacity(2);
 
-                // the low 16 bytes of keccak output
-                cells = self.assign_pi_field(
-                    region,
-                    &mut offset,
-                    "low_16_bytes_of_keccak_rpi",
-                    &keccak.to_fixed_bytes()[16..],
-                    &mut rpi_rlc_acc,
-                    challenges,
-                    true,
-                )?;
-                let keccak_lo_cell = cells[RPI_CELL_IDX].clone();
+                for (idx, (annotation, field_bytes)) in [
+                    (
+                        "high_16_bytes_of_keccak_rpi",
+                        &keccak.to_fixed_bytes()[..16],
+                    ),
+                    ("low_16_bytes_of_keccak_rpi", &keccak.to_fixed_bytes()[16..]),
+                ]
+                .into_iter()
+                .enumerate()
+                {
+                    let cells = self.assign_pi_field(
+                        region,
+                        &mut offset,
+                        annotation,
+                        field_bytes,
+                        &mut rpi_rlc_acc,
+                        challenges,
+                        true,
+                    )?;
+                    pi.push(cells[RPI_CELL_IDX].clone());
+                    if idx == 1 {
+                        region.constrain_equal(
+                            keccak_output_cell.cell(),
+                            cells[RPI_RLC_ACC_CELL_IDX].cell(),
+                        )?;
+                    }
+                }
 
-                region.constrain_equal(
-                    keccak_output_cell.cell(),
-                    cells[RPI_RLC_ACC_CELL_IDX].cell(),
-                )?;
-                Ok((keccak_hi_cell, keccak_lo_cell))
+                Ok(pi)
             },
         )?;
-        layouter.constrain_instance(keccak_hi_cell.cell(), self.pi, 0)?;
-        layouter.constrain_instance(keccak_lo_cell.cell(), self.pi, 1)?;
+        for (idx, cell) in pi.into_iter().enumerate() {
+            layouter.constrain_instance(cell.cell(), self.pi, idx)?;
+        }
         Ok(())
     }
 }
