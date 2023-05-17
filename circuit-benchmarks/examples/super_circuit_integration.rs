@@ -70,7 +70,7 @@ fn bench_super_circuit_prover() {
 
     block.sign(&wallets);
 
-    type TestSuperCircuit = SuperCircuit::<Fr, 4, 32, 512>;
+    type TestSuperCircuit = SuperCircuit<Fr, 4, 32, 512>;
     let (_, circuit, instance, _) = TestSuperCircuit::build(block).unwrap();
     let instance_refs: Vec<&[Fr]> = instance.iter().map(|v| &v[..]).collect();
 

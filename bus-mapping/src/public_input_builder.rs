@@ -70,25 +70,3 @@ pub async fn get_txs_rlp<P: JsonRpcClient>(
         }
     })
 }
-
-#[cfg(test)]
-mod tests {
-    use ethers_core::utils::rlp;
-    use ethers_providers::Http;
-    use std::str::FromStr;
-
-    use super::*;
-    #[tokio::test]
-    async fn test() {
-        let l1_provider =
-            Http::from_str("https://l1rpc.internal.taiko.xyz").expect("Http geth url");
-        let l1_geth_client = GethClient::new(l1_provider);
-        let propose_tx_hash = H256::from_slice(
-            &hex::decode("6384692336baecbdcafb0bfe84437372d3ec2727a4c6bd7a6cf66644773b8124")
-                .unwrap(),
-        );
-        let tx = get_txs_rlp(&l1_geth_client, propose_tx_hash).await.unwrap();
-        let txs: Vec<eth_types::Transaction> = rlp::Rlp::new(&tx).as_list().unwrap();
-        println!("{:?}", txs);
-    }
-}
