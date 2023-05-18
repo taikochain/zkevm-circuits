@@ -116,7 +116,7 @@ impl PublicData {
     pub fn new<F>(block: &witness::Block<F>, taiko: &witness::Taiko) -> Self {
         let field9 = taiko.prover.to_word() * Word::from(2u128.pow(96))
             + Word::from(taiko.parent_gas_used as u64) * Word::from(2u128.pow(64))
-            + block.eth_block.gas_used * Word::from(2u128.pow(32));
+            + Word::from(taiko.gas_used as u64) * Word::from(2u128.pow(32));
 
         PublicData {
             l1_signal_service: taiko.l1_signal_service.to_word(),
