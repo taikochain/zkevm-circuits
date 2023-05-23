@@ -441,7 +441,12 @@ pub(crate) struct ProverCmdConfig {
     gas_used: Option<u32>,
     /// parent gas used
     parent_gas_used: Option<u32>,
-
+    /// block max gas limit
+    block_max_gas_limit: Option<u64>,
+    /// max bytes per tx list
+    max_bytes_per_tx_list: Option<u64>,
+    /// max transactions per block
+    max_transactions_per_block: Option<u64>,
     /// generate yul
     yul_output: Option<String>,
     /// output_file
@@ -462,6 +467,9 @@ impl ProverCmdConfig {
             prover: parse_address(&self.prover),
             parent_gas_used: self.parent_gas_used.unwrap(),
             gas_used: self.gas_used.unwrap(),
+            block_max_gas_limit: self.block_max_gas_limit.unwrap(),
+            max_bytes_per_tx_list: self.max_bytes_per_tx_list.unwrap(),
+            max_transactions_per_block: self.max_transactions_per_block.unwrap(),
         }
     }
 }

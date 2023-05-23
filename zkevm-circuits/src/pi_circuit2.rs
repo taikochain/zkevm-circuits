@@ -21,7 +21,7 @@ const MAX_DEGREE: usize = 10;
 const RPI_CELL_IDX: usize = 0;
 const RPI_RLC_ACC_CELL_IDX: usize = 1;
 const BYTE_POW_BASE: u64 = 1 << 8;
-const RPI_BYTES_LEN: usize = 32 * 9;
+const RPI_BYTES_LEN: usize = 32 * 10;
 
 /// Values of the block table (as in the spec)
 #[derive(Clone, Default, Debug)]
@@ -57,6 +57,9 @@ pub struct PublicData {
     pub graffiti: Word,
     /// union field
     pub field9: Word, // prover[96:256]+parentGasUsed[64:96]+gasUsed[32:64]
+    /// union field
+    pub field10: Word, /* blockMaxGasLimit[192:256]+maxTransactionsPerBlock[128:
+                        * 192]+maxBytesPerTxList[64:128] */
 
     // privates
     // Prover address
@@ -65,6 +68,12 @@ pub struct PublicData {
     parent_gas_used: u32,
     // block gas used
     gas_used: u32,
+    // blockMaxGasLimit
+    block_max_gas_limit: u64,
+    // maxTransactionsPerBlock: u64,
+    max_transactions_per_block: u64,
+    // maxBytesPerTxList: u64,
+    max_bytes_per_tx_list: u64,
 
     block_constants: BlockConstants,
     chain_id: Word,
@@ -77,7 +86,7 @@ enum FieldType {
 }
 
 impl PublicData {
-    fn assignments(&self) -> [(&'static str, FieldType, [u8; 32]); 9] {
+    fn assignments(&self) -> [(&'static str, FieldType, [u8; 32]); 10] {
         use FieldType::*;
         [
             (
@@ -101,6 +110,11 @@ impl PublicData {
                 None,
                 self.field9.to_be_bytes(),
             ),
+            (
+                "blockMaxGasLimit+maxTransactionsPerBlock+maxBytesPerTxList",
+                None,
+                self.field10.to_be_bytes(),
+            ),
         ]
     }
 
@@ -114,10 +128,25 @@ impl PublicData {
 
     /// create PublicData from block and taiko
     pub fn new<F>(block: &witness::Block<F>, taiko: &witness::Taiko) -> Self {
-        let field9 = taiko.prover.to_word() * Word::from(2u128.pow(96))
-            + Word::from(taiko.parent_gas_used as u64) * Word::from(2u128.pow(64))
-            + Word::from(taiko.gas_used as u64) * Word::from(2u128.pow(32));
+        // left shift x by n bits
+        fn left_shift<T: ToWord>(x: T, n: u32) -> Word {
+            assert!(n < 256);
+            if n < 128 {
+                return x.to_word() * Word::from(2u128.pow(n));
+            }
+            let mut bits = [0; 32];
+            bits[..16].copy_from_slice(2u128.pow(n - 128).to_be_bytes().as_ref());
+            bits[16..].copy_from_slice(0u128.to_be_bytes().as_ref());
+            x.to_word() * Word::from(&bits[..])
+        }
 
+        let field9 = left_shift(taiko.prover, 96)
+            + left_shift(taiko.parent_gas_used as u64, 64)
+            + left_shift(taiko.gas_used as u64, 32);
+
+        let field10 = left_shift(taiko.block_max_gas_limit, 192)
+            + left_shift(taiko.max_transactions_per_block, 128)
+            + left_shift(taiko.max_bytes_per_tx_list, 64);
         PublicData {
             l1_signal_service: taiko.l1_signal_service.to_word(),
             l2_signal_service: taiko.l2_signal_service.to_word(),
@@ -130,7 +159,11 @@ impl PublicData {
             prover: taiko.prover,
             parent_gas_used: taiko.parent_gas_used,
             gas_used: taiko.gas_used,
+            block_max_gas_limit: taiko.block_max_gas_limit,
+            max_transactions_per_block: taiko.max_transactions_per_block,
+            max_bytes_per_tx_list: taiko.max_bytes_per_tx_list,
             field9,
+            field10,
             block_constants: BlockConstants {
                 coinbase: block.context.coinbase,
                 timestamp: block.context.timestamp,

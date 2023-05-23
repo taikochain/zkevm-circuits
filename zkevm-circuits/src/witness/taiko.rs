@@ -27,4 +27,10 @@ pub struct Taiko {
     pub gas_used: u32,
     /// parent gas used
     pub parent_gas_used: u32,
+    /// blockMaxGasLimit
+    pub block_max_gas_limit: u64,
+    /// maxTransactionsPerBlock
+    pub max_transactions_per_block: u64,
+    /// maxBytesPerTxList
+    pub max_bytes_per_tx_list: u64,
 }
