@@ -21,7 +21,6 @@ pub use block::{Block, BlockContext};
 pub use call::{Call, CallContext, CallKind};
 use core::fmt::Debug;
 use eth_types::sign_types::{pk_bytes_le, pk_bytes_swap_endianness, SignData};
-use eth_types::ToWord;
 use eth_types::{self, geth_types, Address, GethExecStep, GethExecTrace, Word};
 use ethers_providers::JsonRpcClient;
 pub use execution::{
@@ -400,38 +399,33 @@ impl<P: JsonRpcClient> BuilderClient<P> {
         // self.cli.trace_block_by_number(block_num.into()).await?;
 
         // fetch up to 256 blocks
-        let mut n_blocks = std::cmp::min(256, block_num as usize);
-        let mut next_hash = eth_block.parent_hash;
-        let mut prev_state_root: Option<Word> = None;
-        let mut history_hashes = vec![Word::default(); n_blocks];
-        while n_blocks > 0 {
-            n_blocks -= 1;
+        let n_blocks = std::cmp::min(256, block_num as usize);
+        // let mut next_hash = eth_block.parent_hash;
+        // let mut prev_state_root: Option<Word> = None;
+        let history_hashes = vec![Word::default(); n_blocks];
+        // while n_blocks > 0 {
+        //     n_blocks -= 1;
 
-            // TODO: consider replacing it with `eth_getHeaderByHash`, it's faster
-            let header = self.cli.get_block_by_hash(next_hash).await?;
+        //     // TODO: consider replacing it with `eth_getHeaderByHash`, it's faster
+        //     let header = self.cli.get_block_by_hash(next_hash).await?;
 
-            // set the previous state root
-            if prev_state_root.is_none() {
-                prev_state_root = Some(header.state_root.to_word());
-            }
+        //     // set the previous state root
+        //     if prev_state_root.is_none() {
+        //         prev_state_root = Some(header.state_root.to_word());
+        //     }
 
-            // latest block hash is the last item
-            let block_hash = header
-                .hash
-                .ok_or(Error::EthTypeError(eth_types::Error::IncompleteBlock))?
-                .to_word();
-            history_hashes[n_blocks] = block_hash;
+        //     // latest block hash is the last item
+        //     let block_hash = header
+        //         .hash
+        //         .ok_or(Error::EthTypeError(eth_types::Error::IncompleteBlock))?
+        //         .to_word();
+        //     history_hashes[n_blocks] = block_hash;
 
-            // continue
-            next_hash = header.parent_hash;
-        }
+        //     // continue
+        //     next_hash = header.parent_hash;
+        // }
 
-        Ok((
-            eth_block,
-            geth_traces,
-            history_hashes,
-            prev_state_root.unwrap_or_default(),
-        ))
+        Ok((eth_block, geth_traces, history_hashes, Default::default()))
     }
 
     /// Step 2. Get State Accesses from TxExecTraces

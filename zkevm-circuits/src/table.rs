@@ -459,6 +459,7 @@ impl RwTable {
 }
 
 /// The types of proofs in the MPT table
+#[derive(Debug, Clone, Copy)]
 pub enum ProofType {
     /// Nonce updated
     NonceChanged = AccountFieldTag::Nonce as isize,
@@ -677,7 +678,7 @@ impl BlockTable {
         Self {
             tag: meta.advice_column(),
             index: meta.advice_column(),
-            value: meta.advice_column(),
+            value: meta.advice_column_in(SecondPhase),
         }
     }
 
