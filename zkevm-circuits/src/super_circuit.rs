@@ -80,21 +80,24 @@ use halo2_proofs::{
     plonk::{Circuit, ConstraintSystem, Error, Expression},
 };
 
+use itertools::Itertools;
+use snark_verifier_sdk::CircuitExt;
+
 use std::array;
 
 /// Configuration of the Super Circuit
 #[derive(Clone)]
 pub struct SuperCircuitConfig<F: Field> {
     block_table: BlockTable,
-    mpt_table: MptTable,
-    evm_circuit: EvmCircuitConfig<F>,
-    state_circuit: StateCircuitConfig<F>,
-    tx_circuit: TxCircuitConfig<F>,
-    bytecode_circuit: BytecodeCircuitConfig<F>,
-    copy_circuit: CopyCircuitConfig<F>,
-    keccak_circuit: KeccakCircuitConfig<F>,
+    //mpt_table: MptTable,
+    //evm_circuit: EvmCircuitConfig<F>,
+    //state_circuit: StateCircuitConfig<F>,
+    //tx_circuit: TxCircuitConfig<F>,
+    //bytecode_circuit: BytecodeCircuitConfig<F>,
+    //copy_circuit: CopyCircuitConfig<F>,
+    //keccak_circuit: KeccakCircuitConfig<F>,
     pi_circuit: PiCircuitConfig<F>,
-    exp_circuit: ExpCircuitConfig<F>,
+    //exp_circuit: ExpCircuitConfig<F>,
 }
 
 /// Circuit configuration arguments
@@ -120,14 +123,14 @@ impl<F: Field> SubCircuitConfig<F> for SuperCircuitConfig<F> {
         }: Self::ConfigArgs,
     ) -> Self {
         let tx_table = TxTable::construct(meta);
-        let rw_table = RwTable::construct(meta);
-        let mpt_table = MptTable::construct(meta);
-        let bytecode_table = BytecodeTable::construct(meta);
+        //let rw_table = RwTable::construct(meta);
+        //let mpt_table = MptTable::construct(meta);
+        //let bytecode_table = BytecodeTable::construct(meta);
         let block_table = BlockTable::construct(meta);
-        let q_copy_table = meta.fixed_column();
-        let copy_table = CopyTable::construct(meta, q_copy_table);
-        let exp_table = ExpTable::construct(meta);
-        let keccak_table = KeccakTable::construct(meta);
+        //let q_copy_table = meta.fixed_column();
+        //let copy_table = CopyTable::construct(meta, q_copy_table);
+        //let exp_table = ExpTable::construct(meta);
+        //let keccak_table = KeccakTable::construct(meta);
 
         // Use a mock randomness instead of the randomness derived from the challange
         // (either from mock or real prover) to help debugging assignments.
@@ -140,13 +143,13 @@ impl<F: Field> SubCircuitConfig<F> for SuperCircuitConfig<F> {
             power_of_randomness[0].clone(),
         );
 
-        let keccak_circuit = KeccakCircuitConfig::new(
+        /*let keccak_circuit = KeccakCircuitConfig::new(
             meta,
             KeccakCircuitConfigArgs {
                 keccak_table: keccak_table.clone(),
                 challenges: challenges.clone(),
             },
-        );
+        );*/
 
         let pi_circuit = PiCircuitConfig::new(
             meta,
@@ -157,7 +160,7 @@ impl<F: Field> SubCircuitConfig<F> for SuperCircuitConfig<F> {
                 tx_table: tx_table.clone(),
             },
         );
-        let tx_circuit = TxCircuitConfig::new(
+        /*let tx_circuit = TxCircuitConfig::new(
             meta,
             TxCircuitConfigArgs {
                 tx_table: tx_table.clone(),
@@ -205,19 +208,19 @@ impl<F: Field> SubCircuitConfig<F> for SuperCircuitConfig<F> {
                 keccak_table,
                 exp_table,
             },
-        );
+        );*/
 
         Self {
             block_table,
-            mpt_table,
-            evm_circuit,
-            state_circuit,
-            copy_circuit,
-            tx_circuit,
-            bytecode_circuit,
-            keccak_circuit,
+            //mpt_table,
+            //evm_circuit,
+            //state_circuit,
+            //copy_circuit,
+            //tx_circuit,
+            //bytecode_circuit,
+            //keccak_circuit,
             pi_circuit,
-            exp_circuit,
+            //exp_circuit,
         }
     }
 }
@@ -254,6 +257,16 @@ impl<F: Field> SuperCircuit<F> {
         let num_rows_tx_circuit =
             TxCircuitConfig::<F>::get_num_rows_required(block.circuits_params.max_txs);
         num_rows_evm_circuit.max(num_rows_tx_circuit)
+    }
+}
+
+impl<F: Field> CircuitExt<F> for SuperCircuit<F> {
+    fn num_instance(&self) -> Vec<usize> {
+        self.instance().iter().map(|v| v.len()).collect_vec()
+    }
+
+    fn instances(&self) -> Vec<Vec<F>> {
+        self.instance()
     }
 }
 
@@ -304,14 +317,14 @@ impl<F: Field> SubCircuit<F> for SuperCircuit<F> {
     /// Returns suitable inputs for the SuperCircuit.
     fn instance(&self) -> Vec<Vec<F>> {
         let mut instance = Vec::new();
-        instance.extend_from_slice(&self.keccak_circuit.instance());
+        //instance.extend_from_slice(&self.keccak_circuit.instance());
         instance.extend_from_slice(&self.pi_circuit.instance());
-        instance.extend_from_slice(&self.tx_circuit.instance());
+        /*instance.extend_from_slice(&self.tx_circuit.instance());
         instance.extend_from_slice(&self.bytecode_circuit.instance());
         instance.extend_from_slice(&self.copy_circuit.instance());
         instance.extend_from_slice(&self.state_circuit.instance());
         instance.extend_from_slice(&self.exp_circuit.instance());
-        instance.extend_from_slice(&self.evm_circuit.instance());
+        instance.extend_from_slice(&self.evm_circuit.instance());*/
 
         instance
     }
@@ -343,7 +356,7 @@ impl<F: Field> SubCircuit<F> for SuperCircuit<F> {
         challenges: &Challenges<Value<F>>,
         layouter: &mut impl Layouter<F>,
     ) -> Result<(), Error> {
-        self.keccak_circuit
+        /*self.keccak_circuit
             .synthesize_sub(&config.keccak_circuit, challenges, layouter)?;
         self.bytecode_circuit
             .synthesize_sub(&config.bytecode_circuit, challenges, layouter)?;
@@ -356,7 +369,7 @@ impl<F: Field> SubCircuit<F> for SuperCircuit<F> {
         self.exp_circuit
             .synthesize_sub(&config.exp_circuit, challenges, layouter)?;
         self.evm_circuit
-            .synthesize_sub(&config.evm_circuit, challenges, layouter)?;
+            .synthesize_sub(&config.evm_circuit, challenges, layouter)?;*/
         self.pi_circuit
             .synthesize_sub(&config.pi_circuit, challenges, layouter)?;
         Ok(())
@@ -422,11 +435,11 @@ impl<F: Field> Circuit<F> for SuperCircuit<F> {
             Value::known(block.randomness),
         )?;
 
-        config.mpt_table.load(
+        /*config.mpt_table.load(
             &mut layouter,
             &MptUpdates::mock_from(rws),
             Value::known(block.randomness),
-        )?;
+        )?;*/
 
         self.synthesize_sub(&config, &challenges, &mut layouter)
     }
