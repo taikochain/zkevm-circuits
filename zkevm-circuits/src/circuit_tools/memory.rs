@@ -11,7 +11,7 @@ use std::{
     ops::{Index, IndexMut},
 };
 
-use super::constraint_builder::ConstraintBuilder;
+use super::{constraint_builder::ConstraintBuilder, cell_manager::CellTypeTrait};
 
 #[derive(Clone, Debug, Default)]
 pub(crate) struct Memory<F> {
@@ -55,9 +55,13 @@ impl<F: Field> Memory<F> {
         unreachable!()
     }
 
-    pub(crate) fn generate_constraints(
+    pub(crate) fn get_columns(&self) -> Vec<Column<Advice>> {
+        self.columns.clone()
+    }
+
+    pub(crate) fn generate_constraints<C: CellTypeTrait>(
         &self,
-        cb: &mut ConstraintBuilder<F>,
+        cb: &mut ConstraintBuilder<F, C>,
         is_first_row: Expression<F>,
     ) {
         for bank in self.banks.iter() {
@@ -150,29 +154,29 @@ impl<F: Field> MemoryBank<F> {
         self.cur.expr()
     }
 
-    pub(crate) fn load(
+    pub(crate) fn load<C: CellTypeTrait>(
         &self,
         description: &'static str,
-        cb: &mut ConstraintBuilder<F>,
+        cb: &mut ConstraintBuilder<F, C>,
         offset: Expression<F>,
         values: &[Expression<F>],
     ) {
         self.load_with_key(description, cb, self.key() - offset, values);
     }
 
-    pub(crate) fn load_with_key(
+    pub(crate) fn load_with_key<C: CellTypeTrait>(
         &self,
         description: &'static str,
-        cb: &mut ConstraintBuilder<F>,
+        cb: &mut ConstraintBuilder<F, C>,
         key: Expression<F>,
         values: &[Expression<F>],
     ) {
         cb.lookup(description, self.tag(), self.insert_key(key, values));
     }
 
-    pub(crate) fn store(
+    pub(crate) fn store<C: CellTypeTrait>(
         &self,
-        cb: &mut ConstraintBuilder<F>,
+        cb: &mut ConstraintBuilder<F, C>,
         values: &[Expression<F>],
     ) -> Expression<F> {
         let key = self.key() + 1.expr();
@@ -180,9 +184,9 @@ impl<F: Field> MemoryBank<F> {
         key
     }
 
-    pub(crate) fn store_with_key(
+    pub(crate) fn store_with_key<C: CellTypeTrait>(
         &self,
-        cb: &mut ConstraintBuilder<F>,
+        cb: &mut ConstraintBuilder<F, C>,
         key: Expression<F>,
         values: &[Expression<F>],
     ) {
@@ -202,9 +206,9 @@ impl<F: Field> MemoryBank<F> {
         self.store_offsets.clear();
     }
 
-    pub(crate) fn generate_constraints(
+    pub(crate) fn generate_constraints<C: CellTypeTrait>(
         &self,
-        cb: &mut ConstraintBuilder<F>,
+        cb: &mut ConstraintBuilder<F, C>,
         is_first_row: Expression<F>,
     ) {
         let lookup_table = cb.get_lookup_table(self.tag());
@@ -251,7 +255,7 @@ impl<F: Field> MemoryBank<F> {
         self.tag.clone()
     }
 
-    pub(crate) fn insert_key<T: Clone>(&self, key: T, values: &[T]) -> Vec<T> {
+    pub(crate) fn insert_key<V: Clone>(&self, key: V, values: &[V]) -> Vec<V> {
         [vec![key], values.to_owned()].concat().to_vec()
     }
 }

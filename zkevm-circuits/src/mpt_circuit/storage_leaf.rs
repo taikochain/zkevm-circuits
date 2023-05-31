@@ -1,7 +1,7 @@
 use eth_types::Field;
 use gadgets::util::Scalar;
 use halo2_proofs::{
-    circuit::{Region, Value},
+    circuit::{Value, Region},
     plonk::{Error, VirtualCells},
     poly::Rotation,
 };
@@ -9,9 +9,9 @@ use halo2_proofs::{
 use crate::{
     circuit,
     circuit_tools::{
-        cell_manager::Cell,
+        cell_manager::{Cell, EvmCellType},
         constraint_builder::RLCChainable,
-        gadgets::{IsEqualGadget, LtGadget},
+        gadgets::{IsEqualGadget, LtGadget}, cached_region::{CachedRegion, ChallengeSet},
     },
     mpt_circuit::{
         helpers::{
@@ -60,25 +60,25 @@ impl<F: Field> StorageLeafConfig<F> {
             .cell_manager
             .as_mut()
             .unwrap()
-            .reset(StorageRowType::Count as usize);
+            .reset(meta, StorageRowType::Count as usize);
         let mut config = StorageLeafConfig::default();
 
         circuit!([meta, cb.base], {
             let key_items = [
-                ctx.rlp_item(meta, &mut cb.base, StorageRowType::KeyS as usize),
-                ctx.rlp_item(meta, &mut cb.base, StorageRowType::KeyC as usize),
+                ctx.rlp_item(meta, cb, StorageRowType::KeyS as usize),
+                ctx.rlp_item(meta, cb, StorageRowType::KeyC as usize),
             ];
             config.value_rlp_bytes = [cb.base.query_bytes(), cb.base.query_bytes()];
             let value_item = [
-                ctx.rlp_item(meta, &mut cb.base, StorageRowType::ValueS as usize),
-                ctx.rlp_item(meta, &mut cb.base, StorageRowType::ValueC as usize),
+                ctx.rlp_item(meta, cb, StorageRowType::ValueS as usize),
+                ctx.rlp_item(meta, cb, StorageRowType::ValueC as usize),
             ];
-            let drifted_item = ctx.rlp_item(meta, &mut cb.base, StorageRowType::Drifted as usize);
-            let wrong_item = ctx.rlp_item(meta, &mut cb.base, StorageRowType::Wrong as usize);
+            let drifted_item = ctx.rlp_item(meta, cb, StorageRowType::Drifted as usize);
+            let wrong_item = ctx.rlp_item(meta, cb, StorageRowType::Wrong as usize);
 
             config.main_data = MainData::load(
                 "main storage",
-                &mut cb.base,
+                cb,
                 &ctx.memory[main_memory()],
                 0.expr(),
             );
@@ -94,23 +94,23 @@ impl<F: Field> StorageLeafConfig<F> {
                 let parent_data = &mut config.parent_data[is_s.idx()];
                 *parent_data = ParentData::load(
                     "leaf load",
-                    &mut cb.base,
+                    cb,
                     &ctx.memory[parent_memory(is_s)],
                     0.expr(),
                 );
                 // Key data
                 let key_data = &mut config.key_data[is_s.idx()];
-                *key_data = KeyData::load(&mut cb.base, &ctx.memory[key_memory(is_s)], 0.expr());
+                *key_data = KeyData::load(cb, &ctx.memory[key_memory(is_s)], 0.expr());
 
                 // Placeholder leaf checks
                 config.is_in_empty_trie[is_s.idx()] =
-                    IsEmptyTreeGadget::construct(&mut cb.base, parent_data.rlc.expr(), &r);
+                    IsEmptyTreeGadget::construct(cb, parent_data.rlc.expr(), &r);
                 let is_placeholder_leaf = config.is_in_empty_trie[is_s.idx()].expr();
 
                 let rlp_key = &mut config.rlp_key[is_s.idx()];
-                *rlp_key = ListKeyGadget::construct(&mut cb.base, &key_items[is_s.idx()]);
+                *rlp_key = ListKeyGadget::construct(cb, &key_items[is_s.idx()]);
                 config.rlp_value[is_s.idx()] = RLPValueGadget::construct(
-                    &mut cb.base,
+                    cb,
                     &config.value_rlp_bytes[is_s.idx()]
                         .iter()
                         .map(|c| c.expr())
@@ -142,7 +142,7 @@ impl<F: Field> StorageLeafConfig<F> {
                 // Key
                 key_rlc[is_s.idx()] = key_data.rlc.expr()
                     + rlp_key.key.expr(
-                        &mut cb.base,
+                        cb,
                         rlp_key.key_value.clone(),
                         key_data.mult.expr(),
                         key_data.is_odd.expr(),
@@ -176,10 +176,10 @@ impl<F: Field> StorageLeafConfig<F> {
                 }}
 
                 // Key done, set the default values
-                KeyData::store_defaults(&mut cb.base, &ctx.memory[key_memory(is_s)]);
+                KeyData::store_defaults(cb, &ctx.memory[key_memory(is_s)]);
                 // Store the new parent
                 ParentData::store(
-                    &mut cb.base,
+                    cb,
                     &ctx.memory[parent_memory(is_s)],
                     0.expr(),
                     true.expr(),
@@ -257,15 +257,20 @@ impl<F: Field> StorageLeafConfig<F> {
         config
     }
 
-    pub fn assign(
+    pub fn assign<S: ChallengeSet<F>>(
         &self,
-        region: &mut Region<'_, F>,
-        ctx: &MPTConfig<F>,
+        region: &mut Region<F>,
+        challenges: &S,
+        mpt_config: &MPTConfig<F>,
         pv: &mut MPTState<F>,
         offset: usize,
         node: &Node,
         rlp_values: &[RLPItemWitness],
     ) -> Result<(), Error> {
+        let mut region = CachedRegion::new(
+            region,
+            challenges
+        );
         let storage = &node.storage.clone().unwrap();
 
         let key_items = [
@@ -281,7 +286,7 @@ impl<F: Field> StorageLeafConfig<F> {
 
         let main_data =
             self.main_data
-                .witness_load(region, offset, &pv.memory[main_memory()], 0)?;
+                .witness_load(&mut region, offset, &pv.memory[main_memory()], 0)?;
 
         let mut key_data = vec![KeyDataWitness::default(); 2];
         let mut parent_data = vec![ParentDataWitness::default(); 2];
@@ -289,34 +294,34 @@ impl<F: Field> StorageLeafConfig<F> {
         let mut value_rlc = vec![0.scalar(); 2];
         for is_s in [true, false] {
             parent_data[is_s.idx()] = self.parent_data[is_s.idx()].witness_load(
-                region,
+                &mut region,
                 offset,
                 &mut pv.memory[parent_memory(is_s)],
                 0,
             )?;
 
             let rlp_key_witness = self.rlp_key[is_s.idx()].assign(
-                region,
+                &mut region,
                 offset,
                 &storage.list_rlp_bytes[is_s.idx()],
                 &key_items[is_s.idx()],
             )?;
 
             self.is_not_hashed[is_s.idx()].assign(
-                region,
+                &mut region,
                 offset,
                 rlp_key_witness.rlp_list.num_bytes().scalar(),
                 32.scalar(),
             )?;
 
             key_data[is_s.idx()] = self.key_data[is_s.idx()].witness_load(
-                region,
+                &mut region,
                 offset,
                 &mut pv.memory[key_memory(is_s)],
                 0,
             )?;
             KeyData::witness_store(
-                region,
+                &mut region,
                 offset,
                 &mut pv.memory[key_memory(is_s)],
                 F::zero(),
@@ -340,10 +345,10 @@ impl<F: Field> StorageLeafConfig<F> {
                 .iter()
                 .zip(storage.value_rlp_bytes[is_s.idx()].iter())
             {
-                cell.assign(region, offset, byte.scalar())?;
+                cell.assign(&mut region, offset, byte.scalar())?;
             }
             let value_witness = self.rlp_value[is_s.idx()].assign(
-                region,
+                &mut region,
                 offset,
                 &storage.value_rlp_bytes[is_s.idx()],
             )?;
@@ -354,7 +359,7 @@ impl<F: Field> StorageLeafConfig<F> {
             };
 
             ParentData::witness_store(
-                region,
+                &mut region,
                 offset,
                 &mut pv.memory[parent_memory(is_s)],
                 F::zero(),
@@ -364,7 +369,7 @@ impl<F: Field> StorageLeafConfig<F> {
             )?;
 
             self.is_in_empty_trie[is_s.idx()].assign(
-                region,
+                &mut region,
                 offset,
                 parent_data[is_s.idx()].rlc,
                 pv.r,
@@ -372,13 +377,13 @@ impl<F: Field> StorageLeafConfig<F> {
         }
 
         let is_storage_mod_proof = self.is_storage_mod_proof.assign(
-            region,
+            &mut region,
             offset,
             main_data.proof_type.scalar(),
             MPTProofType::StorageChanged.scalar(),
         )? == true.scalar();
         let is_non_existing_proof = self.is_non_existing_storage_proof.assign(
-            region,
+            &mut region,
             offset,
             main_data.proof_type.scalar(),
             MPTProofType::StorageDoesNotExist.scalar(),
@@ -386,7 +391,7 @@ impl<F: Field> StorageLeafConfig<F> {
 
         // Drifted leaf handling
         self.drifted.assign(
-            region,
+            &mut region,
             offset,
             &parent_data,
             &storage.drifted_rlp_bytes,
@@ -396,7 +401,7 @@ impl<F: Field> StorageLeafConfig<F> {
 
         // Wrong leaf handling
         let key_rlc = self.wrong.assign(
-            region,
+            &mut region,
             offset,
             is_non_existing_proof,
             &key_rlc,
@@ -415,8 +420,8 @@ impl<F: Field> StorageLeafConfig<F> {
         } else {
             MPTProofType::Disabled
         };
-        ctx.mpt_table.assign(
-            region,
+        mpt_config.mpt_table.assign_cached(
+            &mut region,
             offset,
             &MptUpdateRow {
                 address_rlc: Value::known(main_data.address_rlc),

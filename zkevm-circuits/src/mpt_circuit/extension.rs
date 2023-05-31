@@ -1,7 +1,6 @@
 use eth_types::Field;
 use gadgets::util::{pow, Scalar};
 use halo2_proofs::{
-    circuit::Region,
     plonk::{Error, Expression, VirtualCells},
 };
 
@@ -13,7 +12,7 @@ use super::{
 };
 use crate::{
     circuit,
-    circuit_tools::{cell_manager::Cell, constraint_builder::RLCChainable, gadgets::LtGadget},
+    circuit_tools::{cell_manager::Cell, constraint_builder::RLCChainable, gadgets::LtGadget, cached_region::{CachedRegion, ChallengeSet}},
     mpt_circuit::{
         helpers::{
             ext_key_rlc_calc_value, ext_key_rlc_expr, num_nibbles, Indexable, KeyData, ParentData,
@@ -57,20 +56,20 @@ impl<F: Field> ExtensionGadget<F> {
 
         let mut config = ExtensionGadget::default();
 
-        circuit!([meta, cb.base], {
+        circuit!([meta, cb], {
             // Data
             let key_items = [
-                ctx.rlp_item(meta, &mut cb.base, ExtensionBranchRowType::KeyS as usize),
-                ctx.nibbles(meta, &mut cb.base, ExtensionBranchRowType::KeyC as usize),
+                ctx.rlp_item(meta,cb, ExtensionBranchRowType::KeyS as usize),
+                ctx.nibbles(meta, cb, ExtensionBranchRowType::KeyC as usize),
             ];
             let rlp_value = [
-                ctx.rlp_item(meta, &mut cb.base, ExtensionBranchRowType::ValueS as usize),
-                ctx.rlp_item(meta, &mut cb.base, ExtensionBranchRowType::ValueC as usize),
+                ctx.rlp_item(meta, cb, ExtensionBranchRowType::ValueS as usize),
+                ctx.rlp_item(meta, cb, ExtensionBranchRowType::ValueC as usize),
             ];
 
-            config.rlp_key = ListKeyGadget::construct(&mut cb.base, &key_items[0]);
+            config.rlp_key = ListKeyGadget::construct(cb, &key_items[0]);
             // TODO(Brecht): add lookup constraint
-            config.is_key_part_odd = cb.base.query_cell();
+            config.is_key_part_odd = cb.query_cell();
 
             let mut branch_rlp_rlc = vec![0.expr(); 2];
             for is_s in [true, false] {
@@ -139,7 +138,7 @@ impl<F: Field> ExtensionGadget<F> {
             // implemented.
             let key_rlc = key_data.rlc.expr()
                 + ext_key_rlc_expr(
-                    &mut cb.base,
+                    cb,
                     config.rlp_key.key_value.clone(),
                     key_data.mult.expr(),
                     config.is_key_part_odd.expr(),
@@ -159,12 +158,12 @@ impl<F: Field> ExtensionGadget<F> {
             let key_num_bytes_for_mult = key_len
                 - ifx! {not!(key_data.is_odd.expr() * config.is_key_part_odd.expr()) => { 1.expr() }};
             // Get the multiplier for this key length
-            config.mult_key = cb.base.query_cell();
+            config.mult_key = cb.query_cell();
             require!((FixedTableTag::RMult, key_num_bytes_for_mult, config.mult_key.expr()) => @"fixed");
 
             // Store the post ext state
             config.post_state = Some(ExtState {
-                key_rlc: key_rlc,
+                key_rlc,
                 key_mult: key_data.mult.expr() * config.mult_key.expr(),
                 num_nibbles,
                 is_key_odd,
@@ -179,10 +178,10 @@ impl<F: Field> ExtensionGadget<F> {
         self.post_state.as_ref().unwrap().clone()
     }
 
-    pub(crate) fn assign(
+    pub(crate) fn assign<S: ChallengeSet<F>>(
         &self,
-        region: &mut Region<'_, F>,
-        mpt_config: &MPTConfig<F>,
+        region: &mut CachedRegion<'_, '_, F, S>,
+        _mpt_config: &MPTConfig<F>,
         pv: &mut MPTState<F>,
         offset: usize,
         key_data: &KeyDataWitness<F>,
@@ -247,7 +246,7 @@ impl<F: Field> ExtensionGadget<F> {
 
         // Key RLC
         let (key_rlc_ext, _) = ext_key_rlc_calc_value(
-            rlp_key.key_item.clone(),
+            rlp_key.key_item,
             key_data.mult,
             is_key_part_odd,
             !*is_key_odd,
