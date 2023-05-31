@@ -384,12 +384,12 @@ fn create_root_super_circuit_prover_sdk() {
     end_timer!(start0);
 
     //std::fs::remove_file("./examples/agg.snark").unwrap_or_default();
-    let _snark = gen_snark_shplonk(
+    /*let _snark = gen_snark_shplonk(
         &params,
         &pk,
         agg_circuit.clone(),
         /*Some(Path::new("./examples/agg.snark"))*/None::<&str>,
-    );
+    );*/
 
     println!("gen evm snark");
     // do one more time to verify
@@ -440,11 +440,13 @@ mod tests {
 
     #[test]
     fn bench_root_super_circuit_prover() {
+        // Old version, only here for reference
         create_root_super_circuit_prover();
     }
 
     #[test]
     fn bench_root_super_circuit_prover_sdk() {
+        // New version, cleanest using the new sdk
         create_root_super_circuit_prover_sdk();
     }
 
