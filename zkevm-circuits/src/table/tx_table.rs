@@ -29,6 +29,12 @@ pub enum TxFieldTag {
     TxSignHash,
     /// CallData
     CallData,
+    /// Signature field V.
+    SigV,
+    /// Signature field R.
+    SigR,
+    /// Signature field S.
+    SigS,
 }
 impl_expr!(TxFieldTag);
 

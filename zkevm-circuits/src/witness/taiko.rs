@@ -3,7 +3,7 @@
 use eth_types::{Address, Hash, H256};
 
 /// Taiko witness
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct Taiko {
     /// l1 signal service address
     pub l1_signal_service: Address,
@@ -33,4 +33,11 @@ pub struct Taiko {
     pub max_transactions_per_block: u64,
     /// maxBytesPerTxList
     pub max_bytes_per_tx_list: u64,
+
+    /// anchor gas cost
+    pub anchor_gas_cost: u64,
+    /// anchor from
+    pub anchor_from: Address,
+    /// anchor to
+    pub anchor_to: Address,
 }
