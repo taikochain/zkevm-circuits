@@ -74,9 +74,14 @@ static GX2_MUL_PRIVATEKEY_LO_HI: Lazy<(U256, U256)> = Lazy::new(|| split_u256(&G
 
 // # How to check the signature
 // 1. IF r == GX1 OR r == GX2
-// 2. IF r == GX2 THEN IF r == GX1 THEN s == 0
+// 2. IF r == GX2 THEN MUST WHEN r == GX1 AND s == 0
 // 3. IF s == 0 THEN (GX1_MUL_PRIVATEKEY + msg_hash) == N
-// => IF r == GX2 THEN GX1_MUL_PRIVATEKEY * 1 + msg_hash == N
+// => IF r == GX2 THEN GX1_MUL_PRIVATEKEY + msg_hash == N
+// In mul_add chip, we have a * b + c == d
+// => a == GX1_MUL_PRIVATEKEY
+// => b == 1
+// => c == msg_hash
+// => d == N
 //
 // # The layout
 // - msg_hash (c)
