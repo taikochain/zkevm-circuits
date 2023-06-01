@@ -302,6 +302,7 @@ impl<F: Field> SignVerifyConfig<F> {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn assign_field(
         &self,
         region: &mut Region<'_, F>,
@@ -319,7 +320,7 @@ impl<F: Field> SignVerifyConfig<F> {
             let mut u128_acc = Value::known(F::ZERO);
             for (idx, byte) in value.iter().enumerate() {
                 let row_offset = *offset + idx;
-                u128_acc = u128_acc * Value::known(F::from(BYTE_POW_BASE as u64))
+                u128_acc = u128_acc * Value::known(F::from(BYTE_POW_BASE))
                     + Value::known(F::from(*byte as u64));
                 region.assign_advice(
                     || "sign_u128_acc",

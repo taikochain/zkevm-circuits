@@ -251,42 +251,33 @@ impl<F: Field> AnchorTxCircuitConfig<F> {
         // q_call_data_end: Selector,
         // call_data_rlc_acc: Column<Advice>,
         // call_data_tag: Column<Fixed>,
-        for (annotation, len, value, tag) in [
+        for (annotation, value, tag) in [
             (
                 "method_signature",
-                4,
                 &anchor_tx.call_data[..4],
                 PiFieldTag::MethodSign,
             ),
-            (
-                "l1_hash",
-                32,
-                &anchor_tx.call_data[4..36],
-                PiFieldTag::L1Hash,
-            ),
+            ("l1_hash", &anchor_tx.call_data[4..36], PiFieldTag::L1Hash),
             (
                 "l1_signal_root",
-                32,
                 &anchor_tx.call_data[36..68],
                 PiFieldTag::L1SignalRoot,
             ),
             (
                 "l1_height",
-                8,
                 &anchor_tx.call_data[68..76],
                 PiFieldTag::L1Height,
             ),
             (
                 "parent_gas_used",
-                8,
                 &anchor_tx.call_data[76..84],
                 PiFieldTag::ParentGasUsed,
             ),
         ] {
             let mut rlc_acc = Value::known(F::ZERO);
-            for idx in 0..len {
+            for (idx, byte) in value.iter().enumerate() {
                 let row_offset = offset + idx;
-                rlc_acc = rlc_acc * randomness + Value::known(F::from(value[idx] as u64));
+                rlc_acc = rlc_acc * randomness + Value::known(F::from(*byte as u64));
                 region.assign_advice(
                     || annotation,
                     self.call_data_rlc_acc,
@@ -304,13 +295,13 @@ impl<F: Field> AnchorTxCircuitConfig<F> {
                     self.q_call_data_start.enable(region, row_offset)?;
                 }
                 // the last offset of field
-                if idx == len - 1 {
+                if idx == value.len() - 1 {
                     self.q_call_data_end.enable(region, row_offset)?;
                 } else {
                     self.q_call_data_step.enable(region, row_offset)?;
                 }
             }
-            offset += len;
+            offset += value.len();
         }
         todo!()
     }
@@ -411,7 +402,7 @@ impl<F: Field> SubCircuit<F> for AnchorTxCircuit<F> {
         )
     }
 
-    fn min_num_rows_block(block: &witness::Block<F>) -> (usize, usize) {
+    fn min_num_rows_block(_block: &witness::Block<F>) -> (usize, usize) {
         (0, 0)
     }
 }
