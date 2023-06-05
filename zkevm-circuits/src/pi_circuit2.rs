@@ -20,7 +20,6 @@ use halo2_proofs::{
 use std::marker::PhantomData;
 
 const MAX_DEGREE: usize = 10;
-const MIN_DEGREE: usize = 8;
 const RPI_CELL_IDX: usize = 0;
 const RPI_RLC_ACC_CELL_IDX: usize = 1;
 const BYTE_POW_BASE: u64 = 1 << 8;
@@ -680,7 +679,7 @@ mod pi_circuit_test {
 
     use super::*;
 
-    use eth_types::{H64, U256, U64};
+    use eth_types::{ToScalar, H64, U256, U64};
     use halo2_proofs::{
         dev::{MockProver, VerifyFailure},
         halo2curves::bn256::Fr,
