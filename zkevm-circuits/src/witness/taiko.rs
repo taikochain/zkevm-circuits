@@ -3,7 +3,7 @@
 use eth_types::{Address, Hash, H256};
 
 /// Taiko witness
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct Taiko {
     /// l1 signal service address
     pub l1_signal_service: Address,

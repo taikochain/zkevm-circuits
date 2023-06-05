@@ -10,10 +10,10 @@ use bus_mapping::{
     circuit_input_builder::{self, CircuitsParams, CopyEvent, ExpEvent},
     Error,
 };
-use eth_types::{Address, Field, ToLittleEndian, ToScalar, Word};
+use eth_types::{Address, Field, ToLittleEndian, ToScalar, ToWord, Word};
 use halo2_proofs::circuit::Value;
 
-use super::{tx::tx_convert, Bytecode, ExecStep, Rw, RwMap, Transaction};
+use super::{tx::tx_convert, Bytecode, ExecStep, Rw, RwMap, Taiko, Transaction};
 
 // TODO: Remove fields that are duplicated in`eth_block`
 /// Block is the struct used by all circuits, which contains all the needed
@@ -51,6 +51,8 @@ pub struct Block<F> {
     pub keccak_inputs: Vec<Vec<u8>>,
     /// Original Block from geth
     pub eth_block: eth_types::Block<eth_types::Transaction>,
+    /// Taiko witness
+    pub taiko: Taiko,
 }
 
 impl<F: Field> Block<F> {
@@ -134,6 +136,8 @@ pub struct BlockContext {
     pub history_hashes: Vec<Word>,
     /// The chain id
     pub chain_id: Word,
+    /// The block hash
+    pub block_hash: Option<Word>,
 }
 
 impl BlockContext {
@@ -179,6 +183,16 @@ impl BlockContext {
                     randomness
                         .map(|randomness| rlc::value(&self.chain_id.to_le_bytes(), randomness)),
                 ],
+                [
+                    Value::known(F::from(BlockContextFieldTag::BlockHash as u64)),
+                    Value::known(self.number.to_scalar().unwrap()),
+                    randomness.map(|randomness| {
+                        rlc::value(
+                            &self.block_hash.expect("must have block hash").to_le_bytes(),
+                            randomness,
+                        )
+                    }),
+                ],
             ],
             {
                 let len_history = self.history_hashes.len();
@@ -211,6 +225,7 @@ impl From<&circuit_input_builder::Block> for BlockContext {
             base_fee: block.base_fee,
             history_hashes: block.history_hashes.clone(),
             chain_id: block.chain_id,
+            block_hash: block.eth_block.hash.map(|hash| hash.to_word()),
         }
     }
 }
@@ -251,5 +266,6 @@ pub fn block_convert<F: Field>(
         prev_state_root: block.prev_state_root,
         keccak_inputs: circuit_input_builder::keccak_inputs(block, code_db)?,
         eth_block: block.eth_block.clone(),
+        taiko: Taiko::default(),
     })
 }
