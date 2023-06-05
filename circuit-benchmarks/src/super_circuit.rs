@@ -1,21 +1,18 @@
 //! SuperCircuit circuit benchmarks
- 
-use std::fs;
-use std::io::Write;
-use std::rc::Rc;
-use halo2_proofs::plonk::Circuit;
-use zkevm_circuits::root_circuit::KzgDk;
-use zkevm_circuits::root_circuit::KzgSvk;
-use zkevm_circuits::root_circuit::RootCircuit;
-use zkevm_circuits::super_circuit::SuperCircuit;
-use zkevm_circuits::root_circuit::PoseidonTranscript;
-use eth_types::{address, Address, bytecode, geth_types::GethData, Word};
+
+use eth_types::{address, bytecode, geth_types::GethData, Address, Word};
 use ethers_signers::{LocalWallet, Signer};
+use halo2_proofs::plonk::Circuit;
+use std::{fs, io::Write, rc::Rc};
+use zkevm_circuits::{
+    root_circuit::{KzgDk, KzgSvk, PoseidonTranscript, RootCircuit},
+    taiko_super_circuit::SuperCircuit,
+};
 
 use bus_mapping::circuit_input_builder::CircuitsParams;
 
 use rand::SeedableRng;
-use std::{collections::HashMap};
+use std::collections::HashMap;
 
 use halo2_proofs::{
     circuit::Value,
@@ -25,12 +22,10 @@ use halo2_proofs::{
         commitment::ParamsProver,
         kzg::{
             commitment::{KZGCommitmentScheme, ParamsKZG},
-            multiopen::{ProverGWC},
+            multiopen::ProverGWC,
         },
     },
-    transcript::{
-        TranscriptWriterBuffer,
-    },
+    transcript::TranscriptWriterBuffer,
 };
 
 use mock::{TestContext, MOCK_CHAIN_ID};
@@ -39,22 +34,20 @@ use ark_std::{end_timer, start_timer};
 use std::path::Path;
 
 use snark_verifier_sdk::{
-    Snark, CircuitExt, SHPLONK,
     evm::{gen_evm_proof_shplonk, gen_evm_verifier_shplonk},
-    halo2::{aggregation::AggregationCircuit, gen_snark_shplonk, gen_srs},
     gen_pk,
+    halo2::{aggregation::AggregationCircuit, gen_snark_shplonk, gen_srs},
+    CircuitExt, Snark, SHPLONK,
 };
 
+use itertools::Itertools;
+use rand_chacha::ChaCha20Rng;
 use snark_verifier::{
-    pcs::{
-        kzg::{self, *},
-    },
+    loader::evm::{self, encode_calldata, Address as VerifierAddress, EvmLoader, ExecutorBuilder},
+    pcs::kzg::{self, *},
     system::halo2::{compile, transcript::evm::EvmTranscript, Config},
     verifier::SnarkVerifier,
-    loader::evm::{self, encode_calldata, Address as VerifierAddress, EvmLoader, ExecutorBuilder},
 };
-use rand_chacha::ChaCha20Rng;
-use itertools::Itertools;
 
 /// Number of limbs to decompose a elliptic curve base field element into.
 pub const LIMBS: usize = 4;
@@ -67,10 +60,10 @@ pub type ProverKey = ProvingKey<G1Affine>;
 
 /// KZG accumulation scheme with GWC19 multiopen.
 pub type KzgAs<M> = kzg::KzgAs<M, Gwc19>;
-pub type PlonkVerifier<M> = snark_verifier::verifier::plonk::PlonkVerifier<KzgAs<M>, LimbsEncoding<LIMBS, BITS>>;
+pub type PlonkVerifier<M> =
+    snark_verifier::verifier::plonk::PlonkVerifier<KzgAs<M>, LimbsEncoding<LIMBS, BITS>>;
 
-use rand::rngs::StdRng;
-use rand::rngs::OsRng;
+use rand::rngs::{OsRng, StdRng};
 
 use eth_types::Field;
 
@@ -215,9 +208,8 @@ pub fn create_root_super_circuit_prover() {
     let min_k_aggregation = 21;
     let proof_gen_prfx = crate::constants::PROOFGEN_PREFIX;
 
-    /* SuperCircuit */
+    // SuperCircuit
     // Create super circuit
-    const TEST_MOCK_RANDOMNESS: u64 = 0x100;
     let circuits_params = CircuitsParams {
         max_txs: 1,
         max_calldata: 32,
@@ -229,22 +221,27 @@ pub fn create_root_super_circuit_prover() {
         max_keccak_rows: 0,
     };
     let (k, super_circuit, super_instance, _) =
-        SuperCircuit::<_>::build(block_1tx(), circuits_params, TEST_MOCK_RANDOMNESS.into())
-            .unwrap();
+        SuperCircuit::<_>::build(block_1tx(), circuits_params).unwrap();
     let k = k.max(min_k_aggregation);
     let params = ParamsKZG::<Bn256>::setup(k, OsRng);
-    let pk = keygen_pk(&params, keygen_vk(&params, &super_circuit).unwrap(), &super_circuit).unwrap();
+    let pk = keygen_pk(
+        &params,
+        keygen_vk(&params, &super_circuit).unwrap(),
+        &super_circuit,
+    )
+    .unwrap();
     let protocol = compile(
         &params,
         pk.get_vk(),
-        Config::kzg()
-            .with_num_instance(super_instance.iter().map(|instance| instance.len()).collect()),
+        Config::kzg().with_num_instance(
+            super_instance
+                .iter()
+                .map(|instance| instance.len())
+                .collect(),
+        ),
     );
     // Create super circuit proof
-    let proof_message = format!(
-        "{} with degree = {}",
-        proof_gen_prfx, k
-    );
+    let proof_message = format!("{} with degree = {}", proof_gen_prfx, k);
     let start_proof_super = start_timer!(|| proof_message);
     let super_proof = {
         let mut transcript = PoseidonTranscript::new(Vec::new());
@@ -261,7 +258,7 @@ pub fn create_root_super_circuit_prover() {
     };
     end_timer!(start_proof_super);
 
-    /* RootCircuit */
+    // RootCircuit
     // Create root circuit
     println!("root circuit");
     let root_circuit = RootCircuit::new(
@@ -290,12 +287,9 @@ pub fn create_root_super_circuit_prover() {
     // Create root circuit proof
     let pk = keygen_pk(&params, root_vk, &root_circuit).expect("keygen_pk should not fail");
     let mut transcript = TranscriptWriterBuffer::<_, G1Affine, _>::init(Vec::new());
-    let proof_message = format!(
-        "{} with degree = {}",
-        proof_gen_prfx, k
-    );
+    let proof_message = format!("{} with degree = {}", proof_gen_prfx, k);
     let start_proof_root = start_timer!(|| proof_message);
-    create_proof::<KZGCommitmentScheme<_>, ProverGWC<_>, _, _, EvmTranscript<_, _, _, _>, _,>(
+    create_proof::<KZGCommitmentScheme<_>, ProverGWC<_>, _, _, EvmTranscript<_, _, _, _>, _>(
         &params,
         &pk,
         &[root_circuit],
@@ -313,10 +307,8 @@ pub fn create_root_super_circuit_prover() {
     evm_verify(evm_verifier_bytecode, root_instance, proof.clone());
 }
 
-
 fn gen_application_snark(params: &ParamsKZG<Bn256>) -> Snark {
     println!("gen app snark");
-    const TEST_MOCK_RANDOMNESS: u64 = 0x100;
     let circuits_params = CircuitsParams {
         max_txs: 1,
         max_calldata: 32,
@@ -328,10 +320,10 @@ fn gen_application_snark(params: &ParamsKZG<Bn256>) -> Snark {
         max_keccak_rows: 0,
     };
     let (k, super_circuit, super_instance, _) =
-        SuperCircuit::<_>::build(block_1tx(), circuits_params, TEST_MOCK_RANDOMNESS.into())
-            .unwrap();
+        SuperCircuit::<_>::build(block_1tx(), circuits_params).unwrap();
 
-    //let pk = gen_pk(params, &super_circuit, Some(Path::new("./examples/app.pk")), super_circuit.params());
+    // let pk = gen_pk(params, &super_circuit, Some(Path::new("./examples/app.pk")),
+    // super_circuit.params());
     let vk = keygen_vk(params, &super_circuit).expect("keygen_vk should not fail");
     let pk = keygen_pk(params, vk, &super_circuit).expect("keygen_pk should not fail");
     gen_snark_shplonk(params, &pk, super_circuit, None::<&str>)
@@ -348,12 +340,12 @@ fn create_root_super_circuit_prover_sdk() {
         let root_circuit = AggregationCircuit::<SHPLONK>::new(&params, vec![snark]);
 
         let start0 = start_timer!(|| "gen vk & pk");
-        /*let pk = gen_pk(
-            &params,
-            &agg_circuit.without_witnesses(),
-            Some(Path::new("./examples/agg.pk")),
-            agg_circuit.params(),
-        );*/
+        // let pk = gen_pk(
+        // &params,
+        // &agg_circuit.without_witnesses(),
+        // Some(Path::new("./examples/agg.pk")),
+        // agg_circuit.params(),
+        // );
         let vk = keygen_vk(&params, &root_circuit).expect("keygen_vk should not fail");
         let pk = keygen_pk(&params, vk, &root_circuit).expect("keygen_pk should not fail");
         end_timer!(start0);
@@ -362,7 +354,8 @@ fn create_root_super_circuit_prover_sdk() {
             &params,
             &pk,
             root_circuit.clone(),
-            /*Some(Path::new("./examples/agg.snark"))*/None::<&str>,
+            // Some(Path::new("./examples/agg.snark"))
+            None::<&str>,
         );
 
         snark_roots.push(_root);
@@ -373,23 +366,23 @@ fn create_root_super_circuit_prover_sdk() {
     let agg_circuit = AggregationCircuit::<SHPLONK>::new(&params, snark_roots);
 
     let start0 = start_timer!(|| "gen vk & pk");
-    /*let pk = gen_pk(
-        &params,
-        &agg_circuit.without_witnesses(),
-        Some(Path::new("./examples/agg.pk")),
-        agg_circuit.params(),
-    );*/
+    // let pk = gen_pk(
+    // &params,
+    // &agg_circuit.without_witnesses(),
+    // Some(Path::new("./examples/agg.pk")),
+    // agg_circuit.params(),
+    // );
     let vk = keygen_vk(&params, &agg_circuit).expect("keygen_vk should not fail");
     let pk = keygen_pk(&params, vk, &agg_circuit).expect("keygen_pk should not fail");
     end_timer!(start0);
 
-    //std::fs::remove_file("./examples/agg.snark").unwrap_or_default();
-    /*let _snark = gen_snark_shplonk(
-        &params,
-        &pk,
-        agg_circuit.clone(),
-        /*Some(Path::new("./examples/agg.snark"))*/None::<&str>,
-    );*/
+    // std::fs::remove_file("./examples/agg.snark").unwrap_or_default();
+    // let _snark = gen_snark_shplonk(
+    // &params,
+    // &pk,
+    // agg_circuit.clone(),
+    // Some(Path::new("./examples/agg.snark"))*/None::<&str>,
+    // );
 
     println!("gen evm snark");
     // do one more time to verify
@@ -406,10 +399,11 @@ fn create_root_super_circuit_prover_sdk() {
     evm_verify(deployment_code, instances, proof_calldata);
 }
 
-
-
 #[cfg(test)]
 mod tests {
+    use crate::super_circuit::{
+        create_root_super_circuit_prover, create_root_super_circuit_prover_sdk,
+    };
     use ark_std::{end_timer, start_timer};
     use bus_mapping::circuit_input_builder::CircuitsParams;
     use eth_types::{address, bytecode, geth_types::GethData, Word};
@@ -431,12 +425,9 @@ mod tests {
     };
     use mock::{TestContext, MOCK_CHAIN_ID};
     use rand::SeedableRng;
-    use std::{collections::HashMap};
-    use zkevm_circuits::super_circuit::SuperCircuit;
     use rand_chacha::ChaChaRng;
-    use std::env::var;
-    use crate::super_circuit::create_root_super_circuit_prover;
-    use crate::super_circuit::create_root_super_circuit_prover_sdk;
+    use std::{collections::HashMap, env::var};
+    use zkevm_circuits::super_circuit::SuperCircuit;
 
     #[test]
     fn bench_root_super_circuit_prover() {
