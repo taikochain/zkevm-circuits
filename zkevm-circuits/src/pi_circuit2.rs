@@ -50,7 +50,7 @@ const BLOCK_LEN: usize = 7 + 256;
 const EXTRA_LEN: usize = 2;
 const ZERO_BYTE_GAS_COST: u64 = 4;
 const NONZERO_BYTE_GAS_COST: u64 = 16;
-const MAX_DEGREE: usize = 36;
+const MAX_DEGREE: usize = 8;
 const BYTE_POW_BASE: u64 = 1 << 8;
 
 const Q_PARENT_HASH_OFFSET: usize = 4;
@@ -981,48 +981,45 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
             blk_hdr_rlp_len_calc_inv,
         );
 
-        meta.create_gate("Block header RLP: leading zeros checks", |meta| {
-            let mut cb = BaseConstraintBuilder::new(MAX_DEGREE);
+        for q_field in [
+            q_number,
+            q_gas_limit,
+            q_gas_used,
+            q_timestamp,
+            q_base_fee_per_gas,
+        ] {
+            meta.create_gate("Block header RLP: leading zeros checks", |meta| {
+                let mut cb = BaseConstraintBuilder::new(MAX_DEGREE);
 
-            let blk_hdr_rlp_cur = meta.query_advice(blk_hdr_rlp, Rotation::cur());
-            let blk_hdr_is_leading_zero_cur = meta.query_advice(blk_hdr_is_leading_zero, Rotation::cur());
-            let blk_hdr_is_leading_zero_prev = meta.query_advice(blk_hdr_is_leading_zero, Rotation::prev());
+                let blk_hdr_rlp_cur = meta.query_advice(blk_hdr_rlp, Rotation::cur());
+                let blk_hdr_is_leading_zero_cur = meta.query_advice(blk_hdr_is_leading_zero, Rotation::cur());
+                let blk_hdr_is_leading_zero_prev = meta.query_advice(blk_hdr_is_leading_zero, Rotation::prev());
 
-            let q_number_cur = meta.query_fixed(q_number, Rotation::cur());
-            let q_gas_limit_cur = meta.query_fixed(q_gas_limit, Rotation::cur());
-            let q_gas_used_cur = meta.query_fixed(q_gas_used, Rotation::cur());
-            let q_timestamp_cur = meta.query_fixed(q_timestamp, Rotation::cur());
-            let q_base_fee_per_gas_cur = meta.query_fixed(q_base_fee_per_gas, Rotation::cur());
+                let q_field_cur = meta.query_fixed(q_field, Rotation::cur());
+                let q_number_prev = meta.query_fixed(q_number, Rotation::prev());
+                let q_gas_limit_prev = meta.query_fixed(q_gas_limit, Rotation::prev());
+                let q_gas_used_prev = meta.query_fixed(q_gas_used, Rotation::prev());
+                let q_timestamp_prev = meta.query_fixed(q_timestamp, Rotation::prev());
+                let q_base_fee_per_gas_prev = meta.query_fixed(q_base_fee_per_gas, Rotation::prev());
 
-            let q_number_prev = meta.query_fixed(q_number, Rotation::prev());
-            let q_gas_limit_prev = meta.query_fixed(q_gas_limit, Rotation::prev());
-            let q_gas_used_prev = meta.query_fixed(q_gas_used, Rotation::prev());
-            let q_timestamp_prev = meta.query_fixed(q_timestamp, Rotation::prev());
-            let q_base_fee_per_gas_prev = meta.query_fixed(q_base_fee_per_gas, Rotation::prev());
+                cb.require_zero("Leading zero is actually zero", blk_hdr_rlp_cur);
+                cb.require_equal("Leading zeros must be continuous or we are at the begining of the field",
+                                1.expr(),
+                                or::expr([
+                                    blk_hdr_is_leading_zero_prev,
+                                    or::expr([not::expr(q_number_prev),
+                                              not::expr(q_gas_limit_prev),
+                                              not::expr(q_gas_used_prev),
+                                              not::expr(q_timestamp_prev),
+                                              not::expr(q_base_fee_per_gas_prev),
+                                        ])]));
 
-            cb.require_zero("Leading zero is actually zero", blk_hdr_rlp_cur);
-            cb.require_equal("Leading zeros must be continuous or we are at the begining of the field",
-                            1.expr(),
-                            or::expr([
-                                blk_hdr_is_leading_zero_prev,
-                                or::expr([not::expr(q_number_prev),
-                                          not::expr(q_gas_limit_prev),
-                                          not::expr(q_gas_used_prev),
-                                          not::expr(q_timestamp_prev),
-                                          not::expr(q_base_fee_per_gas_prev),
-                                    ])]));
-
-            cb.gate(and::expr([
-                            blk_hdr_is_leading_zero_cur,
-                            or::expr([
-                                q_number_cur,
-                                q_gas_limit_cur,
-                                q_gas_used_cur,
-                                q_timestamp_cur,
-                                q_base_fee_per_gas_cur,
-                            ])
-                        ]))
-        });
+                cb.gate(and::expr([
+                                blk_hdr_is_leading_zero_cur,
+                                q_field_cur,
+                            ]))
+            });
+        }
 
         // Covers a corner case where LSB leading zeros can be skipped.
         // This can occur when `blk_hdr_is_leading_zero` is set to 0 wrongly (the actual byte value is non-zero)
@@ -1052,7 +1049,6 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
                 let blk_hdr_is_leading_zero = meta.query_advice(blk_hdr_is_leading_zero, Rotation::cur());
                 let field_sel = meta.query_fixed(q_value, Rotation::cur());
                 let field_sel_next = meta.query_fixed(q_value, Rotation::next());
-                let prev_length_is_zero = 1.expr() - meta.query_advice(blk_hdr_rlp_len_calc, Rotation::prev()) * meta.query_advice(blk_hdr_rlp_len_calc_inv, Rotation::prev());
                 let total_len_is_zero = and::expr([not::expr(field_sel_next), blk_hdr_rlp_length_is_zero.expr()]);
 
                 let rlp_is_short = meta.query_advice(blk_hdr_rlp_is_short, Rotation::cur());
@@ -1095,7 +1091,9 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
                 cb.condition(and::expr([not::expr(field_sel_next),
                                         prev_length_is_zero]),
                     |cb| {
-                        cb.require_equal("rlp byte <= 0x80 -> rlp_is_short, else NOT(rlp_is_short)", 0x81.expr() - blk_hdr_rlp,  rlp_diff_0x81 - (1.expr() - rlp_is_short)*(2<<8).expr());
+                        cb.require_equal("rlp byte <= 0x80 -> rlp_is_short, else NOT(rlp_is_short)", 
+                                         0x81.expr() - blk_hdr_rlp,
+                                         rlp_diff_0x81 - (1.expr() - rlp_is_short)*((2<<8)-1).expr());
                 });
 
                 cb.gate(field_sel)
@@ -1128,41 +1126,28 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
             cb.gate(and::expr([q_number_next, not::expr(q_number_cur)]))
         });
 
-        meta.create_gate("Block header RLP: check RLP headers for `gas_limit`, `gas_used`, `timestamp`, `base_fee`", |meta| {
-            let mut cb = BaseConstraintBuilder::new(MAX_DEGREE);
+        for q_field in [
+                        q_gas_limit,
+                        q_gas_used,
+                        q_timestamp,
+                        q_base_fee_per_gas] {
+            meta.create_gate("Block header RLP: check RLP headers for `gas_limit`, `gas_used`, `timestamp`, `base_fee`", |meta| {
+                let mut cb = BaseConstraintBuilder::new(MAX_DEGREE);
 
-            let blk_hdr_rlp = meta.query_advice(blk_hdr_rlp, Rotation::cur());
-            let q_gas_limit_cur = meta.query_fixed(q_gas_limit, Rotation::cur());
-            let q_gas_used_cur = meta.query_fixed(q_gas_used, Rotation::cur());
-            let q_timestamp_cur = meta.query_fixed(q_timestamp, Rotation::cur());
-            let q_base_fee_per_gas_cur = meta.query_fixed(q_base_fee_per_gas, Rotation::cur());
+                let blk_hdr_rlp = meta.query_advice(blk_hdr_rlp, Rotation::cur());
+                let q_field_cur = meta.query_fixed(q_field, Rotation::cur());
+                let q_field_next = meta.query_fixed(q_field, Rotation::next());
 
-            let q_gas_limit_next = meta.query_fixed(q_gas_limit, Rotation::next());
-            let q_gas_used_next = meta.query_fixed(q_gas_used, Rotation::next());
-            let q_timestamp_next = meta.query_fixed(q_timestamp, Rotation::next());
-            let q_base_fee_per_gas_next = meta.query_fixed(q_base_fee_per_gas, Rotation::next());
-
-            // All these fields have their lengths calculated 32 rows away
-            // TODO(George): degree too high: 29 > 10'
-            cb.condition(or::expr([
-                    q_gas_limit_next.clone(),
-                    q_gas_used_next.clone(),
-                    q_timestamp_next.clone(),
-                    q_base_fee_per_gas_next.clone(),
-                ]),
-                |cb| {
-                    cb.require_equal("blk_hdr_rlp = 0x80 + Len(<field>)", blk_hdr_rlp, 0x80.expr() + meta.query_advice(blk_hdr_rlp_len_calc, Rotation(32)));
-                }
-            );
-
-            // Enable when the selectors switch from 0 to 1
-            cb.gate(or::expr([
-                and::expr([q_gas_limit_next, not::expr(q_gas_limit_cur)]),
-                and::expr([q_gas_used_next, not::expr(q_gas_used_cur)]),
-                and::expr([q_timestamp_next, not::expr(q_timestamp_cur)]),
-                and::expr([q_base_fee_per_gas_next, not::expr(q_base_fee_per_gas_cur)]),
-            ]))
-        });
+                // All these fields have their lengths calculated 32 rows away
+                cb.condition(q_field_next.clone(),
+                    |cb| {
+                        cb.require_equal("blk_hdr_rlp = 0x80 + Len(<field>)", blk_hdr_rlp, 0x80.expr() + meta.query_advice(blk_hdr_rlp_len_calc, Rotation(32)));
+                    }
+                );
+                // Enable when the selectors switch from 0 to 1
+                cb.gate(and::expr([q_field_next, not::expr(q_field_cur)]))
+            });
+        }
 
         meta.create_gate("Block header RLP: check total length", |meta| {
             let mut cb = BaseConstraintBuilder::new(MAX_DEGREE);
@@ -1196,129 +1181,92 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
         });
 
         // Reconstruct field values
-        meta.create_gate(
-            "Block header RLP: reconstructing header field values from RLP",
-            |meta| {
-                let mut cb = BaseConstraintBuilder::new(MAX_DEGREE);
+        for selector in [q_parent_hash,
+                         q_beneficiary,
+                         q_state_root,
+                         q_transactions_root,
+                         q_receipts_root,
+                         q_number,
+                         q_gas_limit,
+                         q_gas_used,
+                         q_timestamp,
+                         q_mix_hash,
+                         q_base_fee_per_gas,
+                         q_withdrawals_root] {
+            meta.create_gate(
+                "Block header RLP: reconstructing header field values from RLP",
+                |meta| {
+                    let mut cb = BaseConstraintBuilder::new(MAX_DEGREE);
 
-                let q_hi = meta.query_selector(q_hi);
-                let q_lo_cur = meta.query_fixed(q_lo, Rotation::cur());
-                let q_lo_prev = meta.query_fixed(q_lo, Rotation::prev());
+                    let q_hi = meta.query_selector(q_hi);
+                    let q_lo_cur = meta.query_fixed(q_lo, Rotation::cur());
+                    let q_lo_prev = meta.query_fixed(q_lo, Rotation::prev());
 
-                let q_parent_hash = meta.query_fixed(q_parent_hash, Rotation::cur());
-                let q_beneficiary = meta.query_fixed(q_beneficiary, Rotation::cur());
-                let q_state_root = meta.query_fixed(q_state_root, Rotation::cur());
-                let q_transactions_root = meta.query_fixed(q_transactions_root, Rotation::cur());
-                let q_receipts_root = meta.query_fixed(q_receipts_root, Rotation::cur());
-                let q_number = meta.query_fixed(q_number, Rotation::cur());
-                let q_gas_limit = meta.query_fixed(q_gas_limit, Rotation::cur());
-                let q_gas_used = meta.query_fixed(q_gas_used, Rotation::cur());
-                let q_timestamp = meta.query_fixed(q_timestamp, Rotation::cur());
-                let q_mix_hash = meta.query_fixed(q_mix_hash, Rotation::cur());
-                let q_base_fee_per_gas = meta.query_fixed(q_base_fee_per_gas, Rotation::cur());
-                let q_withdrawals_root = meta.query_fixed(q_withdrawals_root, Rotation::cur());
+                    let selector = meta.query_fixed(selector, Rotation::cur());
+                    let blk_hdr_rlp = meta.query_advice(blk_hdr_rlp, Rotation::cur());
+                    let blk_hdr_reconstruct_value_cur = meta.query_advice(blk_hdr_reconstruct_value, Rotation::cur());
+                    let blk_hdr_reconstruct_value_prev = meta.query_advice(blk_hdr_reconstruct_value, Rotation::prev());
 
-                let blk_hdr_rlp = meta.query_advice(blk_hdr_rlp, Rotation::cur());
-                let blk_hdr_reconstruct_value_cur =
-                    meta.query_advice(blk_hdr_reconstruct_value, Rotation::cur());
-                let blk_hdr_reconstruct_value_prev =
-                    meta.query_advice(blk_hdr_reconstruct_value, Rotation::prev());
+                    cb.condition(and::expr([selector.clone(), q_hi.clone()]),
+                        |cb| {
+                            cb.require_equal(
+                                "byte_hi[n]*2^8 + byte_hi[n+1]",
+                                blk_hdr_reconstruct_value_cur.clone(),
+                                blk_hdr_reconstruct_value_prev.clone() * 256.expr() + blk_hdr_rlp.clone(),
+                            )
+                        },
+                    );
 
-                // TODO(George): degree too high: 36 > 10'
-                cb.condition(
-                    or::expr([
-                        and::expr([q_parent_hash.clone(), q_hi.clone()]),
-                        q_beneficiary.clone(),
-                        and::expr([q_state_root.clone(), q_hi.clone()]),
-                        and::expr([q_transactions_root.clone(), q_hi.clone()]),
-                        and::expr([q_receipts_root.clone(), q_hi.clone()]),
-                        q_number.clone(),
-                        and::expr([q_gas_limit.clone(), q_hi.clone()]),
-                        and::expr([q_gas_used.clone(), q_hi.clone()]),
-                        and::expr([q_timestamp.clone(), q_hi.clone()]),
-                        and::expr([q_mix_hash.clone(), q_hi.clone()]),
-                        and::expr([q_base_fee_per_gas.clone(), q_hi.clone()]),
-                        and::expr([q_withdrawals_root.clone(), q_hi]),
-                    ]),
-                    |cb| {
+                    // At the start of the value reconstruction for the lo parts, the previous value
+                    // in `blk_hdr_reconstruct_value` is not zero. We need to explicitly set the first value here
+                    cb.condition(
+                        and::expr([q_lo_cur.clone(), not::expr(q_lo_prev.clone())]),
+                        |cb| {
+                            cb.require_equal(
+                                "byte_lo[0] == rlp_byte",
+                                blk_hdr_reconstruct_value_cur.clone(),
+                                blk_hdr_rlp.clone(),
+                            )
+                        },
+                    );
+
+                    cb.condition(and::expr([q_lo_cur, q_lo_prev]), |cb| {
                         cb.require_equal(
-                            "byte_hi[n]*2^8 + byte_hi[n+1]",
-                            blk_hdr_reconstruct_value_cur.clone(),
-                            blk_hdr_reconstruct_value_prev.clone() * 256.expr()
-                                + blk_hdr_rlp.clone(),
+                            "byte_lo[n]*2^8 + byte_lo[n+1]",
+                            blk_hdr_reconstruct_value_cur,
+                            blk_hdr_reconstruct_value_prev * 256.expr() + blk_hdr_rlp,
                         )
-                    },
-                );
+                    });
 
-                // At the start of the value reconstruction for the lo parts, the previous value
-                // in `blk_hdr_reconstruct_value` is not zero. We need to explicitly set the first value here
-                // TODO(George): degree too high: 15 > 10
-                cb.condition(
-                    and::expr([q_lo_cur.clone(), not::expr(q_lo_prev.clone())]),
-                    |cb| {
-                        cb.require_equal(
-                            "byte_lo[0] == rlp_byte",
-                            blk_hdr_reconstruct_value_cur.clone(),
-                            blk_hdr_rlp.clone(),
-                        )
-                    },
-                );
+                    cb.gate(and::expr([meta.query_selector(q_blk_hdr_total_len), selector]))
+            });
+        }
 
-                // TODO(George): degree too high: 15 > 10'
-                cb.condition(and::expr([q_lo_cur, q_lo_prev]), |cb| {
-                    cb.require_equal(
-                        "byte_lo[n]*2^8 + byte_lo[n+1]",
-                        blk_hdr_reconstruct_value_cur,
-                        blk_hdr_reconstruct_value_prev * 256.expr() + blk_hdr_rlp,
-                    )
-                });
+        for q_field in [q_parent_hash,
+                        q_beneficiary,
+                        q_state_root,
+                        q_transactions_root,
+                        q_receipts_root,
+                        q_number,
+                        q_gas_limit,
+                        q_gas_used,
+                        q_timestamp,
+                        q_mix_hash,
+                        q_base_fee_per_gas,
+                        q_withdrawals_root] {
+            meta.create_gate(
+                "Block header RLP: reconstructing value starts from 0",
+                |meta| {
+                    let mut cb = BaseConstraintBuilder::new(MAX_DEGREE);
 
-                cb.gate(and::expr([meta.query_selector(q_blk_hdr_total_len),
-                                    or::expr([
-                                        q_parent_hash,
-                                        q_beneficiary,
-                                        q_state_root,
-                                        q_transactions_root,
-                                        q_receipts_root,
-                                        q_number,
-                                        q_gas_limit,
-                                        q_gas_used,
-                                        q_timestamp,
-                                        q_mix_hash,
-                                        q_base_fee_per_gas,
-                                        q_withdrawals_root,
-                ])]))
-            },
-        );
+                    cb.require_zero(
+                        "blk_hdr_reconstruct_value defaults to 0",
+                        meta.query_advice(blk_hdr_reconstruct_value, Rotation::cur()),
+                    );
 
-        // TODO(George): Error 'blk_hdr_reconstruct_value defaults to 0 degree too high: 13 > 10'
-        meta.create_gate(
-            "Block header RLP: reconstructing value starts from 0",
-            |meta| {
-                let mut cb = BaseConstraintBuilder::new(MAX_DEGREE);
-
-                cb.require_zero(
-                    "blk_hdr_reconstruct_value defaults to 0",
-                    meta.query_advice(blk_hdr_reconstruct_value, Rotation::cur()),
-                );
-
-                cb.gate(and::expr([meta.query_selector(q_blk_hdr_total_len),
-                                    not::expr(or::expr([
-                                        meta.query_fixed(q_parent_hash, Rotation::cur()),
-                                        meta.query_fixed(q_beneficiary, Rotation::cur()),
-                                        meta.query_fixed(q_state_root, Rotation::cur()),
-                                        meta.query_fixed(q_transactions_root, Rotation::cur()),
-                                        meta.query_fixed(q_receipts_root, Rotation::cur()),
-                                        meta.query_fixed(q_number, Rotation::cur()),
-                                        meta.query_fixed(q_gas_limit, Rotation::cur()),
-                                        meta.query_fixed(q_gas_used, Rotation::cur()),
-                                        meta.query_fixed(q_timestamp, Rotation::cur()),
-                                        meta.query_fixed(q_mix_hash, Rotation::cur()),
-                                        meta.query_fixed(q_base_fee_per_gas, Rotation::cur()),
-                                        meta.query_fixed(q_withdrawals_root, Rotation::cur()),
-                ]))]))
-            },
-        );
+                    cb.gate(and::expr([meta.query_selector(q_blk_hdr_total_len), not::expr(meta.query_fixed(q_field, Rotation::cur()))]))
+            });
+        };
 
         // TODO(George): Check reconstructed values match inputs, use copy constraints
 
@@ -2055,6 +2003,7 @@ impl<F: Field> PiCircuitConfig<F> {
         self.blockhash_cols.q_blk_hdr_rlc_START.enable(region, 0).unwrap();
 
         let (block_header_rlp, leading_zeros, blk_hdr_rlc_acc) = Self::get_block_header_rlp(public_data);
+        println!("block_header_rlp = {:#x?}", block_header_rlp);
         assert_eq!(block_header_rlp.len(), BLOCKHASH_TOTAL_ROWS);
 
         // Initialize columns to zero
@@ -2126,7 +2075,8 @@ impl<F: Field> PiCircuitConfig<F> {
             region.assign_advice(|| "blk_hdr_rlp", self.blockhash_cols.blk_hdr_rlp, offset, || Value::known(F::from(*rlp_byte as u64)),).unwrap();
             region.assign_advice(|| "blk_hdr_rlp_inv", self.blockhash_cols.blk_hdr_rlp_inv, offset, || Value::known(F::from((*rlp_byte) as u64).invert().unwrap_or(F::zero())),).unwrap();
 
-            let diff: u64 = if *rlp_byte < 0x81 { 0x81u64 - *rlp_byte as u64 } else { 0x100u64 - (*rlp_byte as u64 - 0x81u64) };
+            let diff: u64 = if *rlp_byte < 0x81 { 0x81u64 - *rlp_byte as u64 } else { 0xFFu64 - (*rlp_byte as u64 - 0x81u64) };
+            println!("rlp_diff_0x81[{}] = {:?}", offset, diff);
             region.assign_advice(|| "blk_hdr_rlp_diff_0x81", self.blockhash_cols.blk_hdr_rlp_diff_0x81, offset, || Value::known(F::from(diff as u64))).unwrap();
             region.assign_advice(|| "blk_hdr_rlc_acc", self.blockhash_cols.blk_hdr_rlc_acc, offset, || Value::known(F::from(blk_hdr_rlc_acc[offset] as u64))).unwrap();
 
@@ -2228,6 +2178,7 @@ impl<F: Field> PiCircuitConfig<F> {
                 region.assign_fixed(|| "q_beneficiary",self.blockhash_cols.q_beneficiary, Q_BENEFICIARY_OFFSET + i,|| Value::known(F::one()),).unwrap();
                 region.assign_advice(|| "reconstruct_value for beneficiary",self.blockhash_cols.blk_hdr_reconstruct_value, Q_BENEFICIARY_OFFSET + i,|| reconstructed_values[2][i],).unwrap();
                 region.assign_advice(|| "reconstruct_value_inv for beneficiary",self.blockhash_cols.blk_hdr_reconstruct_value_inv, Q_BENEFICIARY_OFFSET + i,|| reconstructed_values_inv[2][i],).unwrap();
+                self.blockhash_cols.q_hi.enable(region, Q_BENEFICIARY_OFFSET + i).unwrap(); // No actual use, Only for convenience in generating some gates elegantly
             }
 
             if i < 8 {
@@ -2251,6 +2202,7 @@ impl<F: Field> PiCircuitConfig<F> {
                 region.assign_advice(|| "number length inverse",self.blockhash_cols.blk_hdr_rlp_len_calc_inv, Q_NUMBER_OFFSET + i,|| Value::known(length_calc_inv)).unwrap();
                 region.assign_advice(|| "reconstruct_value for number",self.blockhash_cols.blk_hdr_reconstruct_value, Q_NUMBER_OFFSET + i,|| reconstructed_values[9][i],).unwrap();
                 region.assign_advice(|| "reconstruct_value_inv for number",self.blockhash_cols.blk_hdr_reconstruct_value_inv, Q_NUMBER_OFFSET + i,|| reconstructed_values_inv[9][i],).unwrap();
+                self.blockhash_cols.q_hi.enable(region, Q_NUMBER_OFFSET + i).unwrap(); // No actual use, Only for convenience in generating some gates elegantly
             }
 
             for (str, field, selector, offset) in
@@ -2873,7 +2825,7 @@ mod pi_circuit_test {
     }
 
     #[test]
-    fn test_blockhash_calc_small_values () {
+    fn test_blockhash_calc_short_values () {
         const MAX_TXS: usize = 8;
         const MAX_CALLDATA: usize = 200;
         let prover =
@@ -2908,6 +2860,77 @@ mod pi_circuit_test {
         );
     }
 
+    #[test]
+    fn test_blockhash_calc_one_byte_non_short_values () {
+        const MAX_TXS: usize = 8;
+        const MAX_CALLDATA: usize = 200;
+        let prover =
+            Address::from_slice(&hex::decode("df08f82de32b8d460adbe8d72043e3a7e25a3b39").unwrap());
+
+        let mut block = witness::Block::<Fr>::default();
+        block.eth_block.parent_hash = *OMMERS_HASH;
+        block.eth_block.author = Some(prover);
+        block.eth_block.state_root = *OMMERS_HASH;
+        block.eth_block.transactions_root = *OMMERS_HASH;
+        block.eth_block.receipts_root = *OMMERS_HASH;
+        block.eth_block.logs_bloom = Some([0; 256].into());
+        block.eth_block.extra_data = eth_types::Bytes::from([0; 0]);
+        block.eth_block.mix_hash = Some(*OMMERS_HASH);
+        block.eth_block.nonce = Some(H64::from([0, 0, 0, 0, 0, 0, 0, 0]));
+
+        block.context.number = U256::from(0x81);
+        block.context.gas_limit = 0x81;
+        block.eth_block.gas_used = U256::from(0x81);
+        block.context.timestamp = U256::from(0x81);
+        block.context.base_fee = U256::from(0x81);
+
+        block.context.difficulty = U256::from(0);
+
+        let public_data = PublicData::new(&block, prover, Default::default());
+
+        let k = 17;
+
+        assert_eq!(
+            run::<Fr, MAX_TXS, MAX_CALLDATA>(k, public_data, None),
+            Ok(())
+        );
+    }
+
+    #[test]
+    fn test_blockhash_calc_one_byte_non_short_values_2 () {
+        const MAX_TXS: usize = 8;
+        const MAX_CALLDATA: usize = 200;
+        let prover =
+            Address::from_slice(&hex::decode("df08f82de32b8d460adbe8d72043e3a7e25a3b39").unwrap());
+
+        let mut block = witness::Block::<Fr>::default();
+        block.eth_block.parent_hash = *OMMERS_HASH;
+        block.eth_block.author = Some(prover);
+        block.eth_block.state_root = *OMMERS_HASH;
+        block.eth_block.transactions_root = *OMMERS_HASH;
+        block.eth_block.receipts_root = *OMMERS_HASH;
+        block.eth_block.logs_bloom = Some([0; 256].into());
+        block.eth_block.extra_data = eth_types::Bytes::from([0; 0]);
+        block.eth_block.mix_hash = Some(*OMMERS_HASH);
+        block.eth_block.nonce = Some(H64::from([0, 0, 0, 0, 0, 0, 0, 0]));
+
+        block.context.number = U256::from(0xFF);
+        block.context.gas_limit = 0xFF;
+        block.eth_block.gas_used = U256::from(0xFF);
+        block.context.timestamp = U256::from(0xFF);
+        block.context.base_fee = U256::from(0xF);
+
+        block.context.difficulty = U256::from(0);
+
+        let public_data = PublicData::new(&block, prover, Default::default());
+
+        let k = 17;
+
+        assert_eq!(
+            run::<Fr, MAX_TXS, MAX_CALLDATA>(k, public_data, None),
+            Ok(())
+        );
+    }
 
     #[test]
     fn test_blockhash_calc_leading_zeros() {
