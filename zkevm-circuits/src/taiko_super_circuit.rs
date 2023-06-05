@@ -207,8 +207,9 @@ impl<F: Field> SuperCircuit<F> {
     pub fn build_from_circuit_input_builder(
         builder: &CircuitInputBuilder,
     ) -> Result<(u32, Self, Vec<Vec<F>>), bus_mapping::Error> {
-        let block = block_convert(&builder.block, &builder.code_db).unwrap();
-
+        let mut block = block_convert(&builder.block, &builder.code_db).unwrap();
+        block.taiko.block_hash = block.eth_block.hash.unwrap();
+        block.taiko.parent_hash = block.eth_block.parent_hash;
         let (_, rows_needed) = Self::min_num_rows_block(&block);
         let k = log2_ceil(Self::unusable_rows() + rows_needed);
         log::debug!("super circuit uses k = {}", k);

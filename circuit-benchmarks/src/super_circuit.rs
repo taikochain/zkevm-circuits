@@ -1,6 +1,6 @@
 //! SuperCircuit circuit benchmarks
 
-use eth_types::{address, bytecode, geth_types::GethData, Address, Word};
+use eth_types::{address, bytecode, geth_types::GethData, Address, ToWord, Word};
 use ethers_signers::{LocalWallet, Signer};
 use halo2_proofs::plonk::Circuit;
 use std::{fs, io::Write, rc::Rc};
@@ -200,6 +200,7 @@ pub(crate) fn block_1tx() -> GethData {
     )
     .unwrap()
     .into();
+    block.history_hashes = vec![block.eth_block.parent_hash.to_word()];
     block.sign(&wallets);
     block
 }
