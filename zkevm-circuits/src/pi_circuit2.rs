@@ -21,14 +21,12 @@ use eth_types::{
     Word,
 };
 use eth_types::{sign_types::SignData, Bytes};
-use ethers_core::types::{Bloom, U256};
+use ethers_core::types::U256;
 use ethers_core::utils::keccak256;
 use halo2_proofs::plonk::{Expression, Instance};
 use itertools::Itertools;
 use rlp::{Rlp, RlpStream};
-// use core::num::dec2flt::number;
 use std::marker::PhantomData;
-use std::ops::Div;
 
 use crate::table::TxFieldTag;
 use crate::table::TxTable;
@@ -75,34 +73,6 @@ lazy_static! {
         &hex::decode("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421").unwrap()
     );
 }
-
-
-// #[derive(Debug, Eq, PartialEq)]
-// enum BlockheaderFieldType {
-//     ParentHashHi=1,
-//     ParentHashLo,
-//     Beneficiary,
-//     StateRootHi,
-//     StateRootLo,
-//     TransactionsRootHi,
-//     TransactionsRootLo,
-//     ReceiptsRootHi,
-//     ReceiptsRootLo,
-//     Number,
-//     GasLimitHi,
-//     GasLimitLo,
-//     GasUsedHi,
-//     GasUsedLo,
-//     TimestampHi,
-//     TimestampLo,
-//     MixHashHi,
-//     MixHashLo,
-//     BaseFeePerGasHi,
-//     BaseFeePerGasLo,
-//     WithdrawalsRootHi,
-//     WithdrawalsRootLo,
-// }
-// impl_expr!(BlockheaderFieldType);
 
 /// Values of the block table (as in the spec)
 #[derive(Clone, Default, Debug)]
@@ -166,8 +136,10 @@ struct BlockhashColumns {
     q_withdrawals_root: Column<Fixed>,
     q_hi: Selector,
     q_lo: Column<Fixed>,
-    q_blk_hdr_rlc_START: Selector,
+    q_blk_hdr_rlc_start: Selector,
+    q_blk_hdr_rlp_end: Selector,
     blk_hdr_rlc_acc: Column<Advice>,
+    q_blk_hdr_rlc_acc: Column<Advice>,
     blk_hdr_is_leading_zero: Column<Advice>,
     blk_hdr_rlp_is_short: Column<Advice>,
     blk_hdr_rlp_diff_0x81: Column<Advice>,
@@ -220,6 +192,8 @@ pub struct PublicData<F: Field> {
     txs_hash: H256,
     txs_hash_hi: F,
     txs_hash_lo: F,
+
+    // blk_hdr_rlp: Bytes,
 }
 
 pub(super) fn rlp_opt<T: rlp::Encodable>(rlp: &mut rlp::RlpStream, opt: &Option<T>) {
@@ -537,6 +511,7 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
         let blk_hdr_rlp_inv = meta.advice_column();
         let blk_hdr_rlp_const = meta.fixed_column();
         let q_blk_hdr_rlp = meta.complex_selector();
+        let q_blk_hdr_rlp_end = meta.complex_selector();
         let q_blk_hdr_rlp_const = meta.complex_selector();
         // let q_blk_hdr_is_var_length = meta.complex_selector();
 
@@ -572,9 +547,10 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
         let q_hi = meta.complex_selector();
         let q_lo = meta.fixed_column();
 
-        let q_blk_hdr_rlc_START = meta.complex_selector();
-        // let q_blk_hdr_rlc_not_end = meta.complex_selector();
+        let q_blk_hdr_rlc_start = meta.complex_selector();
+        let q_blk_hdr_rlc_acc = meta.advice_column();
         let blk_hdr_rlc_acc = meta.advice_column();
+
         let blockhash_cols = BlockhashColumns {
             blk_hdr_rlp,
             blk_hdr_rlp_inv,
@@ -600,8 +576,10 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
             q_withdrawals_root,
             q_hi,
             q_lo,
-            q_blk_hdr_rlc_START,
+            q_blk_hdr_rlc_start,
+            q_blk_hdr_rlp_end,
             blk_hdr_rlc_acc,
+            q_blk_hdr_rlc_acc,
             blk_hdr_is_leading_zero,
             blk_hdr_rlp_is_short,
             blk_hdr_rlp_diff_0x81,
@@ -1091,7 +1069,7 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
                 cb.condition(and::expr([not::expr(field_sel_next),
                                         prev_length_is_zero]),
                     |cb| {
-                        cb.require_equal("rlp byte <= 0x80 -> rlp_is_short, else NOT(rlp_is_short)", 
+                        cb.require_equal("rlp byte <= 0x80 -> rlp_is_short, else NOT(rlp_is_short)",
                                          0x81.expr() - blk_hdr_rlp,
                                          rlp_diff_0x81 - (1.expr() - rlp_is_short)*((2<<8)-1).expr());
                 });
@@ -1270,67 +1248,91 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
 
         // TODO(George): Check reconstructed values match inputs, use copy constraints
 
-        // TODO(George)
-        /*
         // 2. Check RLC of RLP'd block header
         // Accumulate only bytes that have q_blk_hdr_rlp AND NOT(blk_hdr_is_leading_zero) and skip RLP headers if value is <0x80
-        meta.create_gate("block_header_rlp_rlc_acc_next = block_header_rlp_rlc_acc * r + block_header_rlp_next", |meta| {
-            // let mut cb = BaseConstraintBuilder::new(MAX_DEGREE);
 
-            // let q_not_end = meta.query_selector(q_not_end);
+        meta.create_gate("Block header RLC: `q_blk_hdr_rlp` is boolean", |meta| {
+            let mut cb = BaseConstraintBuilder::new(MAX_DEGREE);
+            let q_blk_hdr_rlp = meta.query_selector(q_blk_hdr_rlp);
+            let q_blk_hdr_rlc_acc = meta.query_advice(q_blk_hdr_rlc_acc, Rotation::cur());
 
-            // let block_header_rlp_rlc_acc_next = meta.query_advice(rpi_rlc_acc, Rotation::next());
-            // let block_header_rlp_rlc_acc = meta.query_advice(rpi_rlc_acc, Rotation::cur());
-            // let block_header_rlp_next = meta.query_advice(rpi, Rotation::next());
+            cb.require_boolean("`q_blk_hdr_rlc_acc` is boolean", q_blk_hdr_rlc_acc);
 
-            // let r = challenges.evm_word();
-
-            // cb.require_equal("left=right", rpi_rlc_acc_next, rpi_rlc_acc * r + rpi_next);
-            // cb.gate(q_not_end)
+            cb.gate(q_blk_hdr_rlp)
         });
 
-        meta.create_gate("block_header_rlp_rlc_acc[0] = block_header_rlp[0]", |meta| {
-            // let mut cb = BaseConstraintBuilder::new(MAX_DEGREE);
-            // let q_start = meta.query_selector(q_start);
-            // let rpi_rlc_acc = meta.query_advice(rpi_rlc_acc, Rotation::cur());
-            // let rpi = meta.query_advice(rpi, Rotation::cur());
+        meta.create_gate("Block header RLC: initialize accumulator", |meta| {
+            let mut cb = BaseConstraintBuilder::new(MAX_DEGREE);
+            let q_blk_hdr_rlc_start = meta.query_selector(q_blk_hdr_rlc_start);
+            let blk_hdr_rlp_rlc_acc = meta.query_advice(blk_hdr_rlc_acc, Rotation::cur());
+            let blk_hdr_rlp = meta.query_advice(blk_hdr_rlp, Rotation::cur());
 
-            // cb.require_equal("", rpi_rlc_acc, rpi);
+            cb.require_equal("blk_hdr_rlp_rlc_acc[0] = blk_hdr_rlp[0]", blk_hdr_rlp_rlc_acc, blk_hdr_rlp);
 
-            // cb.gate(q_start)
+            cb.gate(q_blk_hdr_rlc_start)
         });
-        */
+
+        meta.create_gate("Block header RLC: RLC calculation", |meta| {
+            let mut cb = BaseConstraintBuilder::new(MAX_DEGREE);
+
+            let q_blk_hdr_rlp = meta.query_selector(q_blk_hdr_rlp);
+            let q_blk_hdr_rlc_acc = meta.query_advice(q_blk_hdr_rlc_acc, Rotation::cur());
+            let q_blk_hdr_rlp_end = meta.query_selector(q_blk_hdr_rlp_end);
+            let blk_hdr_rlc_acc_next = meta.query_advice(blk_hdr_rlc_acc, Rotation::next());
+            let blk_hdr_rlc_acc = meta.query_advice(blk_hdr_rlc_acc, Rotation::cur());
+            let blk_hdr_rlp_next = meta.query_advice(blk_hdr_rlp, Rotation::next());
+
+            let r = challenges.evm_word();
+
+            cb.require_equal("rlc_acc_next = rlc_acc * r + next_byte", blk_hdr_rlc_acc_next, blk_hdr_rlc_acc * r + blk_hdr_rlp_next);
+
+            cb.gate(and::expr([q_blk_hdr_rlp, q_blk_hdr_rlc_acc, not::expr(q_blk_hdr_rlp_end)]))
+        });
+
+        meta.create_gate("Block header RLC: skip leading zeros and artificial RLP headers", |meta| {
+            let mut cb = BaseConstraintBuilder::new(MAX_DEGREE);
+            let q_blk_hdr_rlp = meta.query_selector(q_blk_hdr_rlp);
+            let q_blk_hdr_rlp_end = meta.query_selector(q_blk_hdr_rlp_end);
+            let q_blk_hdr_rlc_acc = meta.query_advice(q_blk_hdr_rlc_acc, Rotation::cur());
+            let blk_hdr_rlp_rlc_acc_next = meta.query_advice(blk_hdr_rlc_acc, Rotation::next());
+            let blk_hdr_rlp_rlc_acc = meta.query_advice(blk_hdr_rlc_acc, Rotation::cur());
+
+            cb.require_equal("rlc_acc_next = rlc_acc", blk_hdr_rlp_rlc_acc_next, blk_hdr_rlp_rlc_acc);
+
+            cb.gate(and::expr([q_blk_hdr_rlp, not::expr(q_blk_hdr_rlc_acc), not::expr(q_blk_hdr_rlp_end)]))
+        });
 
         // TODO(George)
         /*
         // 3. Check block header hash
         meta.lookup_any("blockhash lookup keccak", |meta| {
-            let q_rpi_encoding = meta.query_selector();
+            let q_blk_hdr_rlp_end = meta.query_selector(q_blk_hdr_rlp_end);
 
-            let blockhash_rlp_rlc = meta.query_advice(, Rotation(1));
-            let blockhash_rlp_len = meta.query_advice(, Rotation(2));
-            let blockhash_hash_hi = meta.query_advice(, Rotation(3));
-            let blockhash_hash_lo = meta.query_advice(, Rotation(4));
+            let blk_hdr_rlc = meta.query_advice(blk_hdr_rlc_acc, Rotation::cur());
+            // The total RLP lenght is the RLP list length (0x200 + blk_hdr_rlp[2]) + 3 bytes for the RLP list header
+            let blk_hdr_rlp_len = 0x200.expr() + meta.query_advice(blk_hdr_rlp, Rotation(-BLOCKHASH_TOTAL_ROWS+1+2)) + 0x03.expr();
+            let blk_hdr_hash_hi = meta.query_advice(, Rotation());
+            let blk_hdr_hash_lo = meta.query_advice(, Rotation());
 
             vec![
                 (
-                    q_rpi_encoding.expr(),
+                    q_blk_hdr_rlp_end.expr(),
                     meta.query_advice(blockhash_keccak_table.is_enabled, Rotation::cur()),
                 ),
                 (
-                    q_rpi_encoding.expr() * blockhash_rlp_rlc,
+                    q_blk_hdr_rlp_end.expr() * blk_hdr_rlc,
                     meta.query_advice(blockhash_keccak_table.input_rlc, Rotation::cur()),
                 ),
                 (
-                    q_rpi_encoding.expr() * blockhash_rlp_len,
+                    q_blk_hdr_rlp_end.expr() * blk_hdr_rlp_len,
                     meta.query_advice(blockhash_keccak_table.input_len, Rotation::cur()),
                 ),
                 (
-                    q_rpi_encoding.expr() * blockhash_hash_hi,
+                    q_blk_hdr_rlp_end.expr() * blk_hdr_hash_hi,
                     meta.query_advice(blockhash_keccak_table.output_hi, Rotation::cur()),
                 ),
                 (
-                    q_rpi_encoding * blockhash_hash_lo,
+                    q_blk_hdr_rlp_end * blk_hdr_hash_lo,
                     meta.query_advice(blockhash_keccak_table.output_lo, Rotation::cur()),
                 ),
             ]
@@ -1914,8 +1916,9 @@ impl<F: Field> PiCircuitConfig<F> {
     }
 
     fn get_block_header_rlp(
-        public_data: &PublicData<F>, /* block: &eth_types::Block<eth_types::Transaction> */
-    ) -> (Vec<u8>, Vec<u8>, Vec<u8>) {
+        public_data: &PublicData<F>,
+        challenges: &Challenges<Value<F>>,
+    ) -> (Vec<u8>, Vec<u8>, Vec<u8>, Vec<Value<F>>) {
         let mut stream = RlpStream::new();
         stream.begin_unbounded_list();
         stream
@@ -1944,30 +1947,41 @@ impl<F: Field> PiCircuitConfig<F> {
         stream.finalize_unbounded_list();
         let out: bytes::Bytes = stream.out().into();
         let mut out_vec: Vec<u8> = out.into();
+
         let mut leading_zeros: Vec<u8> = vec![0; out_vec.len()];
-        let mut blk_hdr_rlc_acc: Vec<u8> = vec![1; out_vec.len()];
+        let mut q_blk_hdr_rlc_acc: Vec<u8> = vec![1; out_vec.len()];
+        let mut blk_hdr_rlc_acc: Vec<Value<F>> = vec![];
+
+        let randomness = challenges.evm_word();
+        out_vec.iter().map(|b| Value::known(F::from(*b as u64)))
+                      .fold(Value::known(F::zero()), |mut rlc_acc, byte| {
+                              rlc_acc = rlc_acc * randomness + byte;
+                              blk_hdr_rlc_acc.push(rlc_acc);
+                              rlc_acc
+                          });
 
         // We handle `number` outside of the for due to the type difference
         // For explanation of the below refer to the following for loop documentation
         if public_data.block_constants.number <= U64::from(0x80) {
             if public_data.block_constants.number != U64::zero() {
                 out_vec.splice(Q_NUMBER_OFFSET-1..Q_NUMBER_OFFSET-1, [0x80]);
+                q_blk_hdr_rlc_acc.splice(Q_NUMBER_OFFSET-2..Q_NUMBER_OFFSET-2, [0]);
+                blk_hdr_rlc_acc.splice(Q_NUMBER_OFFSET-1..Q_NUMBER_OFFSET-1, [blk_hdr_rlc_acc[Q_NUMBER_OFFSET-2]]);
             }
             leading_zeros.splice(Q_NUMBER_OFFSET-1..Q_NUMBER_OFFSET-1, [0]);
-            blk_hdr_rlc_acc.splice(Q_NUMBER_OFFSET-1..Q_NUMBER_OFFSET-1, [0]);
         }
         out_vec.splice(Q_NUMBER_OFFSET..Q_NUMBER_OFFSET, vec![0; (public_data.block_constants.number.leading_zeros() / 8) as usize]);
         leading_zeros.splice(Q_NUMBER_OFFSET..Q_NUMBER_OFFSET, vec![1; (public_data.block_constants.number.leading_zeros() / 8) as usize]);
-        blk_hdr_rlc_acc.splice(Q_NUMBER_OFFSET..Q_NUMBER_OFFSET, vec![0; (public_data.block_constants.number.leading_zeros() / 8) as usize]);
-
+        q_blk_hdr_rlc_acc.splice(Q_NUMBER_OFFSET-1..Q_NUMBER_OFFSET-1, vec![0; (public_data.block_constants.number.leading_zeros() / 8) as usize]);
+        blk_hdr_rlc_acc.splice(Q_NUMBER_OFFSET..Q_NUMBER_OFFSET, vec![blk_hdr_rlc_acc[Q_NUMBER_OFFSET-1]; (public_data.block_constants.number.leading_zeros() / 8) as usize]);
 
         // Handles leading zeros, short values and calculates the values for `blk_hdr_is_leading_zero` and `blk_hdr_rlc_acc`
         for (field, offset) in [(public_data.block_constants.gas_limit, Q_GAS_LIMIT_OFFSET),
                                 (public_data.gas_used, Q_GAS_USED_OFFSET),
                                 (public_data.block_constants.timestamp, Q_TIMESTAMP_OFFSET),
                                 (public_data.block_constants.base_fee, Q_BASE_FEE_OFFSET)].iter() {
-                                    // If the field has a short value then there is no RLP header.
-            // We need add an artificial RLP header (0x80) to align the field
+            // If the field has a short value then there is no RLP header.
+            // We need add an artificial RLP header with field length of one (0x80) to align the field
             //
             // When the field is zero, it is represented by 0x80,
             // which just so happens to be the value of the artificial header we need,
@@ -1978,18 +1992,27 @@ impl<F: Field> PiCircuitConfig<F> {
             if *field <= U256::from(0x80) {
                 if *field != U256::zero() {
                     out_vec.splice(offset-1..offset-1, [0x80]);
+                    // Skipping artificial header for RLC. Since we accumulate the next byte in gates, we denote the skip one row earlier
+                    q_blk_hdr_rlc_acc.splice(offset-2..offset-2, [0]);
+                    // Copy the current RLC when skipping
+                    blk_hdr_rlc_acc.splice(offset-1..offset-1, [blk_hdr_rlc_acc[offset-2]]);
                 }
                 leading_zeros.splice(offset-1..offset-1, [0]);
-                blk_hdr_rlc_acc.splice(offset-1..offset-1, [0]);
             }
 
             // Pad the field at the start with the needed amount leading zeros
             out_vec.splice(offset..offset, vec![0; (field.leading_zeros() / 8) as usize]);
             leading_zeros.splice(offset..offset, vec![1; (field.leading_zeros() / 8) as usize]);
-            blk_hdr_rlc_acc.splice(offset..offset, vec![0; (field.leading_zeros() / 8) as usize]);
+            // Skipping leading zeros for RLC. Since we accumulate the next byte in gates, we denote the skip one row earlier
+            q_blk_hdr_rlc_acc.splice(offset-1..offset-1, vec![0; (field.leading_zeros() / 8) as usize]);
+            // Copy the current RLC when skipping
+            blk_hdr_rlc_acc.splice(offset..offset, vec![blk_hdr_rlc_acc[*offset-1]; (field.leading_zeros() / 8) as usize]);
         }
 
-        (out_vec, leading_zeros, blk_hdr_rlc_acc)
+        println!("blk_hdr_rlp = {:?}", out_vec);
+        println!("q_blk_hdr_rlc_acc = {:?}", q_blk_hdr_rlc_acc);
+        println!("blk_hdr_rlc_acc = {:?}", blk_hdr_rlc_acc);
+        (out_vec, leading_zeros, q_blk_hdr_rlc_acc, blk_hdr_rlc_acc)
     }
 
     // Assigns all columns relevant to the blockhash checks
@@ -1998,12 +2021,12 @@ impl<F: Field> PiCircuitConfig<F> {
         region: &mut Region<'_, F>,
         // TODO(George): tidy up these
         public_data: &PublicData<F>,
+        challenges: &Challenges<Value<F>>,
         // block: &eth_types::Block<eth_types::Transaction>,
     ) {
-        self.blockhash_cols.q_blk_hdr_rlc_START.enable(region, 0).unwrap();
-
-        let (block_header_rlp, leading_zeros, blk_hdr_rlc_acc) = Self::get_block_header_rlp(public_data);
-        println!("block_header_rlp = {:#x?}", block_header_rlp);
+        self.blockhash_cols.q_blk_hdr_rlc_start.enable(region, 0).unwrap();
+        self.blockhash_cols.q_blk_hdr_rlp_end.enable(region, BLOCKHASH_TOTAL_ROWS-1).unwrap();
+        let (block_header_rlp, leading_zeros, q_blk_hdr_rlc_acc, blk_hdr_rlc_acc) = Self::get_block_header_rlp(public_data, challenges);
         assert_eq!(block_header_rlp.len(), BLOCKHASH_TOTAL_ROWS);
 
         // Initialize columns to zero
@@ -2076,9 +2099,9 @@ impl<F: Field> PiCircuitConfig<F> {
             region.assign_advice(|| "blk_hdr_rlp_inv", self.blockhash_cols.blk_hdr_rlp_inv, offset, || Value::known(F::from((*rlp_byte) as u64).invert().unwrap_or(F::zero())),).unwrap();
 
             let diff: u64 = if *rlp_byte < 0x81 { 0x81u64 - *rlp_byte as u64 } else { 0xFFu64 - (*rlp_byte as u64 - 0x81u64) };
-            println!("rlp_diff_0x81[{}] = {:?}", offset, diff);
             region.assign_advice(|| "blk_hdr_rlp_diff_0x81", self.blockhash_cols.blk_hdr_rlp_diff_0x81, offset, || Value::known(F::from(diff as u64))).unwrap();
-            region.assign_advice(|| "blk_hdr_rlc_acc", self.blockhash_cols.blk_hdr_rlc_acc, offset, || Value::known(F::from(blk_hdr_rlc_acc[offset] as u64))).unwrap();
+            region.assign_advice(|| "q_blk_hdr_rlc_acc", self.blockhash_cols.q_blk_hdr_rlc_acc, offset, || Value::known(F::from(q_blk_hdr_rlc_acc[offset] as u64))).unwrap();
+            region.assign_advice(|| "blk_hdr_rlc_acc", self.blockhash_cols.blk_hdr_rlc_acc, offset, || blk_hdr_rlc_acc[offset]).unwrap();
 
             region.assign_advice(|| "blk_hdr_is_leading_zero", self.blockhash_cols.blk_hdr_is_leading_zero, offset, || Value::known(F::from(leading_zeros[offset] as u64))).unwrap();
 
@@ -2088,10 +2111,9 @@ impl<F: Field> PiCircuitConfig<F> {
                 .unwrap();
         }
 
-        // George cleanup
-        // for (offset, lz) in leading_zeros.iter().enumerate() {
-        //     region.assign_advice(|| "blk_hdr_is_leading_zero", self.blockhash_cols.blk_hdr_is_leading_zero, offset, || Value::known(F::from(*lz as u64))).unwrap();
-        // }
+        // Gets rid of CellNotAssigned occuring in the last row
+        region.assign_advice(|| "blk_hdr_rlc_acc", self.blockhash_cols.blk_hdr_rlc_acc, BLOCKHASH_TOTAL_ROWS, || Value::known(F::zero())).unwrap();
+        region.assign_advice(|| "blk_hdr_rlp", self.blockhash_cols.blk_hdr_rlp, BLOCKHASH_TOTAL_ROWS, || Value::known(F::zero())).unwrap();
 
         // Calculate reconstructed values
         let mut reconstructed_values: Vec<Vec<Value<F>>> = vec![];
@@ -2459,7 +2481,7 @@ impl<F: Field> PiCircuitConfig<F> {
                     offset += 1;
                 }
 
-                self.assign_block_hash_calc(&mut region, public_data);
+                self.assign_block_hash_calc(&mut region, public_data, challenges);
 
                 // NOTE: we add this empty row so as to pass mock prover's check
                 //      otherwise it will emit CellNotAssigned Error
@@ -2631,7 +2653,7 @@ impl<F: Field, const MAX_TXS: usize, const MAX_CALLDATA: usize> Circuit<F>
         config.blockhash_keccak_table.dev_load(
             &mut layouter,
             vec![
-                //
+                // &public_data.blk_hdr_rlp.to_vec()
             ],
             &challenges,
         )?;
