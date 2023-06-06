@@ -193,7 +193,9 @@ pub struct PublicData<F: Field> {
     txs_hash_hi: F,
     txs_hash_lo: F,
 
-    // blk_hdr_rlp: Bytes,
+    blockhash_blk_hdr_rlp: Bytes,
+    blockhash_rlp_hash_hi: F,
+    blockhash_rlp_hash_lo: F,
 }
 
 pub(super) fn rlp_opt<T: rlp::Encodable>(rlp: &mut rlp::RlpStream, opt: &Option<T>) {
@@ -282,12 +284,49 @@ impl<F: Field> PublicData<F> {
         )
     }
 
+    fn get_block_header_rlp_from_block(block: &witness::Block<F>) -> (Bytes, F, F)
+    {
+        let mut stream = RlpStream::new();
+        stream.begin_unbounded_list();
+        stream
+            .append(&block.eth_block.parent_hash)
+            .append(&*OMMERS_HASH)
+            .append(&block.eth_block.author.unwrap_or_else(H160::zero))
+            .append(&block.eth_block.state_root)
+            .append(&block.eth_block.transactions_root)
+            .append(&block.eth_block.receipts_root)
+            .append(&vec![0u8; 256]) // logs_bloom is all zeros
+            .append(&block.context.difficulty)
+            .append(&block.context.number.low_u64())
+            .append(&block.context.gas_limit)
+            .append(&block.eth_block.gas_used)
+            .append(&block.context.timestamp);
+        rlp_opt(&mut stream, &None::<u8>); // extra_data = ""
+        stream
+            .append(&block.eth_block.mix_hash.unwrap_or_else(H256::zero))
+            .append(&vec![0u8; 8]) // nonce = 0
+            .append(&block.context.base_fee);
+
+        // TODO(George): can't find withdrawals_root in eth_block, use zeros for now
+        // rlp_opt(&mut stream, &block.withdrawals_root);
+        stream.append(&vec![0; 32]);
+
+        stream.finalize_unbounded_list();
+        let out: bytes::Bytes = stream.out().into();
+        let rlp_bytes: Bytes = out.into();
+        let hash = keccak256(&rlp_bytes);
+        let (hi, lo) = Self::split_hash(hash);
+        (rlp_bytes, hi, lo)
+    }
+
     /// create PublicData from block and prover
     pub fn new(block: &witness::Block<F>, prover: Address, txs_rlp: Bytes) -> Self {
         let txs = Self::decode_txs_rlp(&txs_rlp);
         let (txs_hash, txs_hash_hi, txs_hash_lo) = Self::get_txs_hash(&txs_rlp);
         let (block_rlp, block_hash, block_hash_hi, block_hash_lo) =
             Self::get_block_hash(block, prover, txs_hash);
+        let (blockhash_blk_hdr_rlp, blockhash_rlp_hash_hi, blockhash_rlp_hash_lo) = Self::get_block_header_rlp_from_block(block);
+
         PublicData {
             chain_id: block.context.chain_id,
             history_hashes: block.context.history_hashes.clone(),
@@ -302,6 +341,9 @@ impl<F: Field> PublicData<F> {
                 gas_limit: block.context.gas_limit.into(),
                 base_fee: block.context.base_fee,
             },
+            blockhash_blk_hdr_rlp: blockhash_blk_hdr_rlp,
+            blockhash_rlp_hash_hi: blockhash_rlp_hash_hi,
+            blockhash_rlp_hash_lo: blockhash_rlp_hash_lo,
             block_rlp,
             block_hash,
             block_hash_hi,
@@ -435,7 +477,6 @@ pub struct PiCircuitConfig<F: Field> {
 
     // blockhash columns
     blockhash_cols: BlockhashColumns,
-    blockhash_keccak_table: KeccakTable2,
 
     _marker: PhantomData<F>,
 }
@@ -456,8 +497,6 @@ pub struct PiCircuitConfigArgs<F: Field> {
     pub keccak_table: KeccakTable2,
     /// Challenges
     pub challenges: Challenges<Expression<F>>,
-    /// keccak table used for block hash calculation
-    pub blockhash_keccak_table: KeccakTable2,
 }
 
 impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
@@ -473,7 +512,6 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
             tx_table,
             rlp_table,
             keccak_table,
-            blockhash_keccak_table,
             challenges,
         }: Self::ConfigArgs,
     ) -> Self {
@@ -1302,42 +1340,39 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
             cb.gate(and::expr([q_blk_hdr_rlp, not::expr(q_blk_hdr_rlc_acc), not::expr(q_blk_hdr_rlp_end)]))
         });
 
-        // TODO(George)
-        /*
         // 3. Check block header hash
         meta.lookup_any("blockhash lookup keccak", |meta| {
             let q_blk_hdr_rlp_end = meta.query_selector(q_blk_hdr_rlp_end);
 
             let blk_hdr_rlc = meta.query_advice(blk_hdr_rlc_acc, Rotation::cur());
             // The total RLP lenght is the RLP list length (0x200 + blk_hdr_rlp[2]) + 3 bytes for the RLP list header
-            let blk_hdr_rlp_len = 0x200.expr() + meta.query_advice(blk_hdr_rlp, Rotation(-BLOCKHASH_TOTAL_ROWS+1+2)) + 0x03.expr();
-            let blk_hdr_hash_hi = meta.query_advice(, Rotation());
-            let blk_hdr_hash_lo = meta.query_advice(, Rotation());
+            let blk_hdr_rlp_len = 0x200.expr() + meta.query_advice(blk_hdr_rlp, Rotation(-(BLOCKHASH_TOTAL_ROWS as i32)+1+2)) + 0x03.expr();
+            let blk_hdr_hash_hi = meta.query_advice(rpi_encoding, Rotation::cur());
+            let blk_hdr_hash_lo = meta.query_advice(rpi_encoding, Rotation::prev());
 
             vec![
                 (
                     q_blk_hdr_rlp_end.expr(),
-                    meta.query_advice(blockhash_keccak_table.is_enabled, Rotation::cur()),
+                    meta.query_advice(keccak_table.is_enabled, Rotation::cur()),
                 ),
                 (
                     q_blk_hdr_rlp_end.expr() * blk_hdr_rlc,
-                    meta.query_advice(blockhash_keccak_table.input_rlc, Rotation::cur()),
+                    meta.query_advice(keccak_table.input_rlc, Rotation::cur()),
                 ),
                 (
                     q_blk_hdr_rlp_end.expr() * blk_hdr_rlp_len,
-                    meta.query_advice(blockhash_keccak_table.input_len, Rotation::cur()),
+                    meta.query_advice(keccak_table.input_len, Rotation::cur()),
                 ),
                 (
                     q_blk_hdr_rlp_end.expr() * blk_hdr_hash_hi,
-                    meta.query_advice(blockhash_keccak_table.output_hi, Rotation::cur()),
+                    meta.query_advice(keccak_table.output_hi, Rotation::cur()),
                 ),
                 (
                     q_blk_hdr_rlp_end * blk_hdr_hash_lo,
-                    meta.query_advice(blockhash_keccak_table.output_lo, Rotation::cur()),
+                    meta.query_advice(keccak_table.output_lo, Rotation::cur()),
                 ),
             ]
         });
-        */
 
         Self {
             max_txs,
@@ -1368,7 +1403,6 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
             keccak_table,
 
             blockhash_cols,
-            blockhash_keccak_table,
 
             _marker: PhantomData,
         }
@@ -1915,10 +1949,10 @@ impl<F: Field> PiCircuitConfig<F> {
         )
     }
 
-    fn get_block_header_rlp(
+    fn get_block_header_rlp_from_public_data(
         public_data: &PublicData<F>,
         challenges: &Challenges<Value<F>>,
-    ) -> (Vec<u8>, Vec<u8>, Vec<u8>, Vec<Value<F>>) {
+    ) -> (Vec<u8>, Vec<u8>, Vec<u8>, Vec<Value<F>>, Value<F>, Value<F>) {
         let mut stream = RlpStream::new();
         stream.begin_unbounded_list();
         stream
@@ -1946,8 +1980,18 @@ impl<F: Field> PiCircuitConfig<F> {
 
         stream.finalize_unbounded_list();
         let out: bytes::Bytes = stream.out().into();
-        let mut out_vec: Vec<u8> = out.into();
 
+        // Calculate hash
+        let rlp: Bytes = out.clone().into();
+        let hash = keccak256(&rlp);
+        let hash_hi = hash.iter().take(16).fold(F::zero(), |acc, byte| {
+            acc * F::from(BYTE_POW_BASE) + F::from(*byte as u64)
+        });
+        let hash_lo = hash.iter().skip(16).fold(F::zero(), |acc, byte| {
+            acc * F::from(BYTE_POW_BASE) + F::from(*byte as u64)
+        });
+
+        let mut out_vec: Vec<u8> = out.into();
         let mut leading_zeros: Vec<u8> = vec![0; out_vec.len()];
         let mut q_blk_hdr_rlc_acc: Vec<u8> = vec![1; out_vec.len()];
         let mut blk_hdr_rlc_acc: Vec<Value<F>> = vec![];
@@ -2009,10 +2053,7 @@ impl<F: Field> PiCircuitConfig<F> {
             blk_hdr_rlc_acc.splice(offset..offset, vec![blk_hdr_rlc_acc[*offset-1]; (field.leading_zeros() / 8) as usize]);
         }
 
-        println!("blk_hdr_rlp = {:?}", out_vec);
-        println!("q_blk_hdr_rlc_acc = {:?}", q_blk_hdr_rlc_acc);
-        println!("blk_hdr_rlc_acc = {:?}", blk_hdr_rlc_acc);
-        (out_vec, leading_zeros, q_blk_hdr_rlc_acc, blk_hdr_rlc_acc)
+        (out_vec, leading_zeros, q_blk_hdr_rlc_acc, blk_hdr_rlc_acc, Value::known(hash_hi), Value::known(hash_lo))
     }
 
     // Assigns all columns relevant to the blockhash checks
@@ -2022,11 +2063,10 @@ impl<F: Field> PiCircuitConfig<F> {
         // TODO(George): tidy up these
         public_data: &PublicData<F>,
         challenges: &Challenges<Value<F>>,
-        // block: &eth_types::Block<eth_types::Transaction>,
     ) {
         self.blockhash_cols.q_blk_hdr_rlc_start.enable(region, 0).unwrap();
         self.blockhash_cols.q_blk_hdr_rlp_end.enable(region, BLOCKHASH_TOTAL_ROWS-1).unwrap();
-        let (block_header_rlp, leading_zeros, q_blk_hdr_rlc_acc, blk_hdr_rlc_acc) = Self::get_block_header_rlp(public_data, challenges);
+        let (block_header_rlp, leading_zeros, q_blk_hdr_rlc_acc, blk_hdr_rlc_acc, blk_hdr_hash_hi, blk_hdr_hash_lo) = Self::get_block_header_rlp_from_public_data(public_data, challenges);
         assert_eq!(block_header_rlp.len(), BLOCKHASH_TOTAL_ROWS);
 
         // Initialize columns to zero
@@ -2320,6 +2360,12 @@ impl<F: Field> PiCircuitConfig<F> {
                 region.assign_advice(|| "reconstruct_value_inv for withdrawals_root_lo", self.blockhash_cols.blk_hdr_reconstruct_value_inv, Q_WITHDRAWALS_ROOT_OFFSET + i, || reconstructed_values_inv[21][i - 16],).unwrap();
             }
         }
+
+        // self.q_rpi_encoding.enable(region, BLOCKHASH_TOTAL_ROWS-1);
+        region.assign_advice(|| "blk_hdr_hash_hi", self.rpi_encoding, BLOCKHASH_TOTAL_ROWS-1, || blk_hdr_hash_hi).unwrap();
+        region.assign_advice(|| "blk_hdr_hash_lo", self.rpi_encoding, BLOCKHASH_TOTAL_ROWS-2, || blk_hdr_hash_lo).unwrap();
+        println!("blk_hdr_hash_hi = {:?}", blk_hdr_hash_hi);
+        println!("blk_hdr_hash_lo = {:?}", blk_hdr_hash_lo);
     }
 
     fn assign(
@@ -2614,7 +2660,6 @@ impl<F: Field, const MAX_TXS: usize, const MAX_CALLDATA: usize> Circuit<F>
         let tx_table = TxTable::construct(meta);
         let rlp_table = array_init::array_init(|_| meta.advice_column());
         let keccak_table = KeccakTable2::construct(meta);
-        let blockhash_keccak_table = KeccakTable2::construct(meta);
         let challenges = Challenges::mock(100.expr(), 100.expr());
         PiCircuitConfig::new(
             meta,
@@ -2626,7 +2671,6 @@ impl<F: Field, const MAX_TXS: usize, const MAX_CALLDATA: usize> Circuit<F>
                 rlp_table,
                 keccak_table,
                 challenges,
-                blockhash_keccak_table,
             },
         )
     }
@@ -2645,15 +2689,7 @@ impl<F: Field, const MAX_TXS: usize, const MAX_CALLDATA: usize> Circuit<F>
             vec![
                 &public_data.txs_rlp.to_vec(),
                 &public_data.block_rlp.to_vec(),
-            ],
-            &challenges,
-        )?;
-
-        // TODO(George)
-        config.blockhash_keccak_table.dev_load(
-            &mut layouter,
-            vec![
-                // &public_data.blk_hdr_rlp.to_vec()
+                &public_data.blockhash_blk_hdr_rlp.to_vec()
             ],
             &challenges,
         )?;
