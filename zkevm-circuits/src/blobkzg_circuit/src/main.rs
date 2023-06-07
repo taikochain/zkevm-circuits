@@ -1,44 +1,50 @@
 use halo2_proofs::plonk::{ConstraintSystem,Circuit, Error};
 use halo2_proofs::circuit::{Layouter,SimpleFloorPlanner,Value};
-use halo2_proofs::halo2curves::ff::PrimeField as FieldExt;
+use halo2_proofs::halo2curves::ff::PrimeField;
 use halo2wrong_integer::{IntegerConfig, rns::Rns, IntegerChip, IntegerInstructions, rns::Integer, UnassignedInteger, Range, AssignedInteger};
 use halo2wrong_maingate::{RangeChip, MainGate, RegionCtx};
 
 /// THIS CIRCUIT PERFORMS A NON-NATIVE FUNCTION EVAL USING BARYCENTRIC-FORMULA
-/// P(X) = (const) * sum (d_i * (w^i/x-w^i)) where const = (x^N - 1)/N where w^N = 1, for all X s.t. X^N != 1
+/// P(X) = (const) * sum (d_i * (w^i/x-w^i)) where const = (x^N - 1)/N with w^N = 1 and X^N != 1
 
 #[derive(Clone, Debug)]
 pub struct BlobKZGConfig {
     integer_config: IntegerConfig
 }
-// TODO: optim: remove w column, make wi column Fixed since it's always the same (like n_bits). BUT increases Verifier costs!!!
 
-#[derive(Clone, Debug)]
-pub struct BlobKZGCircuit<W, N>{ // W is the wrong field, N is the native field
+#[derive(Debug)]
+pub struct BlobKZGCircuit<W: PrimeField, N: PrimeField>{ // W is the wrong field, N is the native field
     datapoints: [W; 4096],
     x: W, 
     w: W,
     n: W,
+    witness_values: WitnessValues<W>,
     _marker: std::marker::PhantomData<N>
 }
 
-impl<W: FieldExt, N:FieldExt> Default for BlobKZGCircuit<W,N> {
+impl<W: PrimeField, N:PrimeField> Default for BlobKZGCircuit<W,N> {
     fn default() -> Self {
-        BlobKZGCircuit { datapoints: [W::default();4096], x: W::default(), w: W::default(), n: W::default(), _marker: std::marker::PhantomData }
+        BlobKZGCircuit { datapoints: [W::default();4096], x: W::default(), w: W::default(), n: W::default(), witness_values: WitnessValues::<W>::default(), _marker: std::marker::PhantomData }
     }
 }
-struct WitnessValues<F: FieldExt>{
+#[derive(Clone, Debug)]
+struct WitnessValues<F: PrimeField>{
     evals: [F;4098],
     wis: [F;4096],
     xns: [F;257],
     x2is: [F;256],
     nbits: [F;256] 
 }
-impl<W:FieldExt, N: FieldExt> BlobKZGCircuit<W,N> {
-    fn generate_witnesses(&self) -> Result<WitnessValues<W>, Error> {
+impl<F: PrimeField> Default for WitnessValues<F> {
+    fn default() -> Self {
+        WitnessValues { evals: [F::default();4098], wis: [F::default();4096], xns: [F::default();257], x2is: [F::default();256], nbits: [F::default();256] }
+    }
+}
+impl<W: PrimeField> WitnessValues<W> {
+    fn new(x:&W, n:&W, w:&W, datapoints: &[W; 4096]) -> WitnessValues<W> {
         let x2is: [W; 256] = {
             let mut x2is = [W::default(); 256];
-            let mut state = self.x;
+            let mut state = *x;
             for x in &mut x2is {
                 *x = state;
                 state *= state;
@@ -49,7 +55,7 @@ impl<W:FieldExt, N: FieldExt> BlobKZGCircuit<W,N> {
             let mut nbits = [W::default(); 256];
             let nbits_bool: [bool; 256] = {
                 let mut nbits_bool = [false; 256];
-                let repr: [u8; 32] = self.n.to_repr().as_ref().try_into().unwrap();
+                let repr: [u8; 32] = n.to_repr().as_ref().try_into().unwrap();
                 for (j, byte) in repr.iter().enumerate() {
                     for i in 0..8 {
                         nbits_bool[j*8+i] = ((byte >> i) & 1) == 1;
@@ -73,44 +79,46 @@ impl<W:FieldExt, N: FieldExt> BlobKZGCircuit<W,N> {
             xns[xns.len()-1] = state;
             xns
         };
-        if xns[xns.len()-1] == W::ONE { 
-            // ERROR: should never take an x inside the domain
-            return Err(Error::Synthesis);
-        }
         let wis: [W; 4096] = {
             let mut wis = [W::default(); 4096];
-            let mut state = self.w;
+            let mut state = *w;
             for x in &mut wis {
                 *x = state;
-                state *= self.w;
+                state *= w;
             }
             wis
         };
         let evals: [W; 4098] = {
             let mut evals = [W::default(); 4098];
             let mut state = W::ZERO;
-            for (x, (di, wi)) in evals.iter_mut().zip(self.datapoints.iter().zip(wis.iter())) {
-                *x = state;
-                state += *di * *wi * (self.x-*wi).invert().unwrap();
+            for (eval, (di, wi)) in evals.iter_mut().zip(datapoints.iter().zip(wis.iter())) {
+                *eval = state;
+                state += *di * *wi * (*x-*wi).invert().unwrap();
             }
             evals[evals.len() - 2] = state;
             let xn = xns[xns.len() - 1];
-            evals[evals.len() - 1] = evals[evals.len() - 2] * (xn - W::ONE) * self.n.invert().unwrap();
+            evals[evals.len() - 1] = evals[evals.len() - 2] * (xn - W::ONE) * n.invert().unwrap();
             evals
         };
         
-        let witness_values = WitnessValues{
+        WitnessValues{
             evals,
             wis,
             xns,
             x2is,
             nbits
-        };
-        Ok(witness_values)
+        }
+    }
+
+}
+
+impl<W: PrimeField, N:PrimeField> BlobKZGCircuit<W,N> {
+    fn new(datapoints: [W;4096], x: W, w: W, n: W) -> Self {
+        BlobKZGCircuit { datapoints, x, w, n, witness_values: WitnessValues::<W>::new(&x, &n, &w, &datapoints),_marker: std::marker::PhantomData }
     }
 }
 
-impl<W: FieldExt, N:FieldExt> Circuit<N> for BlobKZGCircuit<W,N> {
+impl<W: PrimeField, N:PrimeField> Circuit<N> for BlobKZGCircuit<W,N> {
     type Config = BlobKZGConfig;
     type FloorPlanner = SimpleFloorPlanner;
 
@@ -124,9 +132,7 @@ impl<W: FieldExt, N:FieldExt> Circuit<N> for BlobKZGCircuit<W,N> {
             const NUMBER_OF_LIMBS: usize = 4;
             let main_gate_config = MainGate::<N>::configure(meta);
             let range_config = {
-                // let overflow_bit_lens = rns::<W, N, BIT_LEN_LIMB>().overflow_lengths();
                 let overflow_bit_lens = Rns::<W, N, NUMBER_OF_LIMBS, BIT_LEN_LIMB>::construct().overflow_lengths();
-                // let composition_bit_len = IntegerChip::<W, N, NUMBER_OF_LIMBS, BIT_LEN_LIMB>::sublimb_bit_len();
                 let composition_bit_lens = vec![BIT_LEN_LIMB / NUMBER_OF_LIMBS];
                 RangeChip::<N>::configure(
                     meta,
@@ -144,7 +150,7 @@ impl<W: FieldExt, N:FieldExt> Circuit<N> for BlobKZGCircuit<W,N> {
     }
 
     fn synthesize(&self, config: Self::Config, mut layouter: impl Layouter<N>) -> Result<(), Error> {
-        fn assign_wrong_integer<W: FieldExt, N: FieldExt>(
+        fn assign_wrong_integer<W: PrimeField, N: PrimeField>(
             integer_chip: &IntegerChip<W, N, NUMBER_OF_LIMBS, BIT_LEN_LIMB>,
             ctx: &mut RegionCtx<N>,
             x: W
@@ -158,7 +164,11 @@ impl<W: FieldExt, N:FieldExt> Circuit<N> for BlobKZGCircuit<W,N> {
              Ok(a)
         }
 
-        let WitnessValues{evals, wis, xns, x2is, nbits}: WitnessValues<W> = self.generate_witnesses()?;
+        let WitnessValues{evals, wis, xns, x2is, nbits}: WitnessValues<W> = self.witness_values;
+        // MAKE SURE X IS NOT IN THE ROOT-OF-UNITY DOMAIN
+        if xns[xns.len()-1] == W::ONE { 
+            return Err(Error::Synthesis);
+        }
         const BIT_LEN_LIMB: usize = 68;
         const NUMBER_OF_LIMBS: usize = 4;
 
@@ -321,33 +331,17 @@ impl<W: FieldExt, N:FieldExt> Circuit<N> for BlobKZGCircuit<W,N> {
 }
 
 
-type N = halo2_proofs::halo2curves::bn256::Fr; // Native Field
-type W = halo2_proofs::halo2curves::bls12_381::Scalar; // Wrong Field
-const ROOT_OF_UNITY: W = W::from_raw([
-    0xb9b5_8d8c_5f0e_466a,
-    0x5b1b_4c80_1819_d7ec,
-    0x0af5_3ae3_52a3_1e64,
-    0x5bf3_adda_19e9_b27b,
-]);
-const ROOT_OF_UNITY_ORDER: W = W::from_raw([
-    0x0000_0000_0100_0000,
-    0x0,
-    0x0,
-    0x0,
-]);
+type N = halo2_proofs::halo2curves::bn256::Fr; // Native Field (BN256)
+type W = halo2_proofs::halo2curves::bls12_381::Scalar; // Wrong Field (BLS12-381)
+// ROOT OF UNITY WITH ORDER 4096: 0x564c_0a11_a0f7_04f4_fc3e_8acf_e0f8_245f_0ad1_347b_378f_bf96_e206_da11_a5d3_6306
+const ROOT_OF_UNITY: W = W::from_raw([0xe206_da11_a5d3_6306, 0x0ad1_347b_378f_bf96, 0xfc3e_8acf_e0f8_245f, 0x564c_0a11_a0f7_04f4]);
+const ROOT_OF_UNITY_ORDER: W = W::from_raw([0x1000, 0x0, 0x0, 0x0]);
 
 fn main() {
-    // use halo2_proofs::halo2curves::group::ff::PrimeField;
-    // let (x,w,n, _marker) = (W::from(5), W::root_of_unity(), W::from(2_u64.pow(W::S)), std::marker::PhantomData::<N>);
-    let (x, w, n, _marker) = (W::from(5), ROOT_OF_UNITY, ROOT_OF_UNITY_ORDER, std::marker::PhantomData::<N>);
-    println!("x: {x}, w: {w}, n: {n}, BLS_MODULUS: {}", <W as FieldExt>::MODULUS);
     let datapoints: [W; 4096] = std::array::from_fn(|i| W::from(i as u64 + 1));
-
-    let circuit = BlobKZGCircuit::<W, N>{datapoints, x, w, n, _marker};
-    // assert!(2_usize.pow(18) >= datapoints.len());
+    let circuit = BlobKZGCircuit::<W, N>::new(datapoints, W::from(5), ROOT_OF_UNITY, ROOT_OF_UNITY_ORDER);
     let prover = halo2_proofs::dev::MockProver::<N>::run(20, &circuit, vec![vec![]]).unwrap();
     prover.assert_satisfied();
-    println!("🥵🥵🥵 CIRCUIT TEST COMPLETED SUCCESSFULLY :-)")
 }
 
 #[cfg(test)]
@@ -358,29 +352,33 @@ mod tests {
         W::random(rand_core::OsRng)
     }
 
+    lazy_static::lazy_static! {
+        static ref DEFAULT_DATAPOINTS: [W; 4096] = std::array::from_fn(|i| W::from(i as u64 + 1));
+        static ref RANDOM_DATAPOINTS: [W; 4096] = std::array::from_fn(|_| random_field_value());
+        static ref DEFAULT_X: W = W::from(5);
+        static ref RANDOM_VALUE: W = random_field_value();
+    }
+
+
     #[test]
-    fn random_datapoints() {
-        let (x, w, n, _marker) = (W::from(5), ROOT_OF_UNITY, ROOT_OF_UNITY_ORDER, std::marker::PhantomData::<N>);
-        let datapoints: [W; 4096] = std::array::from_fn(|_| random_field_value());
-        let circuit = super::BlobKZGCircuit::<W, N>{datapoints, x, w, n, _marker};
+    fn try_default() {
+        let circuit = super::BlobKZGCircuit::<W, N>::new(*DEFAULT_DATAPOINTS, *DEFAULT_X, ROOT_OF_UNITY, ROOT_OF_UNITY_ORDER);
         let prover = halo2_proofs::dev::MockProver::<N>::run(20, &circuit, vec![vec![]]).unwrap();
         prover.assert_satisfied();
     }
 
-    // #[test]
-    // fn random_datapoints_10() {
-    //     for _ in 0..10 {
-    //         random_datapoints();
-    //     }
-    // }
+    #[test]
+    fn try_random_datapoints() {
+        let circuit = super::BlobKZGCircuit::<W, N>::new(*RANDOM_DATAPOINTS, *DEFAULT_X, ROOT_OF_UNITY, ROOT_OF_UNITY_ORDER);
+        let prover = halo2_proofs::dev::MockProver::<N>::run(20, &circuit, vec![vec![]]).unwrap();
+        prover.assert_satisfied();
+    }
 
     #[test]
     #[should_panic]
     fn wrong_x() {
-        let (w, n, _marker) = (ROOT_OF_UNITY, ROOT_OF_UNITY_ORDER, std::marker::PhantomData::<N>);
-        let x = w*w*w;
-        let datapoints: [W; 4096] = std::array::from_fn(|_| random_field_value());
-        let circuit = super::BlobKZGCircuit::<W, N>{datapoints, x, w, n, _marker};
+        // TRY EVALUATION INSIDE THE ROOT OF UNITY DOMAIN
+        let circuit = super::BlobKZGCircuit::<W, N>::new(*DEFAULT_DATAPOINTS, ROOT_OF_UNITY*ROOT_OF_UNITY*ROOT_OF_UNITY, ROOT_OF_UNITY, ROOT_OF_UNITY_ORDER);
         let prover = halo2_proofs::dev::MockProver::<N>::run(20, &circuit, vec![vec![]]).unwrap();
         prover.assert_satisfied();
     }
@@ -388,9 +386,8 @@ mod tests {
     #[test]
     #[should_panic]
     fn wrong_w() {
-        let (x, w, n, _marker) = (W::from(5), random_field_value(), ROOT_OF_UNITY_ORDER, std::marker::PhantomData::<N>);
-        let datapoints: [W; 4096] = std::array::from_fn(|_| random_field_value());
-        let circuit = super::BlobKZGCircuit::<W, N>{datapoints, x, w, n, _marker};
+        // TRY EVALUATION WITH A NON ROOT OF UNITY
+        let circuit = super::BlobKZGCircuit::<W, N>::new(*DEFAULT_DATAPOINTS, *DEFAULT_X, *RANDOM_VALUE, ROOT_OF_UNITY_ORDER);
         let prover = halo2_proofs::dev::MockProver::<N>::run(20, &circuit, vec![vec![]]).unwrap();
         prover.assert_satisfied();
     }
@@ -398,10 +395,14 @@ mod tests {
     #[test]
     #[should_panic]
     fn wrong_n() {
-        let (x, w, n, _marker) = (W::from(5), ROOT_OF_UNITY, random_field_value(), std::marker::PhantomData::<N>);
-        let datapoints: [W; 4096] = std::array::from_fn(|_| random_field_value());
-        let circuit = super::BlobKZGCircuit::<W, N>{datapoints, x, w, n, _marker};
+        // TRY EVALUATION WITH A DIFFERENT ROOT OF UNITY ORDER
+        let circuit = super::BlobKZGCircuit::<W, N>::new(*DEFAULT_DATAPOINTS, *DEFAULT_X, ROOT_OF_UNITY, *RANDOM_VALUE);
         let prover = halo2_proofs::dev::MockProver::<N>::run(20, &circuit, vec![vec![]]).unwrap();
         prover.assert_satisfied();
+    }
+
+    #[test]
+    fn wrong_witness_data() {
+        unimplemented!(); // TODO
     }
 }

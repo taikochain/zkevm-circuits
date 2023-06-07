@@ -1,8 +1,8 @@
 [package]
-name = "blobkzg_circuit"
+name = "blobkzg-circuit"
 version = "0.1.0"
 edition = "2021"
-authors = ["mario a. barbara <mariobarbara@protonmail.ch>"]
+authors = ["mabbamOG <mariobarbara@protonmail.ch>"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -13,3 +13,6 @@ halo2wrong_maingate = {package = "maingate", git = "https://github.com/mabbamOG/
 
 [dev-dependencies]
 rand_core = "0.6.4"
+lazy_static = "1.4.0"
+
+[workspace] # necessary for testing
