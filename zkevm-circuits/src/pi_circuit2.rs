@@ -121,7 +121,6 @@ struct BlockhashColumns {
     blk_hdr_rlp_len_calc_inv: Column<Advice>,
     q_blk_hdr_total_len: Selector,
     blk_hdr_reconstruct_value: Column<Advice>,
-    blk_hdr_reconstruct_value_inv: Column<Advice>,
     q_parent_hash: Column<Fixed>,
     q_beneficiary: Column<Fixed>,
     q_state_root: Column<Fixed>,
@@ -166,7 +165,7 @@ pub struct PublicData<F: Field> {
     pub prover: Address,
 
     /// Parent hash
-    pub parent_hash: H256, // TODO(George) is this the history_hashes.last() ?
+    pub parent_hash: H256,
     /// The author
     pub beneficiary: Address,
     /// Transactions Root
@@ -359,7 +358,7 @@ impl<F: Field> PublicData<F> {
             receipts_root: block.eth_block.receipts_root,
             gas_used: block.eth_block.gas_used,
             mix_hash: block.eth_block.mix_hash.unwrap_or_else(H256::zero),
-            // withdrawalsRoot: block.eth_block.,
+            // TODO(George): withdrawalsRoot: block.eth_block.,
         }
     }
 
@@ -535,11 +534,11 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
         let tx_id_inv = meta.advice_column();
         let tx_value_inv = meta.advice_column();
         let tx_id_diff_inv = meta.advice_column();
+        let fixed_u8 = meta.fixed_column();
         // The difference of tx_id of adjacent rows in calldata part of tx table
         // lies in the interval [0, 2^16] if their tx_id both do not equal to zero.
         // We do not use 2^8 for the reason that a large block may have more than
         // 2^8 transfer transactions which have 21000*2^8 (~ 5.376M) gas.
-        let fixed_u8 = meta.fixed_column();
         let fixed_u16 = meta.fixed_column();
         let calldata_gas_cost = meta.advice_column();
         let is_final = meta.advice_column();
@@ -551,17 +550,11 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
         let q_blk_hdr_rlp = meta.complex_selector();
         let q_blk_hdr_rlp_end = meta.complex_selector();
         let q_blk_hdr_rlp_const = meta.complex_selector();
-        // let q_blk_hdr_is_var_length = meta.complex_selector();
 
         let blk_hdr_rlp_len_calc = meta.advice_column();
         let blk_hdr_rlp_len_calc_inv = meta.advice_column();
-        // let q_blk_hdr_rlp_len_calc_start = meta.complex_selector();
-        // let q_blk_hdr_rlp_len_calc_not_end = meta.complex_selector();
         let q_blk_hdr_total_len = meta.complex_selector();
         let blk_hdr_reconstruct_value = meta.advice_column();
-        let blk_hdr_reconstruct_value_inv = meta.advice_column();
-        // let q_reconstruct_start = meta.complex_selector();
-        // let q_reconstruct_not_end = meta.complex_selector();
         let blk_hdr_is_leading_zero = meta.advice_column();
         let blk_hdr_rlp_is_short = meta.advice_column();
         let blk_hdr_rlp_diff_0x81 = meta.advice_column();
@@ -599,7 +592,6 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
             blk_hdr_rlp_len_calc_inv,
             q_blk_hdr_total_len,
             blk_hdr_reconstruct_value,
-            blk_hdr_reconstruct_value_inv,
             q_parent_hash,
             q_beneficiary,
             q_state_root,
@@ -1286,6 +1278,7 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
 
         // TODO(George): Check reconstructed values match inputs, use copy constraints
 
+
         // 2. Check RLC of RLP'd block header
         // Accumulate only bytes that have q_blk_hdr_rlp AND NOT(blk_hdr_is_leading_zero) and skip RLP headers if value is <0x80
 
@@ -1686,6 +1679,7 @@ impl<F: Field> PiCircuitConfig<F> {
         ),
         Error,
     > {
+        // TODO(George): Assign all needed block header data to the block_table
         let block_values = public_data.get_block_table_values();
         let extra_values = public_data.get_extra_values();
         let randomness = challenges.evm_word();
@@ -2060,7 +2054,6 @@ impl<F: Field> PiCircuitConfig<F> {
     fn assign_block_hash_calc(
         &self,
         region: &mut Region<'_, F>,
-        // TODO(George): tidy up these
         public_data: &PublicData<F>,
         challenges: &Challenges<Value<F>>,
     ) {
@@ -2086,8 +2079,7 @@ impl<F: Field> PiCircuitConfig<F> {
                 region.assign_fixed(|| "initializing column", col, i, || Value::known(F::zero()),).unwrap();
             }
             for col in [self.blockhash_cols.blk_hdr_rlp_len_calc, self.blockhash_cols.blk_hdr_rlp_len_calc_inv,
-                       self.blockhash_cols.blk_hdr_reconstruct_value, self.blockhash_cols.blk_hdr_reconstruct_value_inv,
-                       self.blockhash_cols.blk_hdr_reconstruct_value_inv, self.blockhash_cols.blk_hdr_rlp_is_short] {
+                       self.blockhash_cols.blk_hdr_reconstruct_value, self.blockhash_cols.blk_hdr_rlp_is_short] {
                 region.assign_advice(|| "initializing column", col, i, || Value::known(F::zero()),).unwrap();
             }
         }
@@ -2157,7 +2149,6 @@ impl<F: Field> PiCircuitConfig<F> {
 
         // Calculate reconstructed values
         let mut reconstructed_values: Vec<Vec<Value<F>>> = vec![];
-        let mut reconstructed_values_inv: Vec<Vec<Value<F>>> = vec![];
         for value in [
             public_data.parent_hash.as_fixed_bytes()[0..16].iter(),
             public_data.parent_hash.as_fixed_bytes()[16..32].iter(),
@@ -2196,18 +2187,6 @@ impl<F: Field> PiCircuitConfig<F> {
                     })
                     .collect::<Vec<Value<F>>>(),
             );
-
-            reconstructed_values_inv.push(
-                value
-                    .scan(F::zero(), |acc, &x| {
-                        for _ in 0..8 {
-                            *acc = (*acc).double();
-                        }
-                        *acc += F::from(x as u64);
-                        Some(Value::known(acc.invert().unwrap_or(F::zero()).clone()))
-                    })
-                    .collect::<Vec<Value<F>>>(),
-            );
         }
 
         for (offset, (v, q)) in rlp_const.iter().zip(q_rlp_const.iter()).enumerate() {
@@ -2239,7 +2218,6 @@ impl<F: Field> PiCircuitConfig<F> {
             if i < 20 {
                 region.assign_fixed(|| "q_beneficiary",self.blockhash_cols.q_beneficiary, Q_BENEFICIARY_OFFSET + i,|| Value::known(F::one()),).unwrap();
                 region.assign_advice(|| "reconstruct_value for beneficiary",self.blockhash_cols.blk_hdr_reconstruct_value, Q_BENEFICIARY_OFFSET + i,|| reconstructed_values[2][i],).unwrap();
-                region.assign_advice(|| "reconstruct_value_inv for beneficiary",self.blockhash_cols.blk_hdr_reconstruct_value_inv, Q_BENEFICIARY_OFFSET + i,|| reconstructed_values_inv[2][i],).unwrap();
                 self.blockhash_cols.q_hi.enable(region, Q_BENEFICIARY_OFFSET + i).unwrap(); // No actual use, Only for convenience in generating some gates elegantly
             }
 
@@ -2263,7 +2241,6 @@ impl<F: Field> PiCircuitConfig<F> {
                 region.assign_advice(|| "number length",self.blockhash_cols.blk_hdr_rlp_len_calc, Q_NUMBER_OFFSET + i,|| Value::known(length_calc)).unwrap();
                 region.assign_advice(|| "number length inverse",self.blockhash_cols.blk_hdr_rlp_len_calc_inv, Q_NUMBER_OFFSET + i,|| Value::known(length_calc_inv)).unwrap();
                 region.assign_advice(|| "reconstruct_value for number",self.blockhash_cols.blk_hdr_reconstruct_value, Q_NUMBER_OFFSET + i,|| reconstructed_values[9][i],).unwrap();
-                region.assign_advice(|| "reconstruct_value_inv for number",self.blockhash_cols.blk_hdr_reconstruct_value_inv, Q_NUMBER_OFFSET + i,|| reconstructed_values_inv[9][i],).unwrap();
                 self.blockhash_cols.q_hi.enable(region, Q_NUMBER_OFFSET + i).unwrap(); // No actual use, Only for convenience in generating some gates elegantly
             }
 
@@ -2306,25 +2283,15 @@ impl<F: Field> PiCircuitConfig<F> {
 
                 // reconstructing values for the _hi parts
                 region.assign_advice(|| "reconstruct_value for parent_hash_hi", self.blockhash_cols.blk_hdr_reconstruct_value, Q_PARENT_HASH_OFFSET + i, || reconstructed_values[0][i],).unwrap();
-                region.assign_advice(|| "reconstruct_value_inv for parent_hash_hi", self.blockhash_cols.blk_hdr_reconstruct_value_inv, Q_PARENT_HASH_OFFSET + i, || reconstructed_values_inv[0][i],).unwrap();
                 region.assign_advice(|| "reconstruct_value for state_root_hi", self.blockhash_cols.blk_hdr_reconstruct_value, Q_STATE_ROOT_OFFSET + i, || reconstructed_values[3][i],).unwrap();
-                region.assign_advice(|| "reconstruct_value_inv for state_root_hi", self.blockhash_cols.blk_hdr_reconstruct_value_inv, Q_STATE_ROOT_OFFSET + i, || reconstructed_values_inv[3][i],).unwrap();
                 region.assign_advice(|| "reconstruct_value for tx_root_hi", self.blockhash_cols.blk_hdr_reconstruct_value, Q_TX_ROOT_OFFSET + i, || reconstructed_values[5][i],).unwrap();
-                region.assign_advice(|| "reconstruct_value_inv for tx_root_hi", self.blockhash_cols.blk_hdr_reconstruct_value_inv, Q_TX_ROOT_OFFSET + i, || reconstructed_values_inv[5][i],).unwrap();
                 region.assign_advice(|| "reconstruct_value for receipts_root_hi", self.blockhash_cols.blk_hdr_reconstruct_value, Q_RECEIPTS_ROOT_OFFSET + i, || reconstructed_values[7][i],).unwrap();
-                region.assign_advice(|| "reconstruct_value_inv for receipts_root_hi", self.blockhash_cols.blk_hdr_reconstruct_value_inv, Q_RECEIPTS_ROOT_OFFSET + i, || reconstructed_values_inv[7][i],).unwrap();
                 region.assign_advice(|| "reconstruct_value for gas_limit_hi", self.blockhash_cols.blk_hdr_reconstruct_value, Q_GAS_LIMIT_OFFSET + i, || reconstructed_values[10][i],).unwrap();
-                region.assign_advice(|| "reconstruct_value_inv for gas_limit_hi", self.blockhash_cols.blk_hdr_reconstruct_value_inv, Q_GAS_LIMIT_OFFSET + i, || reconstructed_values_inv[10][i],).unwrap();
                 region.assign_advice(|| "reconstruct_value for gas_used_hi", self.blockhash_cols.blk_hdr_reconstruct_value, Q_GAS_USED_OFFSET + i, || reconstructed_values[12][i],).unwrap();
-                region.assign_advice(|| "reconstruct_value_inv for gas_used_hi", self.blockhash_cols.blk_hdr_reconstruct_value_inv, Q_GAS_USED_OFFSET + i, || reconstructed_values_inv[12][i],).unwrap();
                 region.assign_advice(|| "reconstruct_value for timestamp_hi", self.blockhash_cols.blk_hdr_reconstruct_value, Q_TIMESTAMP_OFFSET + i, || reconstructed_values[14][i],).unwrap();
-                region.assign_advice(|| "reconstruct_value_inv for timestamp_hi", self.blockhash_cols.blk_hdr_reconstruct_value_inv, Q_TIMESTAMP_OFFSET + i, || reconstructed_values_inv[14][i],).unwrap();
                 region.assign_advice(|| "reconstruct_value for mix_hash_hi", self.blockhash_cols.blk_hdr_reconstruct_value, Q_MIX_HASH_OFFSET + i, || reconstructed_values[16][i],).unwrap();
-                region.assign_advice(|| "reconstruct_value_inv for mix_hash_hi", self.blockhash_cols.blk_hdr_reconstruct_value_inv, Q_MIX_HASH_OFFSET + i, || reconstructed_values_inv[16][i],).unwrap();
                 region.assign_advice(|| "reconstruct_value for base_fee_per_gas_hi", self.blockhash_cols.blk_hdr_reconstruct_value, Q_BASE_FEE_OFFSET + i, || reconstructed_values[18][i],).unwrap();
-                region.assign_advice(|| "reconstruct_value_inv for base_fee_per_gas_hi", self.blockhash_cols.blk_hdr_reconstruct_value_inv, Q_BASE_FEE_OFFSET + i, || reconstructed_values_inv[18][i],).unwrap();
                 region.assign_advice(|| "reconstruct_value for withdrawals_root_hi", self.blockhash_cols.blk_hdr_reconstruct_value, Q_WITHDRAWALS_ROOT_OFFSET + i, || reconstructed_values[20][i],).unwrap();
-                region.assign_advice(|| "reconstruct_value_inv for withdrawals_root_hi", self.blockhash_cols.blk_hdr_reconstruct_value_inv, Q_WITHDRAWALS_ROOT_OFFSET + i, || reconstructed_values_inv[20][i],).unwrap();
             }
 
             if i >= 16 {
@@ -2339,29 +2306,18 @@ impl<F: Field> PiCircuitConfig<F> {
 
                 // reconstructing values for the _lo parts
                 region.assign_advice(|| "reconstruct_value for parent_hash_lo", self.blockhash_cols.blk_hdr_reconstruct_value, Q_PARENT_HASH_OFFSET + i, || reconstructed_values[1][i - 16],).unwrap();
-                region.assign_advice(|| "reconstruct_value_inv for parent_hash_lo", self.blockhash_cols.blk_hdr_reconstruct_value_inv, Q_PARENT_HASH_OFFSET + i, || reconstructed_values_inv[1][i - 16],).unwrap();
                 region.assign_advice(|| "reconstruct_value for state_root_lo", self.blockhash_cols.blk_hdr_reconstruct_value, Q_STATE_ROOT_OFFSET + i, || reconstructed_values[4][i - 16],).unwrap();
-                region.assign_advice(|| "reconstruct_value_inv for state_root_lo", self.blockhash_cols.blk_hdr_reconstruct_value_inv, Q_STATE_ROOT_OFFSET + i, || reconstructed_values_inv[4][i - 16],).unwrap();
                 region.assign_advice(|| "reconstruct_value for tx_root_lo", self.blockhash_cols.blk_hdr_reconstruct_value, Q_TX_ROOT_OFFSET + i, || reconstructed_values[6][i - 16],).unwrap();
-                region.assign_advice(|| "reconstruct_value_inv for tx_root_lo", self.blockhash_cols.blk_hdr_reconstruct_value_inv, Q_TX_ROOT_OFFSET + i, || reconstructed_values_inv[6][i - 16],).unwrap();
                 region.assign_advice(|| "reconstruct_value for receipts_root_lo", self.blockhash_cols.blk_hdr_reconstruct_value, Q_RECEIPTS_ROOT_OFFSET + i, || reconstructed_values[8][i - 16],).unwrap();
-                region.assign_advice(|| "reconstruct_value_inv for receipts_root_lo", self.blockhash_cols.blk_hdr_reconstruct_value_inv, Q_RECEIPTS_ROOT_OFFSET + i, || reconstructed_values_inv[8][i - 16],).unwrap();
                 region.assign_advice(|| "reconstruct_value for gas_limit_lo", self.blockhash_cols.blk_hdr_reconstruct_value, Q_GAS_LIMIT_OFFSET + i, || reconstructed_values[11][i - 16],).unwrap();
-                region.assign_advice(|| "reconstruct_value_inv for gas_limit_lo", self.blockhash_cols.blk_hdr_reconstruct_value_inv, Q_GAS_LIMIT_OFFSET + i, || reconstructed_values_inv[11][i - 16],).unwrap();
                 region.assign_advice(|| "reconstruct_value for gas_used_lo", self.blockhash_cols.blk_hdr_reconstruct_value, Q_GAS_USED_OFFSET + i, || reconstructed_values[13][i - 16],).unwrap();
-                region.assign_advice(|| "reconstruct_value_inv for gas_used_lo", self.blockhash_cols.blk_hdr_reconstruct_value_inv, Q_GAS_USED_OFFSET + i, || reconstructed_values_inv[13][i - 16],).unwrap();
                 region.assign_advice(|| "reconstruct_value for timestamp_lo", self.blockhash_cols.blk_hdr_reconstruct_value, Q_TIMESTAMP_OFFSET + i, || reconstructed_values[15][i - 16],).unwrap();
-                region.assign_advice(|| "reconstruct_value_inv for timestamp_lo", self.blockhash_cols.blk_hdr_reconstruct_value_inv, Q_TIMESTAMP_OFFSET + i, || reconstructed_values_inv[15][i - 16],).unwrap();
                 region.assign_advice(|| "reconstruct_value for mix_hash_lo", self.blockhash_cols.blk_hdr_reconstruct_value, Q_MIX_HASH_OFFSET + i, || reconstructed_values[17][i - 16],).unwrap();
-                region.assign_advice(|| "reconstruct_value_inv for mix_hash_lo", self.blockhash_cols.blk_hdr_reconstruct_value_inv, Q_MIX_HASH_OFFSET + i, || reconstructed_values_inv[17][i - 16],).unwrap();
                 region.assign_advice(|| "reconstruct_value for base_fee_per_gas_lo", self.blockhash_cols.blk_hdr_reconstruct_value, Q_BASE_FEE_OFFSET + i, || reconstructed_values[19][i - 16],).unwrap();
-                region.assign_advice(|| "reconstruct_value_inv for base_fee_per_gas_lo", self.blockhash_cols.blk_hdr_reconstruct_value_inv, Q_BASE_FEE_OFFSET + i, || reconstructed_values_inv[19][i - 16],).unwrap();
                 region.assign_advice(|| "reconstruct_value for withdrawals_root_lo", self.blockhash_cols.blk_hdr_reconstruct_value, Q_WITHDRAWALS_ROOT_OFFSET + i, || reconstructed_values[21][i - 16],).unwrap();
-                region.assign_advice(|| "reconstruct_value_inv for withdrawals_root_lo", self.blockhash_cols.blk_hdr_reconstruct_value_inv, Q_WITHDRAWALS_ROOT_OFFSET + i, || reconstructed_values_inv[21][i - 16],).unwrap();
             }
         }
 
-        // self.q_rpi_encoding.enable(region, BLOCKHASH_TOTAL_ROWS-1);
         region.assign_advice(|| "blk_hdr_hash_hi", self.rpi_encoding, BLOCKHASH_TOTAL_ROWS-1, || blk_hdr_hash_hi).unwrap();
         region.assign_advice(|| "blk_hdr_hash_lo", self.rpi_encoding, BLOCKHASH_TOTAL_ROWS-2, || blk_hdr_hash_lo).unwrap();
         println!("blk_hdr_hash_hi = {:?}", blk_hdr_hash_hi);
