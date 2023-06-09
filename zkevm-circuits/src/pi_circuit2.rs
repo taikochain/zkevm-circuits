@@ -182,9 +182,6 @@ pub struct PiCircuitConfig<F: Field> {
     q_field_end: Selector,
     is_field_rlc: Column<Fixed>,
 
-    q_start: Selector,
-    q_not_end: Selector,
-
     is_byte: Column<Fixed>,
 
     pi: Column<Instance>, // keccak_hi, keccak_lo
@@ -228,8 +225,6 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
         let q_field_start = meta.complex_selector();
         let q_field_step = meta.complex_selector();
         let q_field_end = meta.complex_selector();
-        let q_start = meta.complex_selector();
-        let q_not_end = meta.complex_selector();
         let is_byte = meta.fixed_column();
         let is_field_rlc = meta.fixed_column();
 
@@ -328,8 +323,6 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
             q_field_step,
             q_field_end,
 
-            q_start,
-            q_not_end,
             is_byte,
             is_field_rlc,
 
