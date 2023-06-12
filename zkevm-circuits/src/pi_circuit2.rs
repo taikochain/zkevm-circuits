@@ -44,7 +44,7 @@ use lazy_static::lazy_static;
 
 /// Fixed by the spec
 const TX_LEN: usize = 10;
-const BLOCK_LEN: usize = 7 + 256;
+const BLOCK_LEN: usize = 7 + 256 + 16;
 const EXTRA_LEN: usize = 2;
 const ZERO_BYTE_GAS_COST: u64 = 4;
 const NONZERO_BYTE_GAS_COST: u64 = 16;
@@ -69,9 +69,6 @@ lazy_static! {
     static ref OMMERS_HASH: H256 = H256::from_slice(
         &hex::decode("1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347").unwrap()
     );
-    static ref WITHDRAWALS_ROOT: H256 = H256::from_slice(
-        &hex::decode("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421").unwrap()
-    );
 }
 
 /// Values of the block table (as in the spec)
@@ -84,7 +81,7 @@ pub struct BlockValues {
     difficulty: Word,
     base_fee: Word, // NOTE: BaseFee was added by EIP-1559 and is ignored in legacy headers.
     chain_id: u64,
-    history_hashes: Vec<H256>,
+    history_hashes: Vec<Word>,
 }
 
 /// Values of the tx table (as in the spec)
@@ -127,6 +124,7 @@ struct BlockhashColumns {
     q_transactions_root: Column<Fixed>,
     q_receipts_root: Column<Fixed>,
     q_number: Column<Fixed>,
+    // TODO(George) gas limit is u64 and not u256
     q_gas_limit: Column<Fixed>,
     q_gas_used: Column<Fixed>,
     q_timestamp: Column<Fixed>,
@@ -364,14 +362,6 @@ impl<F: Field> PublicData<F> {
 
     /// Returns struct with values for the block table
     pub fn get_block_table_values(&self) -> BlockValues {
-        let history_hashes = [
-            vec![H256::zero(); 256 - self.history_hashes.len()],
-            self.history_hashes
-                .iter()
-                .map(|&hash| H256::from(hash.to_be_bytes()))
-                .collect(),
-        ]
-        .concat();
         BlockValues {
             coinbase: self.block_constants.coinbase,
             gas_limit: self.block_constants.gas_limit.as_u64(),
@@ -380,7 +370,7 @@ impl<F: Field> PublicData<F> {
             difficulty: self.block_constants.difficulty,
             base_fee: self.block_constants.base_fee,
             chain_id: self.chain_id.as_u64(),
-            history_hashes,
+            history_hashes: self.history_hashes.clone(),
         }
     }
 
@@ -621,6 +611,7 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
         meta.enable_equality(rpi_rlc_acc);
         meta.enable_equality(rpi_encoding);
         meta.enable_equality(pi);
+        meta.enable_equality(blk_hdr_reconstruct_value);
 
         // rlc_acc
         meta.create_gate("rpi_rlc_acc_next = rpi_rlc_acc * r + rpi_next", |meta| {
@@ -1276,8 +1267,40 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
             });
         };
 
-        // TODO(George): Check reconstructed values match inputs, use copy constraints
+        // TODO(George): add withdrawals_root
+        // TODO(George): check q_parent_hash
+        for sel in [q_beneficiary, q_number, q_gas_limit, q_state_root, q_transactions_root, q_receipts_root, q_gas_used, q_timestamp, q_mix_hash, q_base_fee_per_gas] {
+            meta.lookup_any("Block header: Check reconstructed values for the lo parts of fields and for fields without hi/lo", |meta| {
+                let q_sel = and::expr([
+                                meta.query_fixed(sel, Rotation::cur()),
+                                not::expr(meta.query_fixed(sel, Rotation::next())),
+                ]);
+                vec![
+                    (
+                        q_sel.clone().expr() * meta.query_advice(blk_hdr_reconstruct_value, Rotation::cur()),
+                        meta.query_advice(block_table.value, Rotation::cur()),
+                    ),
+                ]
+            });
+        }
 
+        // TODO(George): add withdrawals_root
+        // TODO(George): check q_parent_hash
+        for sel in [q_state_root, q_transactions_root, q_receipts_root, q_gas_used, q_timestamp, q_mix_hash, q_base_fee_per_gas] {
+            meta.lookup_any("Block header: check reconstructed values for the hi parts of fields", |meta| {
+                let q_sel = and::expr([
+                                meta.query_fixed(sel, Rotation::cur()),
+                                meta.query_selector(q_hi),
+                                meta.query_fixed(q_lo, Rotation::next()),
+                ]);
+                vec![
+                    (
+                        q_sel.expr() * meta.query_advice(blk_hdr_reconstruct_value, Rotation::cur()),
+                        meta.query_advice(block_table.value, Rotation::cur()),
+                    )
+                ]
+            });
+        }
 
         // 2. Check RLC of RLP'd block header
         // Accumulate only bytes that have q_blk_hdr_rlp AND NOT(blk_hdr_is_leading_zero) and skip RLP headers if value is <0x80
@@ -1679,13 +1702,21 @@ impl<F: Field> PiCircuitConfig<F> {
         ),
         Error,
     > {
-        // TODO(George): Assign all needed block header data to the block_table
         let block_values = public_data.get_block_table_values();
         let extra_values = public_data.get_extra_values();
         let randomness = challenges.evm_word();
         self.q_start.enable(region, 0)?;
         let mut rlc_acc = Value::known(F::zero());
         let mut cells = vec![];
+        let beneficiary_value = Value::known(public_data.beneficiary.as_fixed_bytes().iter().fold(F::zero(),
+                                |mut acc, &x| {
+                                    for _ in 0..8 {
+                                        acc = acc.double();
+                                    }
+                                    acc += F::from(x as u64);
+                                    acc
+                                }));
+
         for (offset, (name, val, not_in_table)) in [
             ("zero", Value::known(F::zero()), false),
             (
@@ -1724,10 +1755,103 @@ impl<F: Field> PiCircuitConfig<F> {
         .chain(block_values.history_hashes.iter().map(|h| {
             (
                 "prev_hash",
-                randomness.map(|v| rlc(h.to_fixed_bytes(), v)),
+                randomness.map(|v| rlc(h.to_le_bytes(), v)),
                 false,
             )
         }))
+        .chain([
+            (
+                "beneficiary",
+                beneficiary_value,
+                false,
+            ),
+            (
+                "state_root_hi",
+                Value::known(F::from_u128(u128::from_be_bytes(public_data.state_root.to_fixed_bytes()[0..16].try_into().unwrap()))),
+                false,
+            ),
+            (
+                "state_root_lo",
+                Value::known(F::from_u128(u128::from_be_bytes(public_data.state_root.to_fixed_bytes()[16..32].try_into().unwrap()))),
+                false,
+            ),
+            (
+                "transactions_root_hi",
+                Value::known(F::from_u128(u128::from_be_bytes(public_data.transactions_root.to_fixed_bytes()[0..16].try_into().unwrap()))),
+                false,
+            ),
+            (
+                "transactions_root_lo",
+                Value::known(F::from_u128(u128::from_be_bytes(public_data.transactions_root.to_fixed_bytes()[16..32].try_into().unwrap()))),
+                false,
+            ),
+            (
+                "receipts_root_hi",
+                Value::known(F::from_u128(u128::from_be_bytes(public_data.receipts_root.to_fixed_bytes()[0..16].try_into().unwrap()))),
+                false,
+            ),
+            (
+                "receipts_root_lo",
+                Value::known(F::from_u128(u128::from_be_bytes(public_data.receipts_root.to_fixed_bytes()[16..32].try_into().unwrap()))),
+                false,
+            ),
+            (
+                "number",
+                Value::known(F::from(block_values.number)),
+                false,
+            ),
+            (
+                "gas_used_hi",
+                Value::known(F::from_u128(u128::from_be_bytes(public_data.gas_used.to_be_bytes()[0..16].try_into().unwrap()))),
+                false,
+            ),
+            (
+                "gas_used_lo",
+                Value::known(F::from_u128(u128::from_be_bytes(public_data.gas_used.to_be_bytes()[16..32].try_into().unwrap()))),
+                false,
+            ),
+            (
+                "timestamp_hi",
+                Value::known(F::from_u128(u128::from_be_bytes(block_values.timestamp.to_be_bytes()[0..16].try_into().unwrap()))),
+                false,
+            ),
+            (
+                "timestamp_lo",
+                Value::known(F::from_u128(u128::from_be_bytes(block_values.timestamp.to_be_bytes()[16..32].try_into().unwrap()))),
+                false,
+            ),
+            (
+                "mix_hash_hi",
+                Value::known(F::from_u128(u128::from_be_bytes(public_data.mix_hash.to_fixed_bytes()[0..16].try_into().unwrap()))),
+                false,
+            ),
+            (
+                "mix_hash_lo",
+                Value::known(F::from_u128(u128::from_be_bytes(public_data.mix_hash.to_fixed_bytes()[16..32].try_into().unwrap()))),
+                false,
+            ),
+            (
+                "base_fee_hi",
+                Value::known(F::from_u128(u128::from_be_bytes(block_values.base_fee.to_be_bytes()[0..16].try_into().unwrap()))),
+                false,
+            ),
+            (
+                "base_fee_lo",
+                Value::known(F::from_u128(u128::from_be_bytes(block_values.base_fee.to_be_bytes()[16..32].try_into().unwrap()))),
+                false,
+            ),
+            // TODO(George): add withdrawals root
+            // (
+            //     "withdrawals_root_hi",
+            //     Value::known(F::from_u128(u128::from_be_bytes(public_data.withdrawals_root.to_fixed_bytes()[0..16].try_into().unwrap()))),
+            //     false,
+            // ),
+            // (
+            //     "withdrawals_root_lo",
+            //     Value::known(F::from_u128(u128::from_be_bytes(public_data.withdrawals_root.to_fixed_bytes()[16..32].try_into().unwrap()))),
+            //     false,
+            // ),
+        ])
         .chain([
             (
                 "state.root",
@@ -2320,8 +2444,6 @@ impl<F: Field> PiCircuitConfig<F> {
 
         region.assign_advice(|| "blk_hdr_hash_hi", self.rpi_encoding, BLOCKHASH_TOTAL_ROWS-1, || blk_hdr_hash_hi).unwrap();
         region.assign_advice(|| "blk_hdr_hash_lo", self.rpi_encoding, BLOCKHASH_TOTAL_ROWS-2, || blk_hdr_hash_lo).unwrap();
-        println!("blk_hdr_hash_hi = {:?}", blk_hdr_hash_hi);
-        println!("blk_hdr_hash_lo = {:?}", blk_hdr_hash_lo);
     }
 
     fn assign(
@@ -2802,6 +2924,8 @@ mod pi_circuit_test {
         );
     }
 
+    // TODO(George): populate block.context.history_hashes in tests
+
     #[test]
     fn test_verify() {
         const MAX_TXS: usize = 8;
@@ -2861,7 +2985,6 @@ mod pi_circuit_test {
         block.eth_block.gas_used = U256::from(0x77);
         block.context.timestamp = U256::from(0x78);
         block.context.base_fee = U256::from(0x79);
-
         block.context.difficulty = U256::from(0);
 
         let public_data = PublicData::new(&block, prover, Default::default());
