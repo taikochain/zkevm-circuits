@@ -44,7 +44,7 @@ use lazy_static::lazy_static;
 
 /// Fixed by the spec
 const TX_LEN: usize = 10;
-const BLOCK_LEN: usize = 7 + 256*2 + 16;
+const BLOCK_LEN: usize = 7 + 256*2 + 18;
 const EXTRA_LEN: usize = 2;
 const ZERO_BYTE_GAS_COST: u64 = 4;
 const NONZERO_BYTE_GAS_COST: u64 = 16;
@@ -176,8 +176,8 @@ pub struct PublicData<F: Field> {
     pub gas_used: U256,
     /// Mix Hash
     pub mix_hash: H256,
-
-    // pub withdrawalsRoot: H256,
+    /// Withdrawals Root
+    pub withdrawals_root: H256,
 
     // private values
     block_rlp: Bytes,
@@ -302,11 +302,8 @@ impl<F: Field> PublicData<F> {
         stream
             .append(&block.eth_block.mix_hash.unwrap_or_else(H256::zero))
             .append(&vec![0u8; 8]) // nonce = 0
-            .append(&block.context.base_fee);
-
-        // TODO(George): can't find withdrawals_root in eth_block, use zeros for now
-        // rlp_opt(&mut stream, &block.withdrawals_root);
-        stream.append(&vec![0; 32]);
+            .append(&block.context.base_fee)
+            .append(&block.eth_block.withdrawals_root.unwrap_or_else(H256::zero));
 
         stream.finalize_unbounded_list();
         let out: bytes::Bytes = stream.out().into();
@@ -356,7 +353,7 @@ impl<F: Field> PublicData<F> {
             receipts_root: block.eth_block.receipts_root,
             gas_used: block.eth_block.gas_used,
             mix_hash: block.eth_block.mix_hash.unwrap_or_else(H256::zero),
-            // TODO(George): withdrawalsRoot: block.eth_block.,
+            withdrawals_root: block.eth_block.withdrawals_root.unwrap_or_else(H256::zero),
         }
     }
 
@@ -1073,7 +1070,7 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
 
                 cb.condition(rlp_is_short,
                     |cb| {
-                        cb.require_zero("Length is zero on a leading zero", length.clone());
+                        cb.require_zero("Length is set to zero for short values", length.clone());
                 });
 
                 cb.gate(field_sel)
@@ -1275,9 +1272,7 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
             });
         };
 
-        // TODO(George): add withdrawals_root
-        // TODO(George): check q_parent_hash
-        for sel in [q_beneficiary, q_number, q_gas_limit, q_parent_hash, q_state_root, q_transactions_root, q_receipts_root, q_gas_used, q_timestamp, q_mix_hash, q_base_fee_per_gas] {
+        for sel in [q_beneficiary, q_number, q_gas_limit, q_parent_hash, q_state_root, q_transactions_root, q_receipts_root, q_gas_used, q_timestamp, q_mix_hash, q_base_fee_per_gas, q_withdrawals_root] {
             meta.lookup_any("Block header: Check reconstructed values for the lo parts of fields and for fields without hi/lo", |meta| {
                 let q_sel = and::expr([
                                 meta.query_fixed(sel, Rotation::cur()),
@@ -1292,9 +1287,7 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
             });
         }
 
-        // TODO(George): add withdrawals_root
-        // TODO(George): check q_parent_hash
-        for sel in [q_parent_hash, q_state_root, q_transactions_root, q_receipts_root, q_gas_used, q_timestamp, q_mix_hash, q_base_fee_per_gas] {
+        for sel in [q_parent_hash, q_state_root, q_transactions_root, q_receipts_root, q_gas_used, q_timestamp, q_mix_hash, q_base_fee_per_gas, q_withdrawals_root] {
             meta.lookup_any("Block header: check reconstructed values for the hi parts of fields", |meta| {
                 let q_sel = and::expr([
                                 meta.query_fixed(sel, Rotation::cur()),
@@ -1855,17 +1848,16 @@ impl<F: Field> PiCircuitConfig<F> {
                 Value::known(F::from_u128(u128::from_be_bytes(block_values.base_fee.to_be_bytes()[16..32].try_into().unwrap()))),
                 false,
             ),
-            // TODO(George): add withdrawals root
-            // (
-            //     "withdrawals_root_hi",
-            //     Value::known(F::from_u128(u128::from_be_bytes(public_data.withdrawals_root.to_fixed_bytes()[0..16].try_into().unwrap()))),
-            //     false,
-            // ),
-            // (
-            //     "withdrawals_root_lo",
-            //     Value::known(F::from_u128(u128::from_be_bytes(public_data.withdrawals_root.to_fixed_bytes()[16..32].try_into().unwrap()))),
-            //     false,
-            // ),
+            (
+                "withdrawals_root_hi",
+                Value::known(F::from_u128(u128::from_be_bytes(public_data.withdrawals_root.to_fixed_bytes()[0..16].try_into().unwrap()))),
+                false,
+            ),
+            (
+                "withdrawals_root_lo",
+                Value::known(F::from_u128(u128::from_be_bytes(public_data.withdrawals_root.to_fixed_bytes()[16..32].try_into().unwrap()))),
+                false,
+            ),
         ])
         .chain([
             (
@@ -2105,11 +2097,8 @@ impl<F: Field> PiCircuitConfig<F> {
         stream
             .append(&public_data.mix_hash)
             .append(&vec![0u8; 8]) // nonce = 0
-            .append(&public_data.block_constants.base_fee);
-
-        // TODO(George): can't find withdrawals_root in eth_block, use zeros for now
-        // rlp_opt(&mut stream, &block.withdrawals_root);
-        stream.append(&vec![0; 32]);
+            .append(&public_data.block_constants.base_fee)
+            .append(&public_data.withdrawals_root);
 
         stream.finalize_unbounded_list();
         let out: bytes::Bytes = stream.out().into();
@@ -2309,11 +2298,8 @@ impl<F: Field> PiCircuitConfig<F> {
             public_data.mix_hash.as_fixed_bytes()[16..32].iter(),
             public_data.block_constants.base_fee.to_be_bytes()[0..16].iter(),
             public_data.block_constants.base_fee.to_be_bytes()[16..32].iter(),
-            // TODO(George): cannot find withdrawals_root in eth_block, use zeros for now
-            // &block.withdrawals_root.as_fixed_bytes()[0..16],
-            // &block.withdrawals_root.as_fixed_bytes()[16..32],
-            [0u8; 16].iter(),
-            [0u8; 16].iter(),
+            public_data.withdrawals_root.as_fixed_bytes()[0..16].iter(),
+            public_data.withdrawals_root.as_fixed_bytes()[16..32].iter(),
         ] {
             reconstructed_values.push(
                 value.clone()
@@ -2966,6 +2952,9 @@ mod pi_circuit_test {
         block.eth_block.mix_hash = Some(*OMMERS_HASH);
         block.eth_block.nonce = Some(H64::from([0, 0, 0, 0, 0, 0, 0, 0]));
         block.eth_block.base_fee_per_gas = Some(U256::from(0));
+        block.eth_block.withdrawals_root = Some(H256::zero());
+        block.context.history_hashes = vec![U256::zero(); 256];
+        block.context.history_hashes[255] = U256::from_big_endian(block.eth_block.parent_hash.as_fixed_bytes());
 
         let public_data = PublicData::new(&block, prover, Default::default());
 
@@ -2994,13 +2983,15 @@ mod pi_circuit_test {
         block.eth_block.extra_data = eth_types::Bytes::from([0; 0]);
         block.eth_block.mix_hash = Some(*OMMERS_HASH);
         block.eth_block.nonce = Some(H64::from([0, 0, 0, 0, 0, 0, 0, 0]));
-
         block.context.number = U256::from(0x75);
         block.context.gas_limit = 0x76;
         block.eth_block.gas_used = U256::from(0x77);
         block.context.timestamp = U256::from(0x78);
         block.context.base_fee = U256::from(0x79);
         block.context.difficulty = U256::from(0);
+        block.eth_block.withdrawals_root = Some(H256::from_slice(&hex::decode("61223344dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49353").unwrap()));
+        block.context.history_hashes = vec![U256::zero(); 256];
+        block.context.history_hashes[255] = U256::from_big_endian(block.eth_block.parent_hash.as_fixed_bytes());
 
         let public_data = PublicData::new(&block, prover, Default::default());
 
@@ -3029,14 +3020,15 @@ mod pi_circuit_test {
         block.eth_block.extra_data = eth_types::Bytes::from([0; 0]);
         block.eth_block.mix_hash = Some(*OMMERS_HASH);
         block.eth_block.nonce = Some(H64::from([0, 0, 0, 0, 0, 0, 0, 0]));
-
         block.context.number = U256::from(0x81);
         block.context.gas_limit = 0x81;
         block.eth_block.gas_used = U256::from(0x81);
         block.context.timestamp = U256::from(0x81);
         block.context.base_fee = U256::from(0x81);
-
         block.context.difficulty = U256::from(0);
+        block.eth_block.withdrawals_root = Some(H256::from_slice(&hex::decode("61223344dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49353").unwrap()));
+        block.context.history_hashes = vec![U256::zero(); 256];
+        block.context.history_hashes[255] = U256::from_big_endian(block.eth_block.parent_hash.as_fixed_bytes());
 
         let public_data = PublicData::new(&block, prover, Default::default());
 
@@ -3065,14 +3057,15 @@ mod pi_circuit_test {
         block.eth_block.extra_data = eth_types::Bytes::from([0; 0]);
         block.eth_block.mix_hash = Some(*OMMERS_HASH);
         block.eth_block.nonce = Some(H64::from([0, 0, 0, 0, 0, 0, 0, 0]));
-
         block.context.number = U256::from(0xFF);
         block.context.gas_limit = 0xFF;
         block.eth_block.gas_used = U256::from(0xFF);
         block.context.timestamp = U256::from(0xFF);
         block.context.base_fee = U256::from(0xF);
-
         block.context.difficulty = U256::from(0);
+        block.eth_block.withdrawals_root = Some(H256::from_slice(&hex::decode("61223344dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49353").unwrap()));
+        block.context.history_hashes = vec![U256::zero(); 256];
+        block.context.history_hashes[255] = U256::from_big_endian(block.eth_block.parent_hash.as_fixed_bytes());
 
         let public_data = PublicData::new(&block, prover, Default::default());
 
@@ -3101,14 +3094,15 @@ mod pi_circuit_test {
         block.eth_block.extra_data = eth_types::Bytes::from([0; 0]);
         block.eth_block.mix_hash = Some(*OMMERS_HASH);
         block.eth_block.nonce = Some(H64::from([0, 0, 0, 0, 0, 0, 0, 0]));
-
         block.context.number = U256::from(0x0090909090909090_u128);
         block.context.gas_limit = 0x0000919191919191;
         block.eth_block.gas_used = U256::from(0x92) << (28*8);
         block.context.timestamp = U256::from(0x93) << (27*8);
         block.context.base_fee = U256::from(0x94) << (26*8);
-
         block.context.difficulty = U256::from(0);
+        block.eth_block.withdrawals_root = Some(H256::from_slice(&hex::decode("61223344dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49353").unwrap()));
+        block.context.history_hashes = vec![U256::zero(); 256];
+        block.context.history_hashes[255] = U256::from_big_endian(block.eth_block.parent_hash.as_fixed_bytes());
 
         let public_data = PublicData::new(&block, prover, Default::default());
 
@@ -3143,6 +3137,7 @@ mod pi_circuit_test {
         block.context.timestamp = U256::from(0x93) << (31*8);
         block.context.base_fee = U256::from(0x94) << (31*8);
         block.context.difficulty = U256::from(0);
+        block.eth_block.withdrawals_root = Some(H256::from_slice(&hex::decode("61223344dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49353").unwrap()));
         block.context.history_hashes = vec![U256::zero(); 256];
         block.context.history_hashes[255] = U256::from_big_endian(block.eth_block.parent_hash.as_fixed_bytes());
 
