@@ -135,18 +135,7 @@ impl PublicData {
 
     /// create PublicData from block and taiko
     pub fn new<F>(block: &witness::Block<F>, taiko: &witness::Taiko) -> Self {
-        // left shift x by n bits
-        fn left_shift<T: ToWord>(x: T, n: u32) -> Word {
-            assert!(n < 256);
-            if n < 128 {
-                return x.to_word() * Word::from(2u128.pow(n));
-            }
-            let mut bits = [0; 32];
-            bits[..16].copy_from_slice(2u128.pow(n - 128).to_be_bytes().as_ref());
-            bits[16..].copy_from_slice(0u128.to_be_bytes().as_ref());
-            x.to_word() * Word::from(&bits[..])
-        }
-
+        use witness::left_shift;
         let field9 = left_shift(taiko.prover, 96)
             + left_shift(taiko.parent_gas_used as u64, 64)
             + left_shift(taiko.gas_used as u64, 32);

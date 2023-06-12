@@ -1,8 +1,11 @@
 //! extra witness for taiko circuits
 
+use std::iter;
+
 use crate::{evm_circuit::util::rlc, table::PiFieldTag};
-use eth_types::{Address, Field, Hash, ToLittleEndian, ToWord, H256};
+use eth_types::{Address, Field, Hash, ToBigEndian, ToLittleEndian, ToWord, Word, H256};
 use halo2_proofs::circuit::Value;
+use keccak256::plain::Keccak;
 
 const ANCHOR_TX_METHOD_SIGNATURE: u32 = 0x3d384a4b;
 
@@ -42,6 +45,7 @@ pub struct Taiko {
     pub anchor_gas_cost: u64,
 }
 
+/// l1 meta hash
 #[derive(Debug, Default, Clone)]
 pub struct MetaHash {
     /// meta id
@@ -70,9 +74,45 @@ pub struct MetaHash {
     pub treasury: Address,
 }
 
+/// left shift x by n bits
+pub fn left_shift<T: ToWord>(x: T, n: u32) -> Word {
+    assert!(n < 256);
+    if n < 128 {
+        return x.to_word() * Word::from(2u128.pow(n));
+    }
+    let mut bits = [0; 32];
+    bits[..16].copy_from_slice(2u128.pow(n - 128).to_be_bytes().as_ref());
+    bits[16..].copy_from_slice(0u128.to_be_bytes().as_ref());
+    x.to_word() * Word::from(&bits[..])
+}
+
 impl MetaHash {
+    /// get the hash of meta hash
     pub fn hash(&self) -> Hash {
-        todo!()
+        let field0 = left_shift(self.id as u64, 192)
+            + left_shift(self.timestamp as u64, 128)
+            + left_shift(self.l1_height as u64, 64);
+
+        let field5 = left_shift(self.tx_list_byte_start as u64, 232)
+            + left_shift(self.tx_list_byte_end as u64, 208)
+            + left_shift(self.gas_limit as u64, 176)
+            + left_shift(self.beneficiary, 16);
+
+        let field6 = left_shift(self.treasury, 96);
+
+        let input: Vec<u8> = iter::empty()
+            .chain(field0.to_be_bytes())
+            .chain(self.l1_hash.to_fixed_bytes())
+            .chain(self.l1_mix_hash.to_fixed_bytes())
+            .chain(self.deposits_processed.to_fixed_bytes())
+            .chain(self.tx_list_hash.to_fixed_bytes())
+            .chain(field5.to_be_bytes())
+            .chain(field6.to_be_bytes())
+            .collect();
+        let mut keccak = Keccak::default();
+        keccak.update(&input);
+        let output = keccak.digest();
+        Hash::from_slice(&output)
     }
 }
 
