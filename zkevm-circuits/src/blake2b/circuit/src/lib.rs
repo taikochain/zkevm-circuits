@@ -44,10 +44,31 @@
     Relative places of combined selectors for a gate type is described by an array of "Combiselector" struct instances. A gate is 
     assigned at some row iff all of the corresponding combined selectors are active. They are called the CONTROL SELECTORS of the gate.
 
-    In order to achieve better in-circuit integration, the approach called "random linear combintaion hashing" is used. The corresponding 
+    In order to achieve better in-circuit integration, the approach called "random linear combination hashing" is used. The corresponding 
     hash of d, which is an array of n native field elements, for the challenge c and key k is designated as RLC(c, d) and computed as follows:
     RLC(k, c, d) = k * c^n + c^(n-1) * d[0] + c^(n-2) * d[1] + ... + c * d[n - 2] + d[n - 1]. It is not hard to verify that RLC has the given 
-    useful property: RLC(0, c, a|b) = RLC(RLC(0, c, a), c, b), where a|b stands for the concatenation of arrays a and b.   
+    useful property: RLC(0, c, a|b) = RLC(RLC(0, c, a), c, b), where a|b stands for the concatenation of arrays a and b.
+
+    The computation of the BLAKE2b compression function is described in the circuit by the sequence of the gates. The sequence starts with an 
+    InitialGate instance followed by zero or more instances of the RoundGate and ends with a FinalGate instance. This sequence describes the 
+    state evolution of the abstract BLAKE2b compression function calculator described below. Its inputs are h, m, t and f defined in RFC 7693,
+    the amount of rounds left to be performed and the challenge used for random linear combination hashing. The InitialGate uses these inputs 
+    to compute the calculator's pre-round state. The pre-round, inter-round and post-round states have the same structure, which includes the 
+    amount of rounds left to be performed, the random linear combination hash of the corresponding compression function input, m permuted for 
+    the current round, h, v (defined in RFC 7693) and the array of 10 binary flags indicating the counted from 0 number of the current round 
+    modulo 10 by the only non-zero entry. A RoundGate instance describes the transition between the calculator's states caused by performing 
+    a round, which changes the value of v in accordance with RFC 7693. A FinalGate instance computes the final calculator's state including 
+    the output of the BLAKE2b compression function as well as the random linear combination hash of the concatenation of the input and output  
+    of this function. The input data of the RoundGate and FinalGate are validated to be the output data of an instance of either RoundGate or 
+    InitialGate. This validation is done by checking the states of the specified combined selectors, the activity of which imply the existence 
+    of the gate instances producing the input data for the current gate. The amount of rounds left to be performed is checked by the FinalGate 
+    to be zero.
+    
+    For the InitialGate, RoundGate and FinalGate instances the little-endian representations of the used or computed 64-bit values are taken from 
+    or assigned to the specified input byte-column chunks of height 8. For storing the amounts of rounds left to be performed and the random linear 
+    combination hashes the specified unconstrained column cells are used. The 10 binary flags for both the states are stored in the form of the 
+    specified combined selectors, which control the gate instances computing the m permuted for the next round. The value of f is taken from the 
+    specified bit cell. Some specified cells are used to store the intermediate results of the computation performed by the gate instance.  
 */
 
 use std::{ marker::PhantomData, array, convert::TryInto };
@@ -195,7 +216,7 @@ impl<F:FieldExt, const H:u8> Chunk<F, H> {
     // and offset relative to the assignment row
     pub fn new(column: Column<Advice>, offset: i32) -> Self {
         assert!(H <= 8, "Cannot create the {}-cell Chunk. The maximum height is 8!", H);
-        Chunk { column, offset, _marker: PhantomData }
+        Self { column, offset, _marker: PhantomData }
     }
 
     // Creates the instance of Expression for the specified cell of the Chunk
@@ -234,7 +255,7 @@ impl<F:FieldExt, const M:u8> ShortCell<F, M> {
     // Creates a ShortCell for the specified constrained  
     // column and offset relative to the assignment row
     pub fn new(column: Column<Advice>, offset: i32) -> Self {
-        ShortCell { column, offset, _marker: PhantomData }
+        Self { column, offset, _marker: PhantomData }
     }
 
     // Creates the instance of Expression for the ShortCell
@@ -269,8 +290,7 @@ impl<F:FieldExt, const H:u8> XChunk<F, H> {
         Self { xtriplet, offset, _marker: PhantomData }
     }
 
-    // Creates the H-cell Chunk, which is the current XChunk instance part contained 
-    // in the column specified by "index", the value of which can be 0, 1 or 2
+    // Creates the H-cell Chunk, which describes the "index"-th part of the current XChunk instance
     pub fn operand(&self, index: usize) -> Chunk<F,H> {
         assert!(index < 3, "The operand {} does not exist in XChunks!", index);
         Chunk::<F,H>::new(self.xtriplet[index], self.offset)
@@ -609,7 +629,7 @@ impl<F:FieldExt, const S:usize> AddGate<F,S> {
 // subcolumn of the xor column triplet chunk
 #[derive(Clone)]
 pub struct XorGate<F:FieldExt>{ 
-    result: OctaChunk<F> // The third subcolumn of the xor column triplet chunk 
+    result: OctaChunk<F> // The third part of the XChunk instance used by the gate
 }
 
 impl<F:FieldExt> XorGate<F> {
@@ -813,8 +833,8 @@ impl<F:FieldExt, const L:usize> PermuteGate<F,L> {
 }
 
 // Defines the gate class, whose representatives set the states of the combined selectors from 
-// the specified target list in such a way that the ((i + 1) mod L)-th selector of this list has 
-// the same state as i-th combined selector of the specified input list
+// the specified target list in such a way that the ((i + 1) mod L)-th selector of this list 
+// has the same state as i-th combined selector of the specified input list
 #[derive(Clone)]
 pub struct SelectorShiftGate<F:FieldExt, const L:usize>{
     selectors: Vec<Combiselector<F>>, // The control Combiselectors
@@ -857,7 +877,7 @@ impl<F:FieldExt, const L:usize> SelectorShiftGate<F,L> {
 }
 
 // Defines the gate class, whose representatives assign to the specified target unconstrained 
-// column cell the random linear combintaion hash of a certain BLAKE2b compression function 
+// column cell the random linear combination hash of a certain BLAKE2b compression function 
 // input. This hash is equal to RLC(0, c, field(r|h|m|(t mod 2^64)|(t div 2^64)|f)), where 
 // c is the specfied challenge, r, h, m, t, f are defined as in RFC 7693 and field(d) maps 
 // the number tuple d to the array of the naturally corresponding native field elements. The 
@@ -874,7 +894,7 @@ impl<F:FieldExt> InitialRLCGate<F> {
     fn configure(meta: &mut ConstraintSystem<F>,
                  // The control Combiselectors
                  selectors: &[Combiselector<F>],
-                 // The challenge for hashing
+                 // The challenge used for hashing
                  challenge: Challenge,
                  // The GeneralCell of the number of rounds
                  r: GeneralCell<F,1>,
@@ -924,7 +944,7 @@ impl<F:FieldExt> InitialRLCGate<F> {
 }
 
 // Defines the gate class, whose representatives assign to the specified target unconstrained 
-// column cell the random linear combintaion hash of a certain BLAKE2b compression function 
+// column cell the random linear combination hash of a certain BLAKE2b compression function 
 // input and output. The hash is equal to RLC(0, c, field(r|h|m|(t mod 2^64)|(t div 2^64)|f|o)), 
 // where c is the specfied challenge, r, h, m, t, f are defined as in RFC 7693, o is the output 
 // state vector and field(d) maps the number tuple d to the array of the naturally corresponding 
@@ -932,7 +952,7 @@ impl<F:FieldExt> InitialRLCGate<F> {
 // RLC(0, c, field(r|h|m|(t mod 2^64)|(t div 2^64)|f|o)) = RLC(i, c, field(o)), where i is the
 // hash of the compression function input computed by an InitialRLCGate and taken from the specified 
 // input unconstrained column cell.The little-endian representations of elements of o are taken from 
-// the specified input byte-column chunks of height 8.   
+// the specified input byte-column chunks of height 8   
 #[derive(Clone)]
 pub struct FinalRLCGate<F:FieldExt>{
     selectors: Vec<Combiselector<F>>, // The control Combiselectors
@@ -979,54 +999,71 @@ impl<F:FieldExt> FinalRLCGate<F> {
     }
 }
 
+// Defines the gate class, whose representatives compute the new values of four entries of the local state vector v, 
+// which are used by the mixing function G in accordance with RFC 7693. The little-endian representations of the 64-bit 
+// values of the four affected entries of v and two entries of the message block vector m, which are used by G, are taken 
+// from the specified input byte-column chunks of height 8. The results of computation are assigned to the specified such
+// chunks. Some specified cells are used to store the intermediate results of the computation 
 #[derive(Clone)]
-pub struct GGate<F:FieldExt>{
-    copy: [CopyGate<F>; 4],
-    add3: [AddGate<F, 3>; 2],
-    add2: [AddGate<F, 2>; 2],
-    xors: [XorGate<F>; 4],
-    shift32: ShiftBytesGate<F, 4>,
-    shift24: ShiftBytesGate<F, 3>,
-    shift16: ShiftBytesGate<F, 2>,
-    shift63: Shift63Gate<F>,
+pub struct GGate<F:FieldExt> {
+    copy: [CopyGate<F>; 4], // The gate types used for copying the values to subcolumns of xor column triplet chunks  
+    add3: [AddGate<F, 3>; 2], // The gate types used for computing (v[a] + v[b] + x) mod 2**w and (v[a] + v[b] + y) mod 2**w 
+    add2: [AddGate<F, 2>; 2], // The gate types used for computing (v[c] + v[d]) mod 2**w 
+    xors: [XorGate<F>; 4], // The gate types used for computing the expressions involving the bitwise xor operation 
+    shift32: ShiftBytesGate<F, 4>, // The gate type used for computing (v[d] ^ v[a]) >>> R1, where R1 = 32 
+    shift24: ShiftBytesGate<F, 3>, // The gate type used for computing (v[b] ^ v[c]) >>> R2, where R2 = 24 
+    shift16: ShiftBytesGate<F, 2>, // The gate type used for computing (v[d] ^ v[a]) >>> R3, where R3 = 16 
+    shift63: Shift63Gate<F> // The gate type used for computing (v[b] ^ v[c]) >>> R4, where R4 = 63
 }
 
 impl<F:FieldExt> GGate<F> {
     fn configure(meta: &mut ConstraintSystem<F>,
+                 // The control Combiselectors
                  selectors: &[Combiselector<F>],
+                 // The array of the Chunks of the initial values of v[a], v[b], v[c] and v[d]
                  input: &[OctaChunk<F>; 4],
+                 // The Chunk of x
                  x: OctaChunk<F>,
+                 // The Chunk of y
                  y: OctaChunk<F>,
-                 misc1: BitCell<F>,
-                 misc7: SeptaCell<F>,
-                 misc8: &[ByteChunk<F>; 4],
-                 xchunks: &[XChunk<F,8>; 4],                 
-                 result: &[OctaChunk<F>; 4]) -> Self { 
+                 // The ShortCell of the intermediate results of the computation 
+                 bit: BitCell<F>,
+                 // The ShortCell of the intermediate results of the computation 
+                 septet: SeptaCell<F>,
+                 // The array of the Chunks of the intermediate results of the computation
+                 bytes: &[ByteChunk<F>; 4],
+                 // The array of the XChunks of the intermediate results of the computation
+                 xchunks: &[XChunk<F,8>; 4],
+                 // The array of the Chunks of the new values of v[a], v[b], v[c] and v[d]
+                 result: &[OctaChunk<F>; 4]) -> Self {
+         // The Chunks of the intermediate values of v[a], v[b], v[c] and v[d] in the middle of the computation of G
         let [a, c, d, b]: [OctaChunk<F>; 4] = array::from_fn(|i| xchunks[i].operand(0)); 
         let xout: [OctaChunk<F>; 4] = array::from_fn(|i| xchunks[i].operand(2));
 
-        GGate {
+        Self {
             copy: [CopyGate::<F>::configure(meta, selectors, input[3], xchunks[0].operand(1)),
                    CopyGate::<F>::configure(meta, selectors, input[1], xchunks[1].operand(1)),
                    CopyGate::<F>::configure(meta, selectors, result[0], xchunks[2].operand(1)),
                    CopyGate::<F>::configure(meta, selectors, result[2], xchunks[3].operand(1))],
 
             xors: [XorGate::<F>::configure(xchunks[0]), XorGate::<F>::configure(xchunks[1]), 
-                  XorGate::<F>::configure(xchunks[2]), XorGate::<F>::configure(xchunks[3])],
+                   XorGate::<F>::configure(xchunks[2]), XorGate::<F>::configure(xchunks[3])],
 
-            add3: [AddGate::<F, 3>::configure(meta, selectors, &[input[0], input[1], x], a, misc8[0]),
-                   AddGate::<F, 3>::configure(meta, selectors, &[a, b, y], result[0], misc8[1])],
+            add3: [AddGate::<F, 3>::configure(meta, selectors, &[input[0], input[1], x], a, bytes[0]),
+                   AddGate::<F, 3>::configure(meta, selectors, &[a, b, y], result[0], bytes[1])],
             
-            add2: [AddGate::<F, 2>::configure(meta, selectors, &[d, input[2]], c, misc8[2]),
-                   AddGate::<F, 2>::configure(meta, selectors, &[c, result[3]], result[2], misc8[3])],
+            add2: [AddGate::<F, 2>::configure(meta, selectors, &[d, input[2]], c, bytes[2]),
+                   AddGate::<F, 2>::configure(meta, selectors, &[c, result[3]], result[2], bytes[3])],
             
             shift32: ShiftBytesGate::<F, 4>::configure(meta, selectors, xout[0], d),
             shift24: ShiftBytesGate::<F, 3>::configure(meta, selectors, xout[1], b),
             shift16: ShiftBytesGate::<F, 2>::configure(meta, selectors, xout[2], result[3]),      
-            shift63: Shift63Gate::<F>::configure(meta, selectors, xout[3], misc1, misc7, result[1]),
+            shift63: Shift63Gate::<F>::configure(meta, selectors, xout[3], bit, septet, result[1]),
         }
     }
 
+    // The input of the function G is specified according to RFC 7693, the results 
+    // of computation are returned by means of updating the vector referenced by "v"
     fn assign(&self, region: &mut Region<F>, row: usize, v: &mut [u64; 16], 
         a: usize, b: usize, c: usize, d: usize, x: u64, y: u64) -> Result<(), Error> {
 
@@ -1052,126 +1089,47 @@ impl<F:FieldExt> GGate<F> {
     }
 }
 
-#[derive(Clone)]
-pub struct RoundGate<F: FieldExt> {
-    l: DownCounterGate<F,1>,
-    h: PermuteGate<F,8>,
-    p: SelectorShiftGate<F,10>,
-    m: [PermuteGate<F,16>; 10],
-    v: [GGate<F>; 8],
-    rlc: CopyGeneralGate<F,2>
-}
-
-impl<F:FieldExt> RoundGate<F> {
-    fn configure(meta: &mut ConstraintSystem<F>,
-                 selectors: &[Combiselector<F>],
-                 initial: &[Combiselector<F>],
-                 round: &[Combiselector<F>],
-                 left: [GeneralCell<F,1>; 2],
-                 h: [&[OctaChunk<F>; 8]; 2],
-                 m: [&[OctaChunk<F>; 16]; 2],
-                 v: [&[OctaChunk<F>; 16]; 2],
-                 rlc: [GeneralCell<F,2>; 2],
-                 misc1: &[BitCell<F>; 8],
-                 misc7: &[SeptaCell<F>; 8],
-                 misc8: &[ByteChunk<F>; 32],
-                 misc64: &[OctaChunk<F>; 16],
-                 xchunks: &[XChunk<F,8>; 32],
-                 permutators: [&[Combiselector<F>; 10]; 2]) -> Self {
-        let miscs8: [&[ByteChunk<F>; 4]; 8] = arrefs_from_slice(misc8);
-        let xors: [&[XChunk<F,8>; 4]; 8] = arrefs_from_slice(xchunks);
-        let ([pi, po], [mi, mo], [vi, vo]) = (permutators, m, v);
-        assert_single_active(meta, selectors, &[initial, round]);
-
-        Self {
-            l: DownCounterGate::<F,1>::configure(meta, selectors, left[0], left[1]),
-
-            h: PermuteGate::<F, 8>::configure(meta, selectors, None, h[0], h[1]),
-
-            p: SelectorShiftGate::<F, 10>::configure(meta, selectors, pi, po),
-
-            m: array::from_fn(|i| {
-                let permutation = permutation::compose(&permutation::invert(&SIGMA[i]), &SIGMA[(i + 1) % 10]);
-                PermuteGate::configure(meta, &[selectors, &pi[i..i + 1]].concat(), Some(&permutation), &mi, &mo)
-            }),
-
-            v: [GGate::configure(meta, selectors, &[vi[0], vi[4], vi[8], vi[12]], mi[0], 
-                    mi[1], misc1[0], misc7[0], miscs8[0], xors[0], &[misc64[0], misc64[4], misc64[8], misc64[12]]),
-                GGate::configure(meta, selectors, &[vi[1], vi[5], vi[9], vi[13]], mi[2], 
-                    mi[3], misc1[1], misc7[1], miscs8[1], xors[1], &[misc64[1], misc64[5], misc64[9], misc64[13]]),
-                GGate::configure(meta, selectors, &[vi[2], vi[6], vi[10], vi[14]], mi[4], 
-                    mi[5], misc1[2], misc7[2], miscs8[2], xors[2], &[misc64[2], misc64[6], misc64[10], misc64[14]]),
-                GGate::configure(meta, selectors, &[vi[3], vi[7], vi[11], vi[15]], mi[6], 
-                    mi[7], misc1[3], misc7[3], miscs8[3], xors[3], &[misc64[3], misc64[7], misc64[11], misc64[15]]),
-
-                GGate::configure(meta, selectors, &[misc64[0], misc64[5], misc64[10], misc64[15]], mi[8], 
-                    mi[9], misc1[4], misc7[4], miscs8[4], xors[4], &[vo[0], vo[5], vo[10], vo[15]]),
-                GGate::configure(meta, selectors, &[misc64[1], misc64[6], misc64[11], misc64[12]], mi[10], 
-                    mi[11], misc1[5], misc7[5], miscs8[5], xors[5], &[vo[1], vo[6], vo[11], vo[12]]),
-                GGate::configure(meta, selectors, &[misc64[2], misc64[7], misc64[8], misc64[13]], mi[12], 
-                    mi[13], misc1[6], misc7[6], miscs8[6], xors[6], &[vo[2], vo[7], vo[8], vo[13]]),                
-                GGate::configure(meta, selectors, &[misc64[3], misc64[4], misc64[9], misc64[14]], mi[14], 
-                    mi[15], misc1[7], misc7[7], miscs8[7], xors[7], &[vo[3], vo[4], vo[9], vo[14]])
-            ],
-
-            rlc: CopyGeneralGate::<F,2>::configure(meta, selectors, rlc[0], rlc[1])
-        }
-    }
-
-    fn assign(&self, region: &mut Region<F>, row: usize, rlc: Value<F>, round: &mut usize, 
-        left: &mut F, h: &[u64; 8], m: &mut [u64; 16], v: &mut [u64; 16]) -> Result<(), Error> {
-        
-        *left = self.l.assign(region, row, *left)?;   
-        self.h.assign(region, row, h)?;
-
-        self.v[0].assign(region, row, v, 0, 4, 8, 12, m[0], m[1])?;
-        self.v[1].assign(region, row, v, 1, 5, 9, 13, m[2], m[3])?;
-        self.v[2].assign(region, row, v, 2, 6, 10, 14, m[4], m[5])?;
-        self.v[3].assign(region, row, v, 3, 7, 11, 15, m[6], m[7])?;
-
-        self.v[4].assign(region, row, v, 0, 5, 10, 15, m[8], m[9])?;
-        self.v[5].assign(region, row, v, 1, 6, 11, 12, m[10], m[11])?;
-        self.v[6].assign(region, row, v, 2, 7, 8, 13, m[12], m[13])?;
-        self.v[7].assign(region, row, v, 3, 4, 9, 14, m[14], m[15])?;
-
-        self.p.assign(region, row, &array::from_fn(|i| i == *round % 10))?;
-        *m = self.m[*round % 10].assign(region, row, m)?;
-        *round += 1;
-
-        self.rlc.assign(region, row, rlc)?;
-
-        Ok(())
-    }
-}
-
+// Defines the gate class, whose representatives compute the pre-round  
+// state of the abstract BLAKE2b compression function calculator
 #[derive(Clone)]
 pub struct InitialGate<F: FieldExt> {
-    rlc: InitialRLCGate<F>,
-    half: PermuteGate<F,8>,
-    quarter: ConstantMultiGate<F,4>,
-    x: ConstantMultiGate<F,2>,
-    t: PermuteGate<F,2>,
-    xors: [XorGate<F>; 2],
-    xout: PermuteGate::<F,2>,
-    not: BiconstantGate<F>,
-    last: ConstantGate<F>,
-    permutators: SelectorMultiGate<F,10>
+    rlc: InitialRLCGate<F>, // The gate type for computing the random linear combination hash
+    half: PermuteGate<F,8>, // The gate type for computing the first half of the local work vector
+    quarter: ConstantMultiGate<F,4>, // The gate type for computing the third quarter of the local work vector
+    x: ConstantMultiGate<F,2>, // The gate types for assigning the Blake2 initialization vector data to subcolumns of xor column triplet chunks
+    t: PermuteGate<F,2>, // The gate types for copying the data of the vector (t mod 2^64, t div 2^64) to subcolumns of xor column triplet chunks
+    xors: [XorGate<F>; 2], // The gate types for computing the 12-th and 13-th elements of the local work vector   
+    xout: PermuteGate::<F,2>, // The gate types for copying the values from the third subcolumns of xor column triplet chunks
+    not: BiconstantGate<F>, // The gate type for computing the 14-th element of the local work vector 
+    last: ConstantGate<F>, // The gate type for computing the 15-th element of the local work vector
+    permutators: SelectorMultiGate<F,10> // The gate type used for setting the states of the 10 "binary flags" combined selectors
 }
 
 impl<F:FieldExt> InitialGate<F> {
     fn configure(meta: &mut ConstraintSystem<F>,
+                 // The control Combiselectors
                  selectors: &[Combiselector<F>],
+                 // The challenge used for random linear combination hashing
                  challenge: Challenge,
+                 // The GeneralCell of the amount of rounds to be performed. It is also a part of the calculator's pre-round state
                  r: GeneralCell<F,1>,
+                 // The array of the Chunks of the initial state vector. It is also a part of the calculator's pre-round  state
                  h: &[OctaChunk<F>; 8],
+                 // The array of the Chunks of the message block vector. It is also a part of the calculator's pre-round state
                  m: &[OctaChunk<F>; 16],
+                 // The array of the Chunks of the vector (t mod 2^64, t div 2^64) descibing the offset counter
                  t: &[OctaChunk<F>; 2],
+                 // The ShortCell of the final block indicator flag
                  f: BitCell<F>,
+                 // The array of the XChunks of the intermediate results of the computation
                  xchunks: &[XChunk<F,8>; 2],
+                 // The array of the Chunks of the local work vector computed for the calculator's pre-round state
                  v: &[OctaChunk<F>; 16],
+                 // The GeneralCell of the random linear combination hash computed for the calculator's pre-round state
                  rlc: GeneralCell<F,2>,
+                 // The Combiselector array of the 10 "binary flags" combined selectors computed for the calculator's pre-round state
                  permutators: &[Combiselector<F>; 10]) -> Self {       
-        InitialGate {
+        Self {
             half: PermuteGate::<F,8>::configure(meta, selectors, 
                 None, &h, &v[0..8].try_into().unwrap()),
 
@@ -1199,6 +1157,7 @@ impl<F:FieldExt> InitialGate<F> {
         }
     }
 
+    // The challenge is specified by "challenge", the elements of the compression function input are specified according to RFC 7693 
     fn assign(&self, region: &mut Region<F>, row: usize, challenge: Value<F>, r: F, 
         h: &[u64; 8], m: &[u64; 16], t: u128, f: bool) -> Result<(Value<F>, [u64; 16]), Error> {
         
@@ -1224,32 +1183,158 @@ impl<F:FieldExt> InitialGate<F> {
     }
 }
 
+// Defines the gate class, whose representatives compute the new state of the    
+// abstract BLAKE2b compression function calculator after it performs a round
+#[derive(Clone)]
+pub struct RoundGate<F: FieldExt> {
+    l: DownCounterGate<F,1>, // The gate type for computing the new amount of rounds left to be performed 
+    h: PermuteGate<F,8>, // The gate type for copying the value of h, since it is unchanged
+    p: SelectorShiftGate<F,10>, // The gate type for computing the new states of the 10 "binary flags" combined selectors
+    m: [PermuteGate<F,16>; 10], // The gate type for computing the value of m permuted for the next round    
+    v: [GGate<F>; 8], // The gate types for computing the expressions involving the mixing function G
+    rlc: CopyGeneralGate<F,2> // The gate type for copying the random linear combination hash, since it is unchanged
+}
+
+impl<F:FieldExt> RoundGate<F> {
+    fn configure(meta: &mut ConstraintSystem<F>,
+                 // The control Combiselectors
+                 selectors: &[Combiselector<F>],
+                 // The Combiselectors, whose activity imply the existence of the InitialGate instance producing the input data for this gate
+                 initial: &[Combiselector<F>],
+                 // The Combiselectors, whose activity imply the existence of the RoundGate instance producing the input data for this gate
+                 round: &[Combiselector<F>],
+                 // The GeneralCells of the current and new amounts of rounds left to be performed
+                 left: [GeneralCell<F,1>; 2],
+                 // The Chunk arrays of h for the current and new states of the calculator 
+                 h: [&[OctaChunk<F>; 8]; 2],
+                 // The Chunk arrays of the m values permuted for the current and next rounds
+                 m: [&[OctaChunk<F>; 16]; 2],
+                 // The Chunk arrays of the current and new values of v 
+                 v: [&[OctaChunk<F>; 16]; 2],
+                 // The GeneralCells of the random linear combination hash for the current and new states of the calculator 
+                 rlc: [GeneralCell<F,2>; 2],
+                 // The array of the ShortCells of the intermediate results of the computation
+                 bits: &[BitCell<F>; 8],
+                 // The array of the ShortCells of the intermediate results of the computation
+                 septets: &[SeptaCell<F>; 8],
+                 // The array of the Chunks of the intermediate results of the computation
+                 bytes: &[ByteChunk<F>; 32],
+                 // The array of the Chunks of the intermediate results of the computation
+                 qwords: &[OctaChunk<F>; 16],
+                 // The array of the XChunks of the intermediate results of the computation
+                 xchunks: &[XChunk<F,8>; 32],
+                 // The Combiselector arrays of the 10 "binary flags" combined selectors for the current and new states of the calculator
+                 permutators: [&[Combiselector<F>; 10]; 2]) -> Self {
+        let bytes: [&[ByteChunk<F>; 4]; 8] = arrefs_from_slice(bytes);
+        let xors: [&[XChunk<F,8>; 4]; 8] = arrefs_from_slice(xchunks);
+        let ([pi, po], [mi, mo], [vi, vo]) = (permutators, m, v);
+        assert_single_active(meta, selectors, &[initial, round]);
+
+        Self {
+            l: DownCounterGate::<F,1>::configure(meta, selectors, left[0], left[1]),
+
+            h: PermuteGate::<F, 8>::configure(meta, selectors, None, h[0], h[1]),
+
+            p: SelectorShiftGate::<F, 10>::configure(meta, selectors, pi, po),
+
+            m: array::from_fn(|i| {
+                let permutation = permutation::compose(&permutation::invert(&SIGMA[i]), &SIGMA[(i + 1) % 10]);
+                PermuteGate::configure(meta, &[selectors, &pi[i..i + 1]].concat(), Some(&permutation), &mi, &mo)
+            }),
+
+            v: [GGate::configure(meta, selectors, &[vi[0], vi[4], vi[8], vi[12]], mi[0], 
+                    mi[1], bits[0], septets[0], bytes[0], xors[0], &[qwords[0], qwords[4], qwords[8], qwords[12]]),
+                GGate::configure(meta, selectors, &[vi[1], vi[5], vi[9], vi[13]], mi[2], 
+                    mi[3], bits[1], septets[1], bytes[1], xors[1], &[qwords[1], qwords[5], qwords[9], qwords[13]]),
+                GGate::configure(meta, selectors, &[vi[2], vi[6], vi[10], vi[14]], mi[4], 
+                    mi[5], bits[2], septets[2], bytes[2], xors[2], &[qwords[2], qwords[6], qwords[10], qwords[14]]),
+                GGate::configure(meta, selectors, &[vi[3], vi[7], vi[11], vi[15]], mi[6], 
+                    mi[7], bits[3], septets[3], bytes[3], xors[3], &[qwords[3], qwords[7], qwords[11], qwords[15]]),
+
+                GGate::configure(meta, selectors, &[qwords[0], qwords[5], qwords[10], qwords[15]], mi[8], 
+                    mi[9], bits[4], septets[4], bytes[4], xors[4], &[vo[0], vo[5], vo[10], vo[15]]),
+                GGate::configure(meta, selectors, &[qwords[1], qwords[6], qwords[11], qwords[12]], mi[10], 
+                    mi[11], bits[5], septets[5], bytes[5], xors[5], &[vo[1], vo[6], vo[11], vo[12]]),
+                GGate::configure(meta, selectors, &[qwords[2], qwords[7], qwords[8], qwords[13]], mi[12], 
+                    mi[13], bits[6], septets[6], bytes[6], xors[6], &[vo[2], vo[7], vo[8], vo[13]]),                
+                GGate::configure(meta, selectors, &[qwords[3], qwords[4], qwords[9], qwords[14]], mi[14], 
+                    mi[15], bits[7], septets[7], bytes[7], xors[7], &[vo[3], vo[4], vo[9], vo[14]])
+            ],
+
+            rlc: CopyGeneralGate::<F,2>::configure(meta, selectors, rlc[0], rlc[1])
+        }
+    }
+
+    // The hash of the compression function input is specified by "rlc", the counted from 0 number of the current round modulo 10 is 
+    // described by "round", the amount of rounds left to be performed for the state, which preceeds the current round, is specified
+    // by "left", "h", "m" and "v" describe the corresponding elements of the calculator's state. After a successful execution of the 
+    // method, the aforesaid variables describe the calculator's computed state 
+    fn assign(&self, region: &mut Region<F>, row: usize, rlc: Value<F>, round: &mut usize, 
+        left: &mut F, h: &[u64; 8], m: &mut [u64; 16], v: &mut [u64; 16]) -> Result<(), Error> {
+        
+        *left = self.l.assign(region, row, *left)?;   
+        self.h.assign(region, row, h)?;
+
+        self.v[0].assign(region, row, v, 0, 4, 8, 12, m[0], m[1])?;
+        self.v[1].assign(region, row, v, 1, 5, 9, 13, m[2], m[3])?;
+        self.v[2].assign(region, row, v, 2, 6, 10, 14, m[4], m[5])?;
+        self.v[3].assign(region, row, v, 3, 7, 11, 15, m[6], m[7])?;
+
+        self.v[4].assign(region, row, v, 0, 5, 10, 15, m[8], m[9])?;
+        self.v[5].assign(region, row, v, 1, 6, 11, 12, m[10], m[11])?;
+        self.v[6].assign(region, row, v, 2, 7, 8, 13, m[12], m[13])?;
+        self.v[7].assign(region, row, v, 3, 4, 9, 14, m[14], m[15])?;
+
+        self.p.assign(region, row, &array::from_fn(|i| i == *round % 10))?;
+        *m = self.m[*round % 10].assign(region, row, m)?;
+        *round += 1;
+
+        self.rlc.assign(region, row, rlc)?;
+
+        Ok(())
+    }
+}
+
+
+// Defines the gate class, whose representatives compute the final state of the abstract BLAKE2b compression function calculator. 
+// This state includes the output of the BLAKE2b compression function as well as the random linear combination hash of the  
+// concatenation of the input and output of this function
 #[derive(Clone)]
 pub struct FinalGate<F:FieldExt> {
-    h: PermuteGate<F,8>,
-    v: PermuteGate<F,16>,
-    xh: [XorGate<F>; 8],
-    xv: [XorGate<F>; 8],
-    xcopy: PermuteGate<F,8>,
-    rlc: FinalRLCGate<F>
+    h: PermuteGate<F,8>,  // The gate types for copying the data of the initial state vector to subcolumns of xor column triplet chunks
+    v: PermuteGate<F,16>, // The gate types for copying the data of the current local work vector to subcolumns of xor column triplet chunks
+    xh: [XorGate<F>; 8], // The gate types for computing the compression function output 
+    xv: [XorGate<F>; 8], // The gate types for computing the bitwise xor of the halves of the current local work vector
+    xcopy: PermuteGate<F,8>, // The gate types for data copying between the subcolumns of xor column triplet chunks
+    rlc: FinalRLCGate<F> // The gate type for computing the hash of the concatenation of the input and output of the compression function 
 }
 
 impl<F:FieldExt> FinalGate<F> {
     fn configure(meta: &mut ConstraintSystem<F>,
+                 // The control Combiselectors
                  selectors: &[Combiselector<F>],
+                 // The challenge used for random linear combination hashing
                  challenge: Challenge,
+                  // The Combiselectors, whose activity imply the existence of the InitialGate instance producing the input data for this gate
                  initial: &[Combiselector<F>],
+                 // The Combiselectors, whose activity imply the existence of the RoundGate instance producing the input data for this gate
                  round: &[Combiselector<F>],
+                 // The GeneralCell of the current amount of rounds left to be performed
                  left: GeneralCell<F,1>,
+                 // The Chunk array of the initial state vector 
                  h: &[OctaChunk<F>; 8],
+                 // The Chunk array of the current local work vector 
                  v: &[OctaChunk<F>; 16],
+                 // The array of the XChunks, whose default-ordered third parts constitute the Chunk array of the compression function output
                  xh: &[XChunk<F,8>; 8],
+                 // The array of the XChunks of the intermediate results of the computation
                  xv: &[XChunk<F,8>; 8],
+                 // The GeneralCells of the random linear combination hash of the compression function input and the hash computed by this gate 
                  rlc: [GeneralCell<F,2>; 2]) -> Self {
         assert_single_active(meta, selectors, &[initial, round]);
         assert_zero(meta, selectors, left);
 
-        FinalGate {
+        Self {
             h: PermuteGate::<F, 8>::configure(meta, selectors, None, h, &array::from_fn(|i| xh[i].operand(1))),
 
             v: PermuteGate::<F, 16>::configure(meta, selectors, None, v, &array::from_fn(|i| xv[i % 8].operand(i / 8))),
@@ -1265,6 +1350,8 @@ impl<F:FieldExt> FinalGate<F> {
         }       
     }
 
+    // The challenge is specified by "challenge", the hash of the compression function input is specified   
+    // by "rlc", "h" and "v" describe the corresponding elements of the calculator's current state 
     fn assign(&self, region: &mut Region<F>, row: usize, challenge: Value<F>, 
         rlc: Value<F>, h: &[u64; 8], v: &[u64; 16]) -> Result<([u64; 8], Value<F>), Error> {
 
@@ -1303,24 +1390,24 @@ impl<F:FieldExt> CircuitPreparator<F> {
                  allowed: Column<Fixed>,
                  septalookup: Column<Fixed>,
                  xlookup: [Column<Fixed>; 3],
-                 bits: &[Column<Advice>],
-                 septets: &[Column<Advice>],
+                 binary: &[Column<Advice>],
+                 septenary: &[Column<Advice>],
                  pairs: &[[Column<Advice>; 2]],
-                 xtriplets:  &[[Column<Advice>; 3]]) -> Self {
+                 xtriplets: &[[Column<Advice>; 3]]) -> Self {
         meta.create_gate("CircuitPreparator", |meta| {
             let allocated = meta.query_fixed(allocated, Rotation::cur());
             let mut constraints = vec![];
-            for bit in bits {
-                let bit = meta.query_advice(*bit, Rotation::cur());
-                constraints.push(allocated.clone() * bit.clone() * (gf(1) - bit)); 
+            for column in binary {
+                let column = meta.query_advice(*column, Rotation::cur());
+                constraints.push(allocated.clone() * column.clone() * (gf(1) - column)); 
             }
             constraints
         });
 
-        for septet in septets {
+        for column in septenary {
             meta.lookup_any("CircuitPreparator", |meta| {
                 let allocated = meta.query_fixed(allocated, Rotation::cur());
-                vec![(allocated * meta.query_advice(*septet, Rotation::cur()), meta.query_fixed(septalookup, Rotation::cur()))]
+                vec![(allocated * meta.query_advice(*column, Rotation::cur()), meta.query_fixed(septalookup, Rotation::cur()))]
             });
         }
 
@@ -1341,7 +1428,7 @@ impl<F:FieldExt> CircuitPreparator<F> {
             });
         }
         
-        CircuitPreparator { allocated, allowed, septalookup, xlookup, _marker: PhantomData }
+        Self { allocated, allowed, septalookup, xlookup, _marker: PhantomData }
     }
 
     fn assign(&self, region: &mut Region<F>, k: u32, before: usize, after: usize, unusable: usize) -> Result<(), Error> {
@@ -1498,39 +1585,40 @@ impl<F:FieldExt, const R: usize> Circuit<F> for CompressionCircuit<F,R> {
             xors.push([advice(meta), advice(meta), advice(meta)]);       
         }
 
-        let mut bits = vec![];
+        let mut binary = vec![];
         for _ in 0..14 {
-            bits.push(advice(meta));
+            binary.push(advice(meta));
         }
 
         let second = meta.advice_column_in(SecondPhase);
-        let [septet, field] = array::from_fn(|_| advice(meta));
+        let [septenary, field] = array::from_fn(|_| advice(meta));
 
-        let circuit_preparator = CircuitPreparator::configure(meta, allocated, allowed, septalookup, xlookup, &bits, &[septet], &pairs, &xors);
+        let circuit_preparator = CircuitPreparator::configure(meta, allocated, 
+            allowed, septalookup, xlookup, &binary, &[septenary], &pairs, &xors);
 
-        let [initial_selector, round_selector, final_selector, bit] = array::from_fn(|_| bits.pop().unwrap());
+        let [initial_selector, round_selector, final_selector, bit] = array::from_fn(|_| binary.pop().unwrap());
 
         let hi: [OctaChunk<F>; 8] = create_chuncks(&pairs, 0, 0);
         let mi: [OctaChunk<F>; 16] = create_chuncks(&pairs, 0, 8);
         let vi: [OctaChunk<F>; 16] = create_chuncks(&pairs, 0, 24);
-        let pi: [Combiselector<F>; 10] = array::from_fn(|i| Combiselector::<F>::new(allowed, bits[i], 0));
+        let pi: [Combiselector<F>; 10] = array::from_fn(|i| Combiselector::<F>::new(allowed, binary[i], 0));
         let xchunks: [XChunk<F,8>; 32] = create_xchunks(&xors, 0, 0);
-        let misc64: [OctaChunk<F>; 16] = create_chuncks(&pairs, 0, 40);
-        let misc7: [SeptaCell<F>; 8] = array::from_fn(|i| SeptaCell::<F>::new(septet, i as i32));
-        let misc1: [BitCell<F>; 8] = array::from_fn(|i| BitCell::<F>::new(bit, i as i32));
+        let qwords: [OctaChunk<F>; 16] = create_chuncks(&pairs, 0, 40);
+        let septets: [SeptaCell<F>; 8] = array::from_fn(|i| SeptaCell::<F>::new(septenary, i as i32));
+        let bits: [BitCell<F>; 8] = array::from_fn(|i| BitCell::<F>::new(bit, i as i32));
         let misc: [OctaChunk<F>; 4] = create_chuncks(&pairs, 0, 56);
-        let misc8: [ByteChunk<F>; 32] = array::from_fn(|i| misc[i / 8].subchunk((i % 8) as u8));
+        let bytes: [ByteChunk<F>; 32] = array::from_fn(|i| misc[i / 8].subchunk((i % 8) as u8));
         let ho: [OctaChunk<F>; 8] = create_chuncks(&pairs, R as i32, 0);
         let mo: [OctaChunk<F>; 16] = create_chuncks(&pairs, R as i32, 8);
         let vo: [OctaChunk<F>; 16] = create_chuncks(&pairs, R as i32, 24);
-        let po: [Combiselector<F>; 10] = array::from_fn(|i| Combiselector::<F>::new(allowed, bits[i], R as i32));
+        let po: [Combiselector<F>; 10] = array::from_fn(|i| Combiselector::<F>::new(allowed, binary[i], R as i32));
         let left = [GeneralCell::<F,1>::new(field, 0), GeneralCell::<F,1>::new(field, R as i32)]; 
         let rlc = [GeneralCell::<F,2>::new(second, 1), GeneralCell::<F,2>::new(second, R as i32 + 1)]; 
         let initial = Combiselector::<F>::new(allowed, initial_selector, 0);
         let round = Combiselector::<F>::new(allowed, round_selector, -(R as i32));
         let selector = Combiselector::<F>::new(allowed, round_selector, 0);
         let round_gate = RoundGate::<F>::configure(meta, &[selector], &[initial], &[round], left, [&hi, &ho], 
-            [&mi, &mo], [&vi, &vo], rlc, &misc1, &misc7, &misc8, &misc64, &xchunks, [&pi, &po]);
+            [&mi, &mo], [&vi, &vo], rlc, &bits, &septets, &bytes, &qwords, &xchunks, [&pi, &po]);
 
         let challenge = meta.challenge_usable_after(FirstPhase);
         let r = GeneralCell::<F,1>::new(field, 0);
@@ -1541,7 +1629,7 @@ impl<F:FieldExt, const R: usize> Circuit<F> for CompressionCircuit<F,R> {
         let f = BitCell::<F>::new(bit, -8);
         let x: [XChunk<F, 8>; 2] = create_xchunks(&xors, -8, 0);
         let v: [OctaChunk<F>; 16] = create_chuncks(&pairs, 0, 24);
-        let p: [Combiselector<F>; 10] = array::from_fn(|i| Combiselector::<F>::new(allowed, bits[i], 0));
+        let p: [Combiselector<F>; 10] = array::from_fn(|i| Combiselector::<F>::new(allowed, binary[i], 0));
         let selector = Combiselector::<F>::new(allowed, initial_selector, 0);
         let initial_gate = InitialGate::<F>::configure(meta, &[selector], challenge, r, &h, &m, &t, f, &x, &v, c, &p);   
 
@@ -1566,7 +1654,7 @@ impl<F:FieldExt, const R: usize> Circuit<F> for CompressionCircuit<F,R> {
         //println!("Unusable rows: {}", meta.blinding_factors() + 1);
         //////////////////////////////
 
-        CompressionConfig { rlc_table, circuit_preparator, initial_gate, final_gate, round_gate, r, h, m, t, f, final_height, unusable_rows }
+        Self::Config { rlc_table, circuit_preparator, initial_gate, final_gate, round_gate, r, h, m, t, f, final_height, unusable_rows }
     }
 
     fn synthesize(&self, config: Self::Config, mut layouter: impl Layouter<F>) -> Result<(), Error> {
