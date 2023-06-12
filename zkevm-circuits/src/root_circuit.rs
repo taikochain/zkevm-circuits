@@ -10,6 +10,7 @@ use halo2_proofs::{
 use itertools::Itertools;
 use maingate::MainGateInstructions;
 use snark_verifier::{util::arithmetic::MultiMillerLoop, verifier::plonk::PlonkProtocol};
+use snark_verifier_sdk::CircuitExt;
 use std::iter;
 
 mod aggregation;
@@ -51,6 +52,7 @@ where
         super_circuit_proof: Value<&'a [u8]>,
     ) -> Result<Self, snark_verifier::Error> {
         let num_instances = super_circuit_protocol.num_instance.iter().sum::<usize>() + 4 * LIMBS;
+        log::info!("new root_circuit with num_instances: {}", num_instances);
         let instance = {
             let mut instance = Ok(vec![M::Scalar::ZERO; num_instances]);
             super_circuit_instances
@@ -100,6 +102,19 @@ where
 
     /// Returns instance
     pub fn instance(&self) -> Vec<Vec<M::Scalar>> {
+        vec![self.instance.clone()]
+    }
+}
+
+impl<'a, M: MultiMillerLoop> CircuitExt<M::Scalar> for RootCircuit<'a, M>
+where
+    M::Scalar: Field,
+{
+    fn num_instance(&self) -> Vec<usize> {
+        vec![self.instance.len()]
+    }
+
+    fn instances(&self) -> Vec<Vec<M::Scalar>> {
         vec![self.instance.clone()]
     }
 }

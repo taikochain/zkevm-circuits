@@ -220,3 +220,137 @@ impl<F: Field> SuperCircuit<F> {
         Ok((k, circuit, instance))
     }
 }
+
+#[cfg(test)]
+mod super_circuit_test {
+    use std::collections::HashMap;
+
+    use crate::root_circuit::PoseidonTranscript;
+
+    use super::*;
+    use eth_types::{address, bytecode, geth_types::GethData, ToWord, Word};
+    use ethers_signers::{LocalWallet, Signer};
+    use halo2_proofs::{
+        dev::MockProver,
+        halo2curves::bn256::{Bn256, Fr},
+        plonk::{create_proof, keygen_pk, keygen_vk, verify_proof},
+        poly::{
+            commitment::ParamsProver,
+            kzg::{
+                commitment::{KZGCommitmentScheme, ParamsVerifierKZG},
+                multiopen::{ProverGWC, VerifierGWC},
+                strategy::SingleStrategy,
+            },
+        },
+    };
+    use mock::{TestContext, MOCK_CHAIN_ID};
+    use rand::SeedableRng;
+    use rand_chacha::{rand_core::OsRng, ChaCha20Rng};
+    use snark_verifier_sdk::halo2::gen_srs;
+
+    #[test]
+    fn test_super_circuit() {
+        let circuits_params = CircuitsParams {
+            max_txs: 1,
+            max_calldata: 32,
+            max_rws: 256,
+            max_copy_rows: 256,
+            max_exp_steps: 256,
+            max_bytecode: 512,
+            max_evm_rows: 0,
+            max_keccak_rows: 0,
+        };
+
+        let k = 18;
+        let (_, circuit, instance, _) =
+            SuperCircuit::<_>::build(block_1tx(), circuits_params).unwrap();
+
+        let prover = match MockProver::<Fr>::run(k, &circuit, instance.clone()) {
+            Ok(prover) => prover,
+            Err(e) => panic!("{:#?}", e),
+        };
+        assert_eq!(prover.verify(), Ok(()));
+
+        let params = gen_srs(k);
+        let vk = keygen_vk(&params, &circuit).expect("keygen_vk should not fail");
+        let pk = keygen_pk(&params, vk, &circuit).expect("keygen_pk should not fail");
+
+        let proof = {
+            let mut transcript = PoseidonTranscript::new(Vec::new());
+            create_proof::<KZGCommitmentScheme<_>, ProverGWC<_>, _, _, _, _>(
+                &params,
+                &pk,
+                &[circuit],
+                &[&instance.iter().map(Vec::as_slice).collect_vec()],
+                OsRng,
+                &mut transcript,
+            )
+            .unwrap();
+            transcript.finalize()
+        };
+
+        let mut verifier_transcript = PoseidonTranscript::new(&proof[..]);
+        let strategy = SingleStrategy::new(&params);
+        let verifier_params: ParamsVerifierKZG<Bn256> = params.verifier_params().clone();
+        let col = instance.iter().map(Vec::as_slice).collect_vec();
+        let cols = vec![col.as_slice()];
+        let instances = cols.as_slice();
+
+        verify_proof::<
+            KZGCommitmentScheme<Bn256>,
+            VerifierGWC<'_, Bn256>,
+            _,
+            _,
+            SingleStrategy<'_, Bn256>,
+        >(
+            &verifier_params,
+            pk.get_vk(),
+            strategy,
+            instances,
+            &mut verifier_transcript,
+        )
+        .expect("failed to verify bench circuit");
+    }
+
+    pub(crate) fn block_1tx() -> GethData {
+        let mut rng = ChaCha20Rng::seed_from_u64(2);
+
+        let chain_id = (*MOCK_CHAIN_ID).as_u64();
+
+        let bytecode = bytecode! {
+            GAS
+            STOP
+        };
+
+        let wallet_a = LocalWallet::new(&mut rng).with_chain_id(chain_id);
+
+        let addr_a = wallet_a.address();
+        let addr_b = address!("0x000000000000000000000000000000000000BBBB");
+
+        let mut wallets = HashMap::new();
+        wallets.insert(wallet_a.address(), wallet_a);
+
+        let mut block: GethData = TestContext::<2, 1>::new(
+            None,
+            |accs| {
+                accs[0]
+                    .address(addr_b)
+                    .balance(Word::from(1u64 << 20))
+                    .code(bytecode);
+                accs[1].address(addr_a).balance(Word::from(1u64 << 20));
+            },
+            |mut txs, accs| {
+                txs[0]
+                    .from(accs[1].address)
+                    .to(accs[0].address)
+                    .gas(Word::from(1_000_000u64));
+            },
+            |block, _tx| block.number(0xcafeu64),
+        )
+        .unwrap()
+        .into();
+        block.history_hashes = vec![block.eth_block.parent_hash.to_word()];
+        block.sign(&wallets);
+        block
+    }
+}

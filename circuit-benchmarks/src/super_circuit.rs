@@ -34,9 +34,9 @@ use ark_std::{end_timer, start_timer};
 use std::path::Path;
 
 use snark_verifier_sdk::{
-    evm::{gen_evm_proof_shplonk, gen_evm_verifier_shplonk},
+    evm::{gen_evm_proof_gwc, gen_evm_proof_shplonk, gen_evm_verifier_shplonk},
     gen_pk,
-    halo2::{aggregation::AggregationCircuit, gen_snark_shplonk, gen_srs},
+    halo2::{aggregation::AggregationCircuit, gen_snark_gwc, gen_snark_shplonk, gen_srs},
     CircuitExt, Snark, SHPLONK,
 };
 
@@ -139,11 +139,20 @@ fn gen_verifier(
     let proof = PlonkVerifier::read_proof(&dk, &protocol, &instances, &mut transcript).unwrap();
     PlonkVerifier::verify(&dk, &protocol, &instances, &proof).unwrap();
 
-    loader.yul_code()
+    let yul = loader.yul_code();
+    fs::write(Path::new("./aggregation_plonk.yul"), &yul).unwrap();
+    yul
 }
 
 fn evm_verify(deployment_code: Vec<u8>, instances: Vec<Vec<Fr>>, proof: Vec<u8>) {
     let calldata = encode_calldata(&instances, &proof);
+    println!(
+        "deploy code size: {} bytes, instances size: [{}][{}], calldata size: {} bytes",
+        deployment_code.len(),
+        instances.len(),
+        instances[0].len(),
+        calldata.len(),
+    );
 
     let success = {
         let mut evm = ExecutorBuilder::default()
@@ -151,14 +160,18 @@ fn evm_verify(deployment_code: Vec<u8>, instances: Vec<Vec<Fr>>, proof: Vec<u8>)
             .build();
         let caller = VerifierAddress::from_low_u64_be(0xfe);
         let deploy = evm.deploy(caller, deployment_code.into(), 0.into());
-        let verifier = deploy.address.unwrap();
-
-        let result = evm.call_raw(caller, verifier, calldata.into(), 0.into());
-
-        println!("Deployment cost: {} gas", deploy.gas_used);
-        println!("Verification cost: {} gas", result.gas_used);
-
-        !result.reverted
+        match deploy.address {
+            Some(addr) => {
+                let result = evm.call_raw(caller, addr, calldata.into(), 0.into());
+                println!("Deployment cost: {} gas", deploy.gas_used);
+                println!("Verification cost: {} gas", result.gas_used);
+                !result.reverted
+            }
+            None => {
+                println!("Deployment failed due to {:?}", deploy.exit_reason);
+                false
+            }
+        }
     };
     assert!(success);
 }
@@ -206,7 +219,7 @@ pub(crate) fn block_1tx() -> GethData {
 }
 
 pub fn create_root_super_circuit_prover() {
-    let min_k_aggregation = 21;
+    let min_k_aggregation = 18;
     let proof_gen_prfx = crate::constants::PROOFGEN_PREFIX;
 
     // SuperCircuit
@@ -224,7 +237,8 @@ pub fn create_root_super_circuit_prover() {
     let (k, super_circuit, super_instance, _) =
         SuperCircuit::<_>::build(block_1tx(), circuits_params).unwrap();
     let k = k.max(min_k_aggregation);
-    let params = ParamsKZG::<Bn256>::setup(k, OsRng);
+    // let params = ParamsKZG::<Bn256>::setup(k, OsRng);
+    let params = gen_srs(22);
     let pk = keygen_pk(
         &params,
         keygen_vk(&params, &super_circuit).unwrap(),
@@ -258,10 +272,12 @@ pub fn create_root_super_circuit_prover() {
         transcript.finalize()
     };
     end_timer!(start_proof_super);
+    println!("super proof size = {}", super_proof.len());
 
     // RootCircuit
     // Create root circuit
     println!("root circuit");
+    // let params = gen_srs(22);
     let root_circuit = RootCircuit::new(
         &params,
         &protocol,
@@ -327,18 +343,25 @@ fn gen_application_snark(params: &ParamsKZG<Bn256>) -> Snark {
     // super_circuit.params());
     let vk = keygen_vk(params, &super_circuit).expect("keygen_vk should not fail");
     let pk = keygen_pk(params, vk, &super_circuit).expect("keygen_pk should not fail");
-    gen_snark_shplonk(params, &pk, super_circuit, None::<&str>)
+    // gen_snark_shplonk(params, &pk, super_circuit, None::<&str>)
+    gen_snark_gwc(params, &pk, super_circuit, None::<&str>)
 }
 
 fn create_root_super_circuit_prover_sdk() {
     let params_app = gen_srs(18);
-    let snarks = [(); 2].map(|_| gen_application_snark(&params_app));
+    let snarks = [(); 1].map(|_| gen_application_snark(&params_app));
 
-    println!("gen root snarks");
     let params = gen_srs(22);
     let mut snark_roots = Vec::new();
     for snark in snarks {
-        let root_circuit = AggregationCircuit::<SHPLONK>::new(&params, vec![snark]);
+        // let root_circuit = AggregationCircuit::<SHPLONK>::new(&params, vec![snark]);
+        let root_circuit = RootCircuit::new(
+            &params,
+            &snark.protocol,
+            Value::known(&snark.instances),
+            Value::known(&snark.proof),
+        )
+        .unwrap();
 
         let start0 = start_timer!(|| "gen vk & pk");
         // let pk = gen_pk(
@@ -351,7 +374,7 @@ fn create_root_super_circuit_prover_sdk() {
         let pk = keygen_pk(&params, vk, &root_circuit).expect("keygen_pk should not fail");
         end_timer!(start0);
 
-        let _root = gen_snark_shplonk(
+        let _root = gen_snark_gwc(
             &params,
             &pk,
             root_circuit.clone(),
@@ -364,7 +387,13 @@ fn create_root_super_circuit_prover_sdk() {
 
     println!("gen block agg snark");
     let params = gen_srs(22);
-    let agg_circuit = AggregationCircuit::<SHPLONK>::new(&params, snark_roots);
+    let agg_circuit = RootCircuit::new(
+        &params,
+        &snark_roots[0].protocol,
+        Value::known(&snark_roots[0].instances),
+        Value::known(&snark_roots[0].proof),
+    )
+    .unwrap();
 
     let start0 = start_timer!(|| "gen vk & pk");
     // let pk = gen_pk(
@@ -374,7 +403,7 @@ fn create_root_super_circuit_prover_sdk() {
     // agg_circuit.params(),
     // );
     let vk = keygen_vk(&params, &agg_circuit).expect("keygen_vk should not fail");
-    let pk = keygen_pk(&params, vk, &agg_circuit).expect("keygen_pk should not fail");
+    let pk = keygen_pk(&params, vk.clone(), &agg_circuit).expect("keygen_pk should not fail");
     end_timer!(start0);
 
     // std::fs::remove_file("./examples/agg.snark").unwrap_or_default();
@@ -388,16 +417,21 @@ fn create_root_super_circuit_prover_sdk() {
     println!("gen evm snark");
     // do one more time to verify
     let num_instances = agg_circuit.num_instance();
-    let instances = agg_circuit.instances();
-    let proof_calldata = gen_evm_proof_shplonk(&params, &pk, agg_circuit, instances.clone());
+    let instances = agg_circuit.instance();
+    let accumulator_indices = Some(agg_circuit.accumulator_indices());
+    let proof_calldata = gen_evm_proof_gwc(&params, &pk, agg_circuit, instances.clone());
 
-    let deployment_code = gen_evm_verifier_shplonk::<AggregationCircuit<SHPLONK>>(
+    let deployment_code = gen_verifier(
         &params,
-        pk.get_vk(),
+        &vk,
+        Config::kzg()
+            .with_num_instance(num_instances.clone())
+            .with_accumulator_indices(accumulator_indices),
         num_instances,
-        Some(Path::new("./examples/standard_plonk.yul")),
     );
-    evm_verify(deployment_code, instances, proof_calldata);
+    let evm_verifier_bytecode = evm::compile_yul(&deployment_code);
+
+    evm_verify(evm_verifier_bytecode, instances, proof_calldata);
 }
 
 #[cfg(test)]
