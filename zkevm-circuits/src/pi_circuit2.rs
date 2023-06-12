@@ -22,7 +22,7 @@ use halo2_proofs::{
 };
 use std::marker::PhantomData;
 
-const MAX_DEGREE: usize = 10;
+const MAX_DEGREE: usize = 9;
 const MIN_DEGREE: usize = 8;
 const RPI_CELL_IDX: usize = 0;
 const RPI_RLC_ACC_CELL_IDX: usize = 1;
@@ -158,7 +158,7 @@ impl PublicData {
             l1_signal_service: taiko.l1_signal_service.to_word(),
             l2_signal_service: taiko.l2_signal_service.to_word(),
             l2_contract: taiko.l2_contract.to_word(),
-            meta_hash: taiko.meta_hash.to_word(),
+            meta_hash: taiko.meta_hash.hash().to_word(),
             block_hash: taiko.block_hash.to_word(),
             parent_hash: taiko.parent_hash.to_word(),
             signal_root: taiko.signal_root.to_word(),

@@ -6,7 +6,8 @@ use crate::{
     table::{TxFieldTag, TxTable},
     util::Challenges,
 };
-use eth_types::{geth_types::Transaction, Field, ToBigEndian, Word, U256};
+use eth_types::{geth_types::Transaction, Address, Field, ToBigEndian, Word, U256};
+use ethers_signers::LocalWallet;
 use gadgets::{
     is_equal::IsEqualChip,
     mul_add::{MulAddChip, MulAddConfig},
@@ -19,10 +20,27 @@ use halo2_proofs::{
 };
 use log::error;
 use once_cell::sync::Lazy;
+use std::str::FromStr;
 
 const ANCHOR_TX_ID: usize = 0;
-const MAX_DEGREE: usize = 10;
+const MAX_DEGREE: usize = 9;
 const BYTE_POW_BASE: u64 = 1 << 8;
+
+pub(crate) static GOLDEN_TOUCH_ADDRESS: Lazy<Address> =
+    Lazy::new(|| Address::from_str("0x0000777735367b36bC9B61C50022d9D0700dB4Ec").unwrap());
+
+// 0x92954368afd3caa1f3ce3ead0069c1af414054aefe1ef9aeacc1bf426222ce38
+pub(crate) const GOLDEN_TOUCH_PRIVATEKEY: Word = U256([
+    0xacc1bf426222ce38,
+    0x414054aefe1ef9ae,
+    0xf3ce3ead0069c1af,
+    0x92954368afd3caa1,
+]);
+
+pub(crate) static GOLDEN_TOUCH_WALLET: Lazy<LocalWallet> = Lazy::new(|| {
+    LocalWallet::from_str("0x92954368afd3caa1f3ce3ead0069c1af414054aefe1ef9aeacc1bf426222ce38")
+        .unwrap()
+});
 
 // 0x79BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798
 const GX1: Word = U256([
@@ -384,6 +402,12 @@ impl<F: Field> SignVerifyConfig<F> {
     fn load_mul_add(&self, region: &mut Region<'_, F>, msg_hash: Word) -> Result<(), Error> {
         let chip = MulAddChip::construct(self.mul_add.clone());
         chip.assign(region, 0, [GX1_MUL_PRIVATEKEY, U256::one(), msg_hash, N])
+    }
+
+    /// Return the minimum number of rows required to prove an input of a
+    /// particular size.
+    pub(crate) fn min_num_rows() -> usize {
+        64 // msg_hash(32B) + sign_r(32B)
     }
 
     pub(crate) fn assign(

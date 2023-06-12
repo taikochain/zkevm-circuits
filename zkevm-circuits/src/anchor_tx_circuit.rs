@@ -1,6 +1,13 @@
 //! Anchor circuit implementation.
 
+#[cfg(any(feature = "test", test, feature = "test-circuits"))]
+mod dev;
+#[cfg(any(feature = "test", test, feature = "test-circuits"))]
+pub use dev::TestAnchorTxCircuit;
 mod sign_verify;
+#[cfg(any(feature = "test", test))]
+mod test;
+
 use crate::{
     evm_circuit::util::constraint_builder::{BaseConstraintBuilder, ConstrainBuilderCommon},
     table::{PiFieldTag, PiTable, TxFieldTag, TxTable},
@@ -18,6 +25,8 @@ use halo2_proofs::{
 use sign_verify::SignVerifyConfig;
 use std::marker::PhantomData;
 
+use self::sign_verify::GOLDEN_TOUCH_ADDRESS;
+
 // The first of txlist is the anchor tx
 const ANCHOR_TX_ID: usize = 0;
 const ANCHOR_TX_VALUE: u64 = 0;
@@ -25,7 +34,7 @@ const ANCHOR_TX_IS_CREATE: bool = false;
 const ANCHOR_TX_GAS_PRICE: u64 = 0;
 // TODO: calculate the method_signature
 const ANCHOR_TX_METHOD_SIGNATURE: u32 = 0;
-const MAX_DEGREE: usize = 10;
+const MAX_DEGREE: usize = 9;
 const BYTE_POW_BASE: u64 = 1 << 8;
 
 // anchor(bytes32,bytes32,uint64,uint64) = method_signature(4B)+1st(32B)+2nd(32B)+3rd(8B)+4th(8B)
@@ -42,11 +51,11 @@ pub struct AnchorTxCircuitConfig<F: Field> {
     tx_table: TxTable,
     pi_table: PiTable,
 
-    q_anchor: Selector,
+    q_tag: Selector,
     // the anchor transaction fixed fields
     // Gas, GasPrice, CallerAddress, CalleeAddress, IsCreate, Value, CallDataLength,
     // 2 rows: 0, tag, 0, value
-    anchor: Column<Fixed>,
+    tag: Column<Fixed>,
 
     // check: method_signature, l1Hash, l1SignalRoot, l1Height, parentGasUsed
     q_call_data_start: Selector,
@@ -80,8 +89,8 @@ impl<F: Field> SubCircuitConfig<F> for AnchorTxCircuitConfig<F> {
             challenges,
         }: Self::ConfigArgs,
     ) -> Self {
-        let q_anchor = meta.complex_selector();
-        let anchor = meta.fixed_column();
+        let q_tag = meta.complex_selector();
+        let tag = meta.fixed_column();
 
         let q_call_data_start = meta.complex_selector();
         let q_call_data_step = meta.complex_selector();
@@ -92,11 +101,11 @@ impl<F: Field> SubCircuitConfig<F> for AnchorTxCircuitConfig<F> {
 
         // anchor transaction constants
         meta.lookup_any("anchor fixed fields", |meta| {
-            let q_anchor = meta.query_selector(q_anchor);
+            let q_anchor = meta.query_selector(q_tag);
             let tx_id = ANCHOR_TX_ID.expr();
-            let tag = meta.query_fixed(anchor, Rotation(0));
+            let value = meta.query_fixed(tag, Rotation::next());
+            let tag = meta.query_fixed(tag, Rotation::cur());
             let index = 0.expr();
-            let value = meta.query_fixed(anchor, Rotation(1));
             vec![
                 (
                     q_anchor.expr() * tx_id,
@@ -167,8 +176,8 @@ impl<F: Field> SubCircuitConfig<F> for AnchorTxCircuitConfig<F> {
             tx_table,
             pi_table,
 
-            q_anchor,
-            anchor,
+            q_tag,
+            tag,
 
             q_call_data_start,
             q_call_data_step,
@@ -202,15 +211,14 @@ impl<F: Field> AnchorTxCircuitConfig<F> {
             (
                 TxFieldTag::CallerAddress,
                 Value::known(
-                    taiko
-                        .anchor_from
+                    GOLDEN_TOUCH_ADDRESS
                         .to_scalar()
                         .expect("anchor_tx.from too big"),
                 ),
             ),
             (
                 TxFieldTag::CalleeAddress,
-                Value::known(taiko.anchor_to.to_scalar().expect("anchor_tx.to too big")),
+                Value::known(taiko.l2_contract.to_scalar().expect("anchor_tx.to too big")),
             ),
             (
                 TxFieldTag::IsCreate,
@@ -222,15 +230,15 @@ impl<F: Field> AnchorTxCircuitConfig<F> {
                 Value::known(F::from(ANCHOR_CALL_DATA_LEN as u64)),
             ),
         ] {
-            self.q_anchor.enable(region, offset)?;
+            self.q_tag.enable(region, offset)?;
             region.assign_fixed(
                 || "tag",
-                self.anchor,
+                self.tag,
                 offset,
                 || Value::known(F::from(tag as u64)),
             )?;
             offset += 1;
-            region.assign_fixed(|| "anchor", self.anchor, offset, || value)?;
+            region.assign_fixed(|| "anchor", self.tag, offset, || value)?;
             offset += 1;
         }
         Ok(())
@@ -245,12 +253,6 @@ impl<F: Field> AnchorTxCircuitConfig<F> {
     ) -> Result<(), Error> {
         let mut offset = call_data.start;
         let randomness = challenges.evm_word();
-        // // check: method_signature, l1Hash, l1SignalRoot, l1Height, parentGasUsed
-        // q_call_data_start: Selector,
-        // q_call_data_step: Selector,
-        // q_call_data_end: Selector,
-        // call_data_rlc_acc: Column<Advice>,
-        // call_data_tag: Column<Fixed>,
         for (annotation, value, tag) in [
             (
                 "method_signature",
@@ -350,6 +352,13 @@ impl<F: Field> AnchorTxCircuit<F> {
         }
     }
 
+    /// Return the minimum number of rows required to prove an input of a
+    /// particular size.
+    pub(crate) fn min_num_rows() -> usize {
+        let rows_sign_verify = SignVerifyConfig::<F>::min_num_rows();
+        std::cmp::max(ANCHOR_CALL_DATA_LEN, rows_sign_verify)
+    }
+
     fn call_data_start(&self) -> usize {
         self.max_txs * TX_LEN + 1 // empty row
     }
@@ -363,7 +372,9 @@ impl<F: Field> SubCircuit<F> for AnchorTxCircuit<F> {
     type Config = AnchorTxCircuitConfig<F>;
 
     fn unusable_rows() -> usize {
-        0
+        // No column queried at more than 1 distinct rotations, so returns 5 as
+        // minimum unusable row.
+        5
     }
 
     fn new_from_block(block: &witness::Block<F>) -> Self {
@@ -392,6 +403,7 @@ impl<F: Field> SubCircuit<F> for AnchorTxCircuit<F> {
             start: self.call_data_start(),
             end: self.call_data_end(),
         };
+        // the first transaction is the anchor transaction
         config.assign(
             layouter,
             &self.anchor_tx,
@@ -403,6 +415,6 @@ impl<F: Field> SubCircuit<F> for AnchorTxCircuit<F> {
     }
 
     fn min_num_rows_block(_block: &witness::Block<F>) -> (usize, usize) {
-        (0, 0)
+        (Self::min_num_rows(), Self::min_num_rows())
     }
 }
