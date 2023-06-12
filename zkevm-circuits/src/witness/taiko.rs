@@ -4,8 +4,7 @@ use crate::{evm_circuit::util::rlc, table::PiFieldTag};
 use eth_types::{Address, Field, Hash, ToLittleEndian, ToWord, H256};
 use halo2_proofs::circuit::Value;
 
-// TODO: calculate the method_signature
-const ANCHOR_TX_METHOD_SIGNATURE: u32 = 0;
+const ANCHOR_TX_METHOD_SIGNATURE: u32 = 0x3d384a4b;
 
 /// Taiko witness
 #[derive(Debug, Default, Clone)]
