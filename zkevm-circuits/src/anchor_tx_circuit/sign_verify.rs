@@ -1,3 +1,42 @@
+//! # How to check the signature
+//!
+//! 1. IF r == GX1 OR r == GX2
+//! 2. IF r == GX2 THEN MUST WHEN r == GX1 AND s == 0
+//! 3. IF s == 0 THEN GX1_MUL_PRIVATEKEY + msg_hash == N
+//!
+//! So, IF r == GX2 THEN GX1_MUL_PRIVATEKEY + msg_hash == N
+//!
+//! ## Why we only need to prove the equation: GX1_MUL_PRIVATEKEY + msg_hash == N
+//!
+//! based on the algorithm of [taiko-mono](https://github.com/taikoxyz/taiko-mono/blob/ad26803e5bcbcc76b812084b7bd08f45992e59dd/packages/protocol/contracts/libs/LibAnchorSignature.sol#L68)
+//!
+//! ### The formula of signature with K = 1
+//!
+//! ```
+//! s = (GX1 * GOLDEN_TOUCH_PRIVATEKEY + msg_hash) (mod N) (K = 1)
+//! ```
+//!
+//! #### Formula deformation
+//!
+//! ```
+//! s = (GX1 * GOLDEN_TOUCH_PRIVATEKEY (mod N) + msg_hash (mod N)) (mod N)
+//! ```
+//!
+//! - Our `GX1_MUL_PRIVATEKEY` is equal to `GX1 * GOLDEN_TOUCH_PRIVATEKEY (mod N)`
+//! - Our `msg_hash` has already been (mod N) in [zkevm-circuit](https://github.com/taikoxyz/zkevm-circuits/blob/839152c04ab3ddd1b8ce32632a407e5e7ef823a8/eth-types/src/geth_types.rs#L236)
+//!
+//! ```rust
+//! let msg_hash = msg_hash.mod_floor(&*SECP256K1_Q);
+//! ```
+//!
+//! ### Summary
+//!
+//! ```
+//! because: 0 < GX1_MUL_PRIVATEKEY + msg_hash < 2N
+//! need prove: (GX1_MUL_PRIVATEKEY + msg_hash) (mod N) == 0
+//! so: GX1_MUL_PRIVATEKEY + msg_hash == N
+//! ```
+
 use crate::{
     evm_circuit::util::{
         constraint_builder::{BaseConstraintBuilder, ConstrainBuilderCommon},
@@ -90,18 +129,13 @@ const GX2_MUL_PRIVATEKEY: Word = U256([
 ]);
 static GX2_MUL_PRIVATEKEY_LO_HI: Lazy<(U256, U256)> = Lazy::new(|| split_u256(&GX2_MUL_PRIVATEKEY));
 
-// # How to check the signature
-// 1. IF r == GX1 OR r == GX2
-// 2. IF r == GX2 THEN MUST WHEN r == GX1 AND s == 0
-// 3. IF s == 0 THEN (GX1_MUL_PRIVATEKEY + msg_hash) == N
-// => IF r == GX2 THEN GX1_MUL_PRIVATEKEY + msg_hash == N
 // In mul_add chip, we have a * b + c == d
 // => a == GX1_MUL_PRIVATEKEY
 // => b == 1
 // => c == msg_hash
 // => d == N
 //
-// # The layout
+// # The circuit layout
 // - msg_hash (c)
 // - SigR
 
