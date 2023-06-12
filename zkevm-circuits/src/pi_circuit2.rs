@@ -44,7 +44,7 @@ use lazy_static::lazy_static;
 
 /// Fixed by the spec
 const TX_LEN: usize = 10;
-const BLOCK_LEN: usize = 7 + 256 + 16;
+const BLOCK_LEN: usize = 7 + 256*2 + 16;
 const EXTRA_LEN: usize = 2;
 const ZERO_BYTE_GAS_COST: u64 = 4;
 const NONZERO_BYTE_GAS_COST: u64 = 16;
@@ -362,6 +362,14 @@ impl<F: Field> PublicData<F> {
 
     /// Returns struct with values for the block table
     pub fn get_block_table_values(&self) -> BlockValues {
+        let history_hashes = [
+            vec![U256::zero(); 256 - self.history_hashes.len()],
+            self.history_hashes
+                .iter()
+                .map(|&hash| hash)
+                .collect(),
+        ]
+        .concat();
         BlockValues {
             coinbase: self.block_constants.coinbase,
             gas_limit: self.block_constants.gas_limit.as_u64(),
@@ -370,7 +378,7 @@ impl<F: Field> PublicData<F> {
             difficulty: self.block_constants.difficulty,
             base_fee: self.block_constants.base_fee,
             chain_id: self.chain_id.as_u64(),
-            history_hashes: self.history_hashes.clone(),
+            history_hashes: history_hashes
         }
     }
 
@@ -1269,7 +1277,7 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
 
         // TODO(George): add withdrawals_root
         // TODO(George): check q_parent_hash
-        for sel in [q_beneficiary, q_number, q_gas_limit, q_state_root, q_transactions_root, q_receipts_root, q_gas_used, q_timestamp, q_mix_hash, q_base_fee_per_gas] {
+        for sel in [q_beneficiary, q_number, q_gas_limit, q_parent_hash, q_state_root, q_transactions_root, q_receipts_root, q_gas_used, q_timestamp, q_mix_hash, q_base_fee_per_gas] {
             meta.lookup_any("Block header: Check reconstructed values for the lo parts of fields and for fields without hi/lo", |meta| {
                 let q_sel = and::expr([
                                 meta.query_fixed(sel, Rotation::cur()),
@@ -1286,7 +1294,7 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
 
         // TODO(George): add withdrawals_root
         // TODO(George): check q_parent_hash
-        for sel in [q_state_root, q_transactions_root, q_receipts_root, q_gas_used, q_timestamp, q_mix_hash, q_base_fee_per_gas] {
+        for sel in [q_parent_hash, q_state_root, q_transactions_root, q_receipts_root, q_gas_used, q_timestamp, q_mix_hash, q_base_fee_per_gas] {
             meta.lookup_any("Block header: check reconstructed values for the hi parts of fields", |meta| {
                 let q_sel = and::expr([
                                 meta.query_fixed(sel, Rotation::cur()),
@@ -1754,8 +1762,15 @@ impl<F: Field> PiCircuitConfig<F> {
         .into_iter()
         .chain(block_values.history_hashes.iter().map(|h| {
             (
-                "prev_hash",
-                randomness.map(|v| rlc(h.to_le_bytes(), v)),
+                "prev_hash_hi",
+                Value::known(F::from_u128(u128::from_be_bytes(h.to_be_bytes()[0..16].try_into().unwrap()))),
+                false,
+            )
+        }))
+        .chain(block_values.history_hashes.iter().map(|h| {
+            (
+                "prev_hash_lo",
+                Value::known(F::from_u128(u128::from_be_bytes(h.to_be_bytes()[16..32].try_into().unwrap()))),
                 false,
             )
         }))
@@ -3115,21 +3130,21 @@ mod pi_circuit_test {
         let mut block = witness::Block::<Fr>::default();
         block.eth_block.parent_hash = *OMMERS_HASH;
         block.eth_block.author = Some(prover);
-        block.eth_block.state_root = *OMMERS_HASH;
-        block.eth_block.transactions_root = *OMMERS_HASH;
-        block.eth_block.receipts_root = *OMMERS_HASH;
+        block.eth_block.state_root = H256::from_slice(&hex::decode("21223344dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49349").unwrap());
+        block.eth_block.transactions_root = H256::from_slice(&hex::decode("31223344dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49350").unwrap());
+        block.eth_block.receipts_root = H256::from_slice(&hex::decode("41223344dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49351").unwrap());
         block.eth_block.logs_bloom = Some([0; 256].into());
         block.eth_block.extra_data = eth_types::Bytes::from([0; 0]);
-        block.eth_block.mix_hash = Some(*OMMERS_HASH);
+        block.eth_block.mix_hash = Some(H256::from_slice(&hex::decode("51223344dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49352").unwrap()));
         block.eth_block.nonce = Some(H64::from([0, 0, 0, 0, 0, 0, 0, 0]));
-
         block.context.number = U256::from(0x9090909090909090_u128);
         block.context.gas_limit = 0x9191919191919191;
         block.eth_block.gas_used = U256::from(0x92) << (31*8);
         block.context.timestamp = U256::from(0x93) << (31*8);
         block.context.base_fee = U256::from(0x94) << (31*8);
-
         block.context.difficulty = U256::from(0);
+        block.context.history_hashes = vec![U256::zero(); 256];
+        block.context.history_hashes[255] = U256::from_big_endian(block.eth_block.parent_hash.as_fixed_bytes());
 
         let public_data = PublicData::new(&block, prover, Default::default());
 
