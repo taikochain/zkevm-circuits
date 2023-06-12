@@ -42,7 +42,7 @@ use crate::{
         constraint_builder::{BaseConstraintBuilder, ConstrainBuilderCommon},
         split_u256_limb64,
     },
-    table::{TxFieldTag, TxTable},
+    table::{LookupTable, TxFieldTag, TxTable},
     util::Challenges,
 };
 use eth_types::{geth_types::Transaction, Address, Field, ToBigEndian, Word, U256};
@@ -219,6 +219,7 @@ impl<F: Field> SignVerifyConfig<F> {
                 cb.gate(q_sign_step)
             },
         );
+
         meta.create_gate("sign_rlc_acc[0] = sign[0]", |meta| {
             let mut cb = BaseConstraintBuilder::new(MAX_DEGREE);
 
@@ -229,6 +230,7 @@ impl<F: Field> SignVerifyConfig<F> {
             cb.require_equal("sign_rlc_acc[0] = sign[0]", sign_rlc_acc, sign);
             cb.gate(q_sign_start)
         });
+
         meta.lookup_any("sign_r or msg_hash in tx_table", |meta| {
             let q_sign_end = meta.query_selector(q_sign_end);
 
@@ -236,25 +238,14 @@ impl<F: Field> SignVerifyConfig<F> {
             let tag = meta.query_fixed(tag, Rotation::cur());
             let index = 0.expr();
             let value = meta.query_advice(sign_rlc_acc, Rotation::cur());
-            vec![
-                (
-                    q_sign_end.expr() * tx_id,
-                    meta.query_advice(tx_table.tx_id, Rotation::cur()),
-                ),
-                (
-                    q_sign_end.expr() * tag,
-                    meta.query_fixed(tx_table.tag, Rotation::cur()),
-                ),
-                (
-                    q_sign_end.expr() * index,
-                    meta.query_advice(tx_table.index, Rotation::cur()),
-                ),
-                (
-                    q_sign_end * value,
-                    meta.query_advice(tx_table.value, Rotation::cur()),
-                ),
-            ]
+
+            [tx_id, tag, index, value]
+                .into_iter()
+                .zip(tx_table.table_exprs(meta).into_iter())
+                .map(|(arg, table)| (q_sign_end.expr() * arg, table))
+                .collect::<Vec<_>>()
         });
+
         // signature u128
         meta.create_gate(
             "sign_u128_acc[i+1] = sign_u128_acc[i] * BYTE_POW_BASE + sign[i+1]",
@@ -273,6 +264,7 @@ impl<F: Field> SignVerifyConfig<F> {
                 cb.gate(q_u128_step)
             },
         );
+
         meta.create_gate("sign_u128_acc[start] = sign[start]", |meta| {
             let mut cb = BaseConstraintBuilder::new(MAX_DEGREE);
 

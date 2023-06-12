@@ -10,7 +10,7 @@ mod test;
 
 use crate::{
     evm_circuit::util::constraint_builder::{BaseConstraintBuilder, ConstrainBuilderCommon},
-    table::{PiFieldTag, PiTable, TxFieldTag, TxTable},
+    table::{LookupTable, PiFieldTag, PiTable, TxFieldTag, TxTable},
     tx_circuit::TX_LEN,
     util::{Challenges, SubCircuit, SubCircuitConfig},
     witness::{self, Taiko},
@@ -160,16 +160,11 @@ impl<F: Field> SubCircuitConfig<F> for AnchorTxCircuitConfig<F> {
             let call_data_rlc_acc = meta.query_advice(call_data_rlc_acc, Rotation::cur());
             let call_data_tag = meta.query_fixed(call_data_tag, Rotation::cur());
 
-            vec![
-                (
-                    q_call_data_end.expr() * call_data_tag,
-                    meta.query_fixed(pi_table.tag, Rotation::cur()),
-                ),
-                (
-                    q_call_data_end * call_data_rlc_acc,
-                    meta.query_advice(pi_table.value, Rotation::cur()),
-                ),
-            ]
+            [call_data_tag, call_data_rlc_acc]
+                .into_iter()
+                .zip(pi_table.table_exprs(meta).into_iter())
+                .map(|(arg, table)| (q_call_data_end.expr() * arg, table))
+                .collect::<Vec<_>>()
         });
 
         Self {
