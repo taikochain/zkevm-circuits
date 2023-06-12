@@ -41,11 +41,7 @@ fn run<F: Field>(block: &Block<F>) -> Result<(), Vec<VerifyFailure>> {
 
 const GAS_LIMIT: u64 = 1500000;
 
-fn gen_block<const NUM_TXS: usize>(
-    max_txs: usize,
-    max_call_data: usize,
-    taiko: Taiko,
-) -> Block<Fr> {
+fn gen_block<const NUM_TXS: usize>(max_txs: usize, max_calldata: usize, taiko: Taiko) -> Block<Fr> {
     let block: GethData = TestContext::<1, NUM_TXS>::new(
         None,
         |_accs| {},
@@ -61,9 +57,11 @@ fn gen_block<const NUM_TXS: usize>(
     )
     .unwrap()
     .into();
-    let mut circuits_params = CircuitsParams::default();
-    circuits_params.max_txs = max_txs;
-    circuits_params.max_calldata = max_call_data;
+    let circuits_params = CircuitsParams {
+        max_txs,
+        max_calldata,
+        ..Default::default()
+    };
     let mut builder = BlockData::new_from_geth_data_with_params(block.clone(), circuits_params)
         .new_circuit_input_builder();
     builder
