@@ -14,5 +14,5 @@ pub use rw::{Rw, RwMap, RwRow};
 mod tx;
 pub use bus_mapping::circuit_input_builder::Call;
 pub use tx::Transaction;
-mod taiko;
-pub use taiko::Taiko;
+mod protocol_instance;
+pub use protocol_instance::ProtocolInstance;

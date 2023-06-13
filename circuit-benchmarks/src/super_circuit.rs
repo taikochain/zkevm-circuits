@@ -5,7 +5,7 @@ use ethers_signers::{LocalWallet, Signer};
 use halo2_proofs::plonk::Circuit;
 use std::{fs, io::Write, rc::Rc};
 use zkevm_circuits::{
-    root_circuit::{KzgDk, KzgSvk, PoseidonTranscript, RootCircuit},
+    root_circuit::{KzgDk, KzgSvk, PCDAggregationCircuit, PoseidonTranscript, RootCircuit},
     taiko_super_circuit::SuperCircuit,
 };
 
@@ -277,14 +277,11 @@ pub fn create_root_super_circuit_prover() {
     // RootCircuit
     // Create root circuit
     println!("root circuit");
-    // let params = gen_srs(22);
     let root_circuit = RootCircuit::new(
         &params,
-        vec![Snark {
-            protocol,
-            instances: super_instance,
-            proof: super_proof,
-        }],
+        &protocol,
+        Value::known(&super_instance),
+        Value::known(&super_proof),
     )
     .unwrap();
     let root_instance = root_circuit.instance();
@@ -338,8 +335,7 @@ fn gen_application_snark(params: &ParamsKZG<Bn256>) -> Snark {
         max_evm_rows: 0,
         max_keccak_rows: 0,
     };
-    let (k, super_circuit, super_instance, _) =
-        SuperCircuit::<_>::build(block_1tx(), circuits_params).unwrap();
+    let (_, super_circuit, _, _) = SuperCircuit::<_>::build(block_1tx(), circuits_params).unwrap();
 
     // let pk = gen_pk(params, &super_circuit, Some(Path::new("./examples/app.pk")),
     // super_circuit.params());
@@ -356,9 +352,8 @@ fn create_root_super_circuit_prover_sdk() {
     let params = gen_srs(22);
     let mut snark_roots = Vec::new();
     for snark in snarks {
-        // let root_circuit = AggregationCircuit::<SHPLONK>::new(&params, vec![snark]);
-        let root_circuit = RootCircuit::new(&params, [snark]).unwrap();
-        println!("new root circuit {}", root_circuit);
+        let pcd_circuit = PCDAggregationCircuit::new(&params, [snark]).unwrap();
+        println!("new pcd aggregation circuit {}", pcd_circuit);
 
         let start0 = start_timer!(|| "gen vk & pk");
         // let pk = gen_pk(
@@ -367,14 +362,14 @@ fn create_root_super_circuit_prover_sdk() {
         // Some(Path::new("./examples/agg.pk")),
         // agg_circuit.params(),
         // );
-        let vk = keygen_vk(&params, &root_circuit).expect("keygen_vk should not fail");
-        let pk = keygen_pk(&params, vk, &root_circuit).expect("keygen_pk should not fail");
+        let vk = keygen_vk(&params, &pcd_circuit).expect("keygen_vk should not fail");
+        let pk = keygen_pk(&params, vk, &pcd_circuit).expect("keygen_pk should not fail");
         end_timer!(start0);
 
         let _root = gen_snark_gwc(
             &params,
             &pk,
-            root_circuit.clone(),
+            pcd_circuit.clone(),
             // Some(Path::new("./examples/agg.snark"))
             None::<&str>,
         );
@@ -384,15 +379,8 @@ fn create_root_super_circuit_prover_sdk() {
 
     println!("gen blocks agg snark");
     let params = gen_srs(22);
-    let agg_circuit = RootCircuit::new(&params, snark_roots).unwrap();
-    println!("new agg circuit {}", agg_circuit);
-    // RootCircuit::new(
-    //     &params,
-    //     &snark_roots[0].protocol,
-    //     Value::known(&snark_roots[0].instances),
-    //     Value::known(&snark_roots[0].proof),
-    // )
-    // .unwrap();
+    let agg_circuit = PCDAggregationCircuit::new(&params, snark_roots).unwrap();
+    println!("new root agg circuit {}", agg_circuit);
 
     let start0 = start_timer!(|| "gen vk & pk");
     // let pk = gen_pk(
@@ -416,11 +404,8 @@ fn create_root_super_circuit_prover_sdk() {
     println!("gen evm snark");
     // do one more time to verify
     let num_instances = agg_circuit.num_instance();
-    println!("num_instances {:?}", num_instances);
     let instances = agg_circuit.instance();
-    println!("instances {:?}", instances);
     let accumulator_indices = Some(agg_circuit.accumulator_indices());
-    println!("accumulator_indices {:?}", accumulator_indices);
     let proof_calldata = gen_evm_proof_gwc(&params, &pk, agg_circuit, instances.clone());
 
     let deployment_code = gen_verifier(
@@ -446,6 +431,7 @@ mod tests {
     use eth_types::{address, bytecode, geth_types::GethData, Word};
     use ethers_signers::{LocalWallet, Signer};
     use halo2_proofs::{
+        arithmetic::Field,
         halo2curves::bn256::{Bn256, Fr, G1Affine},
         plonk::{create_proof, keygen_pk, keygen_vk, verify_proof},
         poly::{
@@ -462,9 +448,18 @@ mod tests {
     };
     use mock::{TestContext, MOCK_CHAIN_ID};
     use rand::SeedableRng;
-    use rand_chacha::ChaChaRng;
+    use rand_chacha::{ChaCha20Rng, ChaChaRng};
+    use snark_verifier_sdk::halo2::read_or_create_srs;
     use std::{collections::HashMap, env::var};
     use zkevm_circuits::super_circuit::SuperCircuit;
+
+    #[test]
+    fn test_setup_random_params() {
+        let k = 22;
+        read_or_create_srs::<G1Affine, _>(k, move |k| {
+            ParamsKZG::<Bn256>::setup(k, ChaCha20Rng::from_entropy())
+        });
+    }
 
     #[test]
     fn bench_root_super_circuit_prover() {

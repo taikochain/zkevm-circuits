@@ -133,7 +133,7 @@ impl PublicData {
             x.to_word() * Word::from(&bits[..])
         }
 
-        let taiko = &block.taiko;
+        let taiko = &block.protocal_instance;
 
         let field9 = left_shift(taiko.prover, 96)
             + left_shift(taiko.parent_gas_used as u64, 64)
@@ -803,8 +803,8 @@ mod pi_circuit_test {
         block.eth_block.mix_hash = Some(*OMMERS_HASH);
         block.eth_block.nonce = Some(H64::from([0, 0, 0, 0, 0, 0, 0, 0]));
         block.eth_block.base_fee_per_gas = Some(U256::from(0));
-        block.taiko.block_hash = *OMMERS_HASH;
-        block.taiko.parent_hash = *OMMERS_HASH;
+        block.protocal_instance.block_hash = *OMMERS_HASH;
+        block.protocal_instance.parent_hash = *OMMERS_HASH;
         block.context.history_hashes = vec![OMMERS_HASH.to_word()];
         block.context.block_hash = Some(OMMERS_HASH.to_word());
         block.context.number = 300.into();
