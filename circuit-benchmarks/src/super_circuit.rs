@@ -280,9 +280,11 @@ pub fn create_root_super_circuit_prover() {
     // let params = gen_srs(22);
     let root_circuit = RootCircuit::new(
         &params,
-        &protocol,
-        Value::known(&super_instance),
-        Value::known(&super_proof),
+        vec![Snark {
+            protocol,
+            instances: super_instance,
+            proof: super_proof,
+        }],
     )
     .unwrap();
     let root_instance = root_circuit.instance();
@@ -355,13 +357,8 @@ fn create_root_super_circuit_prover_sdk() {
     let mut snark_roots = Vec::new();
     for snark in snarks {
         // let root_circuit = AggregationCircuit::<SHPLONK>::new(&params, vec![snark]);
-        let root_circuit = RootCircuit::new(
-            &params,
-            &snark.protocol,
-            Value::known(&snark.instances),
-            Value::known(&snark.proof),
-        )
-        .unwrap();
+        let root_circuit = RootCircuit::new(&params, [snark]).unwrap();
+        println!("new root circuit {}", root_circuit);
 
         let start0 = start_timer!(|| "gen vk & pk");
         // let pk = gen_pk(
@@ -385,15 +382,17 @@ fn create_root_super_circuit_prover_sdk() {
         snark_roots.push(_root);
     }
 
-    println!("gen block agg snark");
+    println!("gen blocks agg snark");
     let params = gen_srs(22);
-    let agg_circuit = RootCircuit::new(
-        &params,
-        &snark_roots[0].protocol,
-        Value::known(&snark_roots[0].instances),
-        Value::known(&snark_roots[0].proof),
-    )
-    .unwrap();
+    let agg_circuit = RootCircuit::new(&params, snark_roots).unwrap();
+    println!("new agg circuit {}", agg_circuit);
+    // RootCircuit::new(
+    //     &params,
+    //     &snark_roots[0].protocol,
+    //     Value::known(&snark_roots[0].instances),
+    //     Value::known(&snark_roots[0].proof),
+    // )
+    // .unwrap();
 
     let start0 = start_timer!(|| "gen vk & pk");
     // let pk = gen_pk(
@@ -417,8 +416,11 @@ fn create_root_super_circuit_prover_sdk() {
     println!("gen evm snark");
     // do one more time to verify
     let num_instances = agg_circuit.num_instance();
+    println!("num_instances {:?}", num_instances);
     let instances = agg_circuit.instance();
+    println!("instances {:?}", instances);
     let accumulator_indices = Some(agg_circuit.accumulator_indices());
+    println!("accumulator_indices {:?}", accumulator_indices);
     let proof_calldata = gen_evm_proof_gwc(&params, &pk, agg_circuit, instances.clone());
 
     let deployment_code = gen_verifier(
