@@ -1,7 +1,7 @@
 //! Mock Block definition and builder related methods.
 
 use crate::{MockTransaction, MOCK_BASEFEE, MOCK_CHAIN_ID, MOCK_DIFFICULTY, MOCK_GASLIMIT};
-use eth_types::{Address, Block, Bytes, Hash, Transaction, Word, H64, U64, H256};
+use eth_types::{Address, Block, Bytes, Hash, Transaction, Word, H256, H64, U64};
 use ethers_core::types::Bloom;
 use ethers_core::types::OtherFields;
 
