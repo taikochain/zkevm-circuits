@@ -288,10 +288,8 @@ mod test {
     use snark_verifier::{
         loader::evm::{self, encode_calldata, Address, EvmLoader, ExecutorBuilder},
         pcs::kzg::{Gwc19, KzgAs, LimbsEncoding},
-        system,
         system::halo2::transcript::evm::EvmTranscript,
-        util::arithmetic::{fe_to_limbs, FieldExt},
-        verifier::{self, plonk::PlonkProtocol, SnarkVerifier},
+        verifier::{self, SnarkVerifier},
     };
     use std::{fs, io::Cursor, rc::Rc, time::Instant};
 
