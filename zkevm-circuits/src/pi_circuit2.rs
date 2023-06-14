@@ -156,7 +156,6 @@ struct BlockhashColumns {
     blk_hdr_rlc_acc: Column<Advice>,
     q_blk_hdr_rlc_acc: Column<Advice>,
     blk_hdr_is_leading_zero: Column<Advice>,
-    blk_hdr_const_0x81: Column<Fixed>,
 }
 
 /// PublicData contains all the values that the PiCircuit recieves as input
@@ -569,7 +568,6 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
         let q_blk_hdr_total_len = meta.complex_selector();
         let blk_hdr_reconstruct_value = meta.advice_column();
         let blk_hdr_is_leading_zero = meta.advice_column();
-        let blk_hdr_const_0x81 = meta.fixed_column();
 
         // Enum for selecting header fields. The cases are:
         // let blk_hdr_field_select = meta.fixed_column();
@@ -623,7 +621,6 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
             blk_hdr_rlc_acc,
             q_blk_hdr_rlc_acc,
             blk_hdr_is_leading_zero,
-            blk_hdr_const_0x81,
         };
 
         let pi = meta.instance_column();
