@@ -2,7 +2,7 @@
 
 use eth_types::{address, bytecode, geth_types::GethData, Address, ToWord, Word};
 use ethers_signers::{LocalWallet, Signer};
-use halo2_proofs::plonk::Circuit;
+use halo2_proofs::{plonk::Circuit, poly::commitment::Params};
 use std::{fs, io::Write, rc::Rc};
 use zkevm_circuits::{
     root_circuit::{KzgDk, KzgSvk, PCDAggregationCircuit, PoseidonTranscript, RootCircuit},
@@ -147,7 +147,7 @@ fn gen_verifier(
 fn evm_verify(deployment_code: Vec<u8>, instances: Vec<Vec<Fr>>, proof: Vec<u8>) {
     let calldata = encode_calldata(&instances, &proof);
     println!(
-        "deploy code size: {} bytes, instances size: [{}][{}], calldata size: {} bytes",
+        "deploy code size: {} bytes, instances size: [{}][{}], calldata: {}",
         deployment_code.len(),
         instances.len(),
         instances[0].len(),
@@ -421,10 +421,63 @@ fn create_root_super_circuit_prover_sdk() {
     evm_verify(evm_verifier_bytecode, instances, proof_calldata);
 }
 
+// for N super circuit -> 1 root circuit integration
+fn create_1_level_root_super_circuit_prover_sdk() {
+    let app_degree = 18;
+    let min_k_aggretation = 21;
+    let mut params_app = gen_srs(min_k_aggretation);
+    params_app.downsize(app_degree);
+    let snarks = [(); 1].map(|_| gen_application_snark(&params_app));
+
+    println!("gen blocks agg snark");
+    let params = gen_srs(min_k_aggretation);
+    let agg_circuit = PCDAggregationCircuit::new(&params, snarks).unwrap();
+    // println!("new root agg circuit {}", agg_circuit);
+
+    let start0 = start_timer!(|| "gen vk & pk");
+    // let pk = gen_pk(
+    // &params,
+    // &agg_circuit.without_witnesses(),
+    // Some(Path::new("./examples/agg.pk")),
+    // agg_circuit.params(),
+    // );
+    let vk = keygen_vk(&params, &agg_circuit).expect("keygen_vk should not fail");
+    let pk = keygen_pk(&params, vk.clone(), &agg_circuit).expect("keygen_pk should not fail");
+    end_timer!(start0);
+
+    // std::fs::remove_file("./examples/agg.snark").unwrap_or_default();
+    // let _snark = gen_snark_shplonk(
+    // &params,
+    // &pk,
+    // agg_circuit.clone(),
+    // Some(Path::new("./examples/agg.snark"))*/None::<&str>,
+    // );
+
+    println!("gen evm snark");
+    // do one more time to verify
+    let num_instances = agg_circuit.num_instance();
+    let instances = agg_circuit.instance();
+    let accumulator_indices = Some(agg_circuit.accumulator_indices());
+    let proof_calldata = gen_evm_proof_gwc(&params, &pk, agg_circuit, instances.clone());
+
+    let deployment_code = gen_verifier(
+        &params,
+        &vk,
+        Config::kzg()
+            .with_num_instance(num_instances.clone())
+            .with_accumulator_indices(accumulator_indices),
+        num_instances,
+    );
+    let evm_verifier_bytecode = evm::compile_yul(&deployment_code);
+
+    evm_verify(evm_verifier_bytecode, instances, proof_calldata);
+}
+
 #[cfg(test)]
 mod tests {
     use crate::super_circuit::{
-        create_root_super_circuit_prover, create_root_super_circuit_prover_sdk,
+        create_1_level_root_super_circuit_prover_sdk, create_root_super_circuit_prover,
+        create_root_super_circuit_prover_sdk,
     };
     use ark_std::{end_timer, start_timer};
     use bus_mapping::circuit_input_builder::CircuitsParams;
@@ -471,6 +524,12 @@ mod tests {
     fn bench_root_super_circuit_prover_sdk() {
         // New version, cleanest using the new sdk
         create_root_super_circuit_prover_sdk();
+    }
+
+    #[test]
+    fn bench_n_to_1_root_super_circuit_prover() {
+        // for N->1 aggregation using new sdk
+        create_1_level_root_super_circuit_prover_sdk();
     }
 
     #[cfg_attr(not(feature = "benches"), ignore)]
