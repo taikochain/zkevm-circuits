@@ -266,10 +266,7 @@ mod application {
 #[cfg(test)]
 mod test {
     use super::application::StandardPlonk;
-    use crate::{
-        root_circuit::{compile, Config, PoseidonTranscript, RootCircuit},
-        super_circuit::{super_circuit_tests::sampl_block, SuperCircuit},
-    };
+    use crate::root_circuit::{compile, Config, PoseidonTranscript, RootCircuit};
     use halo2_proofs::{
         circuit::Value,
         dev::MockProver,
@@ -289,15 +286,8 @@ mod test {
     use itertools::Itertools;
     use rand::rngs::OsRng;
     use snark_verifier::{
-        loader::{
-            evm::{self, encode_calldata, Address, EvmLoader, ExecutorBuilder},
-            native::NativeLoader,
-        },
+        loader::evm::{self, encode_calldata, Address, EvmLoader, ExecutorBuilder},
         pcs::kzg::{Gwc19, KzgAs, LimbsEncoding},
-        pcs::{
-            kzg::{KzgAccumulator, KzgSuccinctVerifyingKey, LimbsEncodingInstructions},
-            AccumulationScheme, AccumulationSchemeProver,
-        },
         system,
         system::halo2::transcript::evm::EvmTranscript,
         util::arithmetic::{fe_to_limbs, FieldExt},
@@ -371,7 +361,7 @@ mod test {
 
         File::create("./PlonkAggregationVerifier.sol")
             .expect("PlonkAggregationVerifier.sol")
-            .write_all(&loader.yul_code().as_bytes())
+            .write_all(loader.yul_code().as_bytes())
             .expect("PlonkAggregationVerifier.sol");
 
         evm::compile_yul(&loader.yul_code())

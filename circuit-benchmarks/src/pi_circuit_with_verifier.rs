@@ -144,7 +144,7 @@ use snark_verifier::{
     verifier::{self, SnarkVerifier},
 };
 use std::fs::{self, File};
-use std::{io::Cursor, io::Write, rc::Rc, time::Instant};
+use std::{io::Write, rc::Rc};
 
 type PlonkVerifier = verifier::plonk::PlonkVerifier<KzgAs<Bn256, Gwc19>>;
 
@@ -184,14 +184,13 @@ fn new_pi_circuit<const MAX_TXS: usize, const MAX_CALLDATA: usize>(
     let randomness = Fr::random(&mut rng);
     let rand_rpi = Fr::random(&mut rng);
     let public_data = generate_publicdata::<MAX_TXS, MAX_CALLDATA>();
-    let circuit = PiTestCircuit::<Fr, MAX_TXS, MAX_CALLDATA>(PiCircuit::<Fr>::new(
+    PiTestCircuit::<Fr, MAX_TXS, MAX_CALLDATA>(PiCircuit::<Fr>::new(
         MAX_TXS,
         MAX_CALLDATA,
         randomness,
         rand_rpi,
         public_data,
-    ));
-    circuit
+    ))
 }
 
 trait InstancesExport {
@@ -235,7 +234,7 @@ fn gen_evm_verifier(
 
     File::create("./PlonkEvmVerifier.sol")
         .expect("PlonkEvmVerifier.sol")
-        .write_all(&loader.yul_code().as_bytes())
+        .write_all(loader.yul_code().as_bytes())
         .expect("PlonkEvmVerifier.sol");
 
     evm::compile_yul(&loader.yul_code())
