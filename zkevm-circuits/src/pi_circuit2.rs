@@ -165,14 +165,13 @@ struct BlockhashColumns {
     q_transactions_root: Column<Fixed>,
     q_receipts_root: Column<Fixed>,
     q_number: Column<Fixed>,
-    // TODO(George) gas limit is u64 and not u256
     q_gas_limit: Column<Fixed>,
     q_gas_used: Column<Fixed>,
     q_timestamp: Column<Fixed>,
     q_mix_hash: Column<Fixed>,
     q_base_fee_per_gas: Column<Fixed>,
     q_withdrawals_root: Column<Fixed>,
-    q_hi: Selector,
+    q_hi: Column<Fixed>,
     q_lo: Column<Fixed>,
     q_blk_hdr_rlc_start: Selector,
     q_blk_hdr_rlp_end: Selector,
@@ -606,7 +605,7 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
         let q_withdrawals_root = meta.fixed_column();
         // We use `q_hi` and `q_lo` to distinguish the 16 MSB from the 16 LSB for fields
         // with length of 32 bytes
-        let q_hi = meta.complex_selector();
+        let q_hi = meta.fixed_column();
         let q_lo = meta.fixed_column();
 
         let q_blk_hdr_rlc_start = meta.complex_selector();
@@ -1286,23 +1285,22 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
                 |meta| {
                     let mut cb = BaseConstraintBuilder::new(MAX_DEGREE);
 
-                    let q_hi = meta.query_selector(q_hi);
+                    let q_hi_next = meta.query_fixed(q_hi, Rotation::next());
                     let q_lo_cur = meta.query_fixed(q_lo, Rotation::cur());
-                    let q_lo_prev = meta.query_fixed(q_lo, Rotation::prev());
-
-                    let selector = meta.query_fixed(selector, Rotation::cur());
-                    let blk_hdr_rlp = meta.query_advice(blk_hdr_rlp, Rotation::cur());
+                    let q_lo_next = meta.query_fixed(q_lo, Rotation::next());
+                    let selector_next = meta.query_fixed(selector, Rotation::next());
+                    let blk_hdr_rlp_next = meta.query_advice(blk_hdr_rlp, Rotation::next());
                     let blk_hdr_reconstruct_value_cur =
                         meta.query_advice(blk_hdr_reconstruct_value, Rotation::cur());
-                    let blk_hdr_reconstruct_value_prev =
-                        meta.query_advice(blk_hdr_reconstruct_value, Rotation::prev());
+                    let blk_hdr_reconstruct_value_next =
+                        meta.query_advice(blk_hdr_reconstruct_value, Rotation::next());
 
-                    cb.condition(and::expr([selector.clone(), q_hi]), |cb| {
+                    cb.condition(and::expr([selector_next.clone(), q_hi_next]), |cb| {
                         cb.require_equal(
-                            "byte_hi[n]*2^8 + byte_hi[n+1]",
-                            blk_hdr_reconstruct_value_cur.clone(),
-                            blk_hdr_reconstruct_value_prev.clone() * 256.expr()
-                                + blk_hdr_rlp.clone(),
+                            "reconstruct[n+1] = reconstruct[n]*2^8 + byte_hi[n+1]",
+                            blk_hdr_reconstruct_value_next.clone(),
+                            blk_hdr_reconstruct_value_cur.clone() * 256.expr()
+                                + blk_hdr_rlp_next.clone(),
                         )
                     });
 
@@ -1310,63 +1308,52 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
                     // in `blk_hdr_reconstruct_value` is not zero. We need to explicitly set the
                     // first value here
                     cb.condition(
-                        and::expr([q_lo_cur.clone(), not::expr(q_lo_prev.clone())]),
+                        and::expr([q_lo_next.clone(), not::expr(q_lo_cur.clone())]),
                         |cb| {
                             cb.require_equal(
                                 "byte_lo[0] == rlp_byte",
-                                blk_hdr_reconstruct_value_cur.clone(),
-                                blk_hdr_rlp.clone(),
+                                blk_hdr_reconstruct_value_next.clone(),
+                                blk_hdr_rlp_next.clone(),
                             )
                         },
                     );
 
-                    cb.condition(and::expr([q_lo_cur, q_lo_prev]), |cb| {
+                    cb.condition(and::expr([q_lo_next, q_lo_cur]), |cb| {
                         cb.require_equal(
-                            "byte_lo[n]*2^8 + byte_lo[n+1]",
-                            blk_hdr_reconstruct_value_cur,
-                            blk_hdr_reconstruct_value_prev * 256.expr() + blk_hdr_rlp,
+                            "reconstruct[n+1] = reconstruct[n]*2^8 + byte_lo[n+1]",
+                            blk_hdr_reconstruct_value_next,
+                            blk_hdr_reconstruct_value_cur * 256.expr() + blk_hdr_rlp_next,
                         )
                     });
 
+
                     cb.gate(and::expr([
-                        meta.query_selector(q_blk_hdr_total_len),
-                        selector,
+                        meta.query_selector(q_blk_hdr_rlp),
+                        selector_next,
                     ]))
                 },
             );
         }
 
-        for q_field in [
-            q_parent_hash,
-            q_beneficiary,
-            q_state_root,
-            q_transactions_root,
-            q_receipts_root,
-            q_number,
-            q_gas_limit,
-            q_gas_used,
-            q_timestamp,
-            q_mix_hash,
-            q_base_fee_per_gas,
-            q_withdrawals_root,
-        ] {
-            meta.create_gate(
-                "Block header RLP: reconstructing value starts from 0",
-                |meta| {
-                    let mut cb = BaseConstraintBuilder::new(MAX_DEGREE);
+        meta.create_gate(
+            "Block header RLP: reconstructing value starts from 0",
+            |meta| {
+                let mut cb = BaseConstraintBuilder::new(MAX_DEGREE);
 
-                    cb.require_zero(
-                        "blk_hdr_reconstruct_value defaults to 0",
-                        meta.query_advice(blk_hdr_reconstruct_value, Rotation::cur()),
-                    );
+                cb.require_zero(
+                    "blk_hdr_reconstruct_value defaults to 0",
+                    meta.query_advice(blk_hdr_reconstruct_value, Rotation::cur()),
+                );
 
-                    cb.gate(and::expr([
-                        meta.query_selector(q_blk_hdr_total_len),
-                        not::expr(meta.query_fixed(q_field, Rotation::cur())),
-                    ]))
-                },
-            );
-        }
+                cb.gate(and::expr([
+                    meta.query_selector(q_blk_hdr_rlp),
+                    not::expr(meta.query_fixed(q_hi, Rotation::cur())),
+                    not::expr(meta.query_fixed(q_beneficiary, Rotation::cur())),
+                    not::expr(meta.query_fixed(q_lo, Rotation::cur())),
+                    not::expr(meta.query_fixed(q_number, Rotation::cur())),
+                ]))
+            },
+        );
 
         for sel in [
             q_beneficiary,
@@ -1412,7 +1399,7 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
                 |meta| {
                     let q_sel = and::expr([
                         meta.query_fixed(sel, Rotation::cur()),
-                        meta.query_selector(q_hi),
+                        meta.query_fixed(q_hi, Rotation::cur()),
                         meta.query_fixed(q_lo, Rotation::next()),
                     ]);
                     vec![(
@@ -2482,15 +2469,7 @@ impl<F: Field> PiCircuitConfig<F> {
                 self.blockhash_cols.q_base_fee_per_gas,
                 self.blockhash_cols.q_withdrawals_root,
                 self.blockhash_cols.q_lo,
-                self.blockhash_cols.q_lo,
-                self.blockhash_cols.q_lo,
-                self.blockhash_cols.q_lo,
-                self.blockhash_cols.q_lo,
-                self.blockhash_cols.q_lo,
-                self.blockhash_cols.q_lo,
-                self.blockhash_cols.q_lo,
-                self.blockhash_cols.q_lo,
-                self.blockhash_cols.q_lo,
+                self.blockhash_cols.q_hi,
             ] {
                 region
                     .assign_fixed(|| "initializing column", col, i, || Value::known(F::zero()))
@@ -2634,22 +2613,44 @@ impl<F: Field> PiCircuitConfig<F> {
         }
 
         // Gets rid of CellNotAssigned occuring in the last row
-        region
+        for fixed_col in [self.blockhash_cols.q_parent_hash,
+                          self.blockhash_cols.q_beneficiary,
+                          self.blockhash_cols.q_state_root,
+                          self.blockhash_cols.q_transactions_root,
+                          self.blockhash_cols.q_receipts_root,
+                          self.blockhash_cols.q_number,
+                          self.blockhash_cols.q_gas_limit,
+                          self.blockhash_cols.q_gas_used,
+                          self.blockhash_cols.q_timestamp,
+                          self.blockhash_cols.q_mix_hash,
+                          self.blockhash_cols.q_base_fee_per_gas,
+                          self.blockhash_cols.q_withdrawals_root,
+                          self.blockhash_cols.q_lo,
+                          self.blockhash_cols.q_hi] {
+            region
+                .assign_fixed(
+                    || "fixed column last row",
+                    fixed_col,
+                    BLOCKHASH_TOTAL_ROWS,
+                    || Value::known(F::zero()),
+                )
+                .unwrap();
+        }
+
+        for advice_col in [
+            self.blockhash_cols.blk_hdr_rlc_acc,
+            self.blockhash_cols.blk_hdr_rlp,
+            self.blockhash_cols.blk_hdr_reconstruct_value,
+        ] {
+            region
             .assign_advice(
-                || "blk_hdr_rlc_acc",
-                self.blockhash_cols.blk_hdr_rlc_acc,
+                || "advice column last row",
+                advice_col,
                 BLOCKHASH_TOTAL_ROWS,
                 || Value::known(F::zero()),
             )
             .unwrap();
-        region
-            .assign_advice(
-                || "blk_hdr_rlp",
-                self.blockhash_cols.blk_hdr_rlp,
-                BLOCKHASH_TOTAL_ROWS,
-                || Value::known(F::zero()),
-            )
-            .unwrap();
+        }
 
         // Calculate reconstructed values
         let mut reconstructed_values: Vec<Vec<Value<F>>> = vec![];
@@ -2789,11 +2790,15 @@ impl<F: Field> PiCircuitConfig<F> {
                         || reconstructed_values[2][i],
                     )
                     .unwrap();
-                self.blockhash_cols
-                    .q_hi
-                    .enable(region, BENEFICIARY_RLP_OFFSET + i)
-                    .unwrap(); // No actual use, Only for convenience in
-                               // generating some gates elegantly
+                // No actual use, Only for convenience in
+                // generating some gates elegantly
+                region.assign_fixed(
+                    || "q_hi",
+                    self.blockhash_cols.q_hi,
+                    BENEFICIARY_RLP_OFFSET + i,
+                    || Value::known(F::one()),
+                )
+                .unwrap();
             }
 
             if i < 8 {
@@ -2845,11 +2850,14 @@ impl<F: Field> PiCircuitConfig<F> {
                         || reconstructed_values[9][i],
                     )
                     .unwrap();
-                self.blockhash_cols
-                    .q_hi
-                    .enable(region, NUMBER_RLP_OFFSET + i)
-                    .unwrap(); // No actual use, Only for convenience in
-                               // generating some gates elegantly
+                // No actual use, Only for convenience in
+                // generating some gates elegantly
+                region.assign_fixed(
+                    || "q_hi",
+                    self.blockhash_cols.q_hi,
+                    NUMBER_RLP_OFFSET + i,
+                    || Value::known(F::one()),
+                ).unwrap();
             }
 
             for (str, field, selector, offset) in [
@@ -2937,7 +2945,12 @@ impl<F: Field> PiCircuitConfig<F> {
                     BASE_FEE_RLP_OFFSET,
                     WITHDRAWALS_ROOT_RLP_OFFSET,
                 ] {
-                    self.blockhash_cols.q_hi.enable(region, offset + i).unwrap();
+                    region.assign_fixed(
+                        || "q_hi",
+                        self.blockhash_cols.q_hi,
+                        offset + i,
+                        || Value::known(F::one()),
+                    ).unwrap();
                 }
 
                 // reconstructing values for the _hi parts
@@ -3094,11 +3107,6 @@ impl<F: Field> PiCircuitConfig<F> {
             (TIMESTAMP_RLP_OFFSET, TIMESTAMP_RLP_LEN),
             (BASE_FEE_RLP_OFFSET, BASE_FEE_RLP_LEN),
         ] {
-            println!(
-                "LtChip::assign : block_header_rlp[{}] = {:0x?}",
-                base_offset + field_len - 2,
-                block_header_rlp[base_offset + field_len - 2]
-            );
             lt_chip
                 .assign(
                     region,
@@ -3603,8 +3611,6 @@ mod pi_circuit_test {
             Ok(())
         );
     }
-
-    // TODO(George): populate block.context.history_hashes in tests
 
     #[test]
     fn test_verify() {
