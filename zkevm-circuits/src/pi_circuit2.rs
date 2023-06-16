@@ -47,7 +47,7 @@ use lazy_static::lazy_static;
 
 /// Fixed by the spec
 const TX_LEN: usize = 10;
-const BLOCK_LEN: usize = 7 + 256 * 2 + 18;
+const BLOCK_LEN: usize = 7 + 256 * 2 + 8;
 const EXTRA_LEN: usize = 2;
 const ZERO_BYTE_GAS_COST: u64 = 4;
 const NONZERO_BYTE_GAS_COST: u64 = 16;
@@ -159,20 +159,12 @@ struct BlockhashColumns {
     blk_hdr_rlp_len_calc_inv: Column<Advice>,
     q_blk_hdr_total_len: Selector,
     blk_hdr_reconstruct_value: Column<Advice>,
-    q_parent_hash: Column<Fixed>,
-    q_beneficiary: Column<Fixed>,
-    q_state_root: Column<Fixed>,
-    q_transactions_root: Column<Fixed>,
-    q_receipts_root: Column<Fixed>,
+    q_reconstruct: Column<Fixed>,
     q_number: Column<Fixed>,
     q_gas_limit: Column<Fixed>,
     q_gas_used: Column<Fixed>,
     q_timestamp: Column<Fixed>,
-    q_mix_hash: Column<Fixed>,
     q_base_fee_per_gas: Column<Fixed>,
-    q_withdrawals_root: Column<Fixed>,
-    q_hi: Column<Fixed>,
-    q_lo: Column<Fixed>,
     q_blk_hdr_rlc_start: Selector,
     q_blk_hdr_rlp_end: Selector,
     blk_hdr_rlc_acc: Column<Advice>,
@@ -586,27 +578,15 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
         let blk_hdr_rlp_len_calc_inv = meta.advice_column();
         let q_blk_hdr_total_len = meta.complex_selector();
         let blk_hdr_reconstruct_value = meta.advice_column();
+        let q_reconstruct = meta.fixed_column();
         let blk_hdr_is_leading_zero = meta.advice_column();
 
-        // Enum for selecting header fields. The cases are:
-        // let blk_hdr_field_select = meta.fixed_column();
         // Selectors for each header field.
-        let q_parent_hash = meta.fixed_column();
-        let q_beneficiary = meta.fixed_column();
-        let q_state_root = meta.fixed_column();
-        let q_transactions_root = meta.fixed_column();
-        let q_receipts_root = meta.fixed_column();
         let q_number = meta.fixed_column();
         let q_gas_limit = meta.fixed_column();
         let q_gas_used = meta.fixed_column();
         let q_timestamp = meta.fixed_column();
-        let q_mix_hash = meta.fixed_column();
         let q_base_fee_per_gas = meta.fixed_column();
-        let q_withdrawals_root = meta.fixed_column();
-        // We use `q_hi` and `q_lo` to distinguish the 16 MSB from the 16 LSB for fields
-        // with length of 32 bytes
-        let q_hi = meta.fixed_column();
-        let q_lo = meta.fixed_column();
 
         let q_blk_hdr_rlc_start = meta.complex_selector();
         let q_blk_hdr_rlc_acc = meta.advice_column();
@@ -622,20 +602,12 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
             blk_hdr_rlp_len_calc_inv,
             q_blk_hdr_total_len,
             blk_hdr_reconstruct_value,
-            q_parent_hash,
-            q_beneficiary,
-            q_state_root,
-            q_transactions_root,
-            q_receipts_root,
+            q_reconstruct,
             q_number,
             q_gas_limit,
             q_gas_used,
             q_timestamp,
-            q_mix_hash,
             q_base_fee_per_gas,
-            q_withdrawals_root,
-            q_hi,
-            q_lo,
             q_blk_hdr_rlc_start,
             q_blk_hdr_rlp_end,
             blk_hdr_rlc_acc,
@@ -1045,12 +1017,7 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
                     meta.query_advice(blk_hdr_is_leading_zero, Rotation::prev());
 
                 let q_field_cur = meta.query_fixed(q_field, Rotation::cur());
-                let q_number_prev = meta.query_fixed(q_number, Rotation::prev());
-                let q_gas_limit_prev = meta.query_fixed(q_gas_limit, Rotation::prev());
-                let q_gas_used_prev = meta.query_fixed(q_gas_used, Rotation::prev());
-                let q_timestamp_prev = meta.query_fixed(q_timestamp, Rotation::prev());
-                let q_base_fee_per_gas_prev =
-                    meta.query_fixed(q_base_fee_per_gas, Rotation::prev());
+                let q_field_prev = meta.query_fixed(q_field, Rotation::cur());
 
                 cb.require_zero("Leading zero is actually zero", blk_hdr_rlp_cur);
                 cb.require_equal(
@@ -1058,13 +1025,7 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
                     1.expr(),
                     or::expr([
                         blk_hdr_is_leading_zero_prev,
-                        or::expr([
-                            not::expr(q_number_prev),
-                            not::expr(q_gas_limit_prev),
-                            not::expr(q_gas_used_prev),
-                            not::expr(q_timestamp_prev),
-                            not::expr(q_base_fee_per_gas_prev),
-                        ]),
+                        q_field_prev,
                     ]),
                 );
 
@@ -1266,113 +1227,61 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
         });
 
         // Reconstruct field values
-        for selector in [
-            q_parent_hash,
-            q_beneficiary,
-            q_state_root,
-            q_transactions_root,
-            q_receipts_root,
-            q_number,
-            q_gas_limit,
-            q_gas_used,
-            q_timestamp,
-            q_mix_hash,
-            q_base_fee_per_gas,
-            q_withdrawals_root,
-        ] {
-            meta.create_gate(
-                "Block header RLP: reconstructing header field values from RLP",
-                |meta| {
-                    let mut cb = BaseConstraintBuilder::new(MAX_DEGREE);
-
-                    let q_hi_next = meta.query_fixed(q_hi, Rotation::next());
-                    let q_lo_cur = meta.query_fixed(q_lo, Rotation::cur());
-                    let q_lo_next = meta.query_fixed(q_lo, Rotation::next());
-                    let selector_next = meta.query_fixed(selector, Rotation::next());
-                    let blk_hdr_rlp_next = meta.query_advice(blk_hdr_rlp, Rotation::next());
-                    let blk_hdr_reconstruct_value_cur =
-                        meta.query_advice(blk_hdr_reconstruct_value, Rotation::cur());
-                    let blk_hdr_reconstruct_value_next =
-                        meta.query_advice(blk_hdr_reconstruct_value, Rotation::next());
-
-                    cb.condition(and::expr([selector_next.clone(), q_hi_next]), |cb| {
-                        cb.require_equal(
-                            "reconstruct[n+1] = reconstruct[n]*2^8 + byte_hi[n+1]",
-                            blk_hdr_reconstruct_value_next.clone(),
-                            blk_hdr_reconstruct_value_cur.clone() * 256.expr()
-                                + blk_hdr_rlp_next.clone(),
-                        )
-                    });
-
-                    // At the start of the value reconstruction for the lo parts, the previous value
-                    // in `blk_hdr_reconstruct_value` is not zero. We need to explicitly set the
-                    // first value here
-                    cb.condition(
-                        and::expr([q_lo_next.clone(), not::expr(q_lo_cur.clone())]),
-                        |cb| {
-                            cb.require_equal(
-                                "byte_lo[0] == rlp_byte",
-                                blk_hdr_reconstruct_value_next.clone(),
-                                blk_hdr_rlp_next.clone(),
-                            )
-                        },
-                    );
-
-                    cb.condition(and::expr([q_lo_next, q_lo_cur]), |cb| {
-                        cb.require_equal(
-                            "reconstruct[n+1] = reconstruct[n]*2^8 + byte_lo[n+1]",
-                            blk_hdr_reconstruct_value_next,
-                            blk_hdr_reconstruct_value_cur * 256.expr() + blk_hdr_rlp_next,
-                        )
-                    });
-
-
-                    cb.gate(and::expr([
-                        meta.query_selector(q_blk_hdr_rlp),
-                        selector_next,
-                    ]))
-                },
-            );
-        }
-
         meta.create_gate(
-            "Block header RLP: reconstructing value starts from 0",
+            "Block header RLP: Calculate fields' value RLC",
             |meta| {
                 let mut cb = BaseConstraintBuilder::new(MAX_DEGREE);
 
-                cb.require_zero(
-                    "blk_hdr_reconstruct_value defaults to 0",
-                    meta.query_advice(blk_hdr_reconstruct_value, Rotation::cur()),
+                let q_reconstruct_cur = meta.query_fixed(q_reconstruct, Rotation::cur());
+                let q_reconstruct_next = meta.query_fixed(q_reconstruct, Rotation::next());
+                let blk_hdr_rlp_next = meta.query_advice(blk_hdr_rlp, Rotation::next());
+                let blk_hdr_reconstruct_value_cur =
+                    meta.query_advice(blk_hdr_reconstruct_value, Rotation::cur());
+                let blk_hdr_reconstruct_value_next =
+                    meta.query_advice(blk_hdr_reconstruct_value, Rotation::next());
+
+                let r = challenges.evm_word();
+
+                // TODO(George): decide to either skip leading zeros here or
+                //               include leading zeros on the block_table rlc values calculation.
+                //               For now keeping leading zeros in RLC.
+                cb.require_equal(
+                    "reconstruct[n+1] = reconstruct[n] * r + byte[n+1]",
+                    blk_hdr_reconstruct_value_next,
+                    blk_hdr_reconstruct_value_cur * r + blk_hdr_rlp_next,
+                );
+
+                cb.gate(and::expr([q_reconstruct_cur, q_reconstruct_next]))
+            },
+        );
+
+        meta.create_gate(
+            "Block header RLP: Field RLC starts from the byte value",
+            |meta| {
+                let mut cb = BaseConstraintBuilder::new(MAX_DEGREE);
+                let q_reconstruct_cur = meta.query_fixed(q_reconstruct, Rotation::cur());
+                let q_reconstruct_next = meta.query_fixed(q_reconstruct, Rotation::next());
+                let blk_hdr_rlp_next = meta.query_advice(blk_hdr_rlp, Rotation::next());
+                let blk_hdr_reconstruct_value_next =
+                    meta.query_advice(blk_hdr_reconstruct_value, Rotation::next());
+
+                cb.require_equal(
+                    "reconstruct[0] = byte[0]",
+                    blk_hdr_reconstruct_value_next,
+                    blk_hdr_rlp_next
                 );
 
                 cb.gate(and::expr([
-                    meta.query_selector(q_blk_hdr_rlp),
-                    not::expr(meta.query_fixed(q_hi, Rotation::cur())),
-                    not::expr(meta.query_fixed(q_beneficiary, Rotation::cur())),
-                    not::expr(meta.query_fixed(q_lo, Rotation::cur())),
-                    not::expr(meta.query_fixed(q_number, Rotation::cur())),
+                    not::expr(q_reconstruct_cur),
+                    q_reconstruct_next
                 ]))
             },
         );
 
-        for sel in [
-            q_beneficiary,
-            q_number,
-            q_gas_limit,
-            q_parent_hash,
-            q_state_root,
-            q_transactions_root,
-            q_receipts_root,
-            q_gas_used,
-            q_timestamp,
-            q_mix_hash,
-            q_base_fee_per_gas,
-            q_withdrawals_root,
-        ] {
-            meta.lookup_any("Block header: Check reconstructed values for the lo parts of fields and for fields without hi/lo", |meta| {
+        meta.lookup_any("Block header: Check RLC of field values", |meta| {
                 let q_sel = and::expr([
-                                meta.query_fixed(sel, Rotation::cur()),
-                                not::expr(meta.query_fixed(sel, Rotation::next())),
+                                meta.query_fixed(q_reconstruct, Rotation::cur()),
+                                not::expr(meta.query_fixed(q_reconstruct, Rotation::next())),
                 ]);
                 vec![
                     (
@@ -1380,42 +1289,14 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
                         meta.query_advice(block_table.value, Rotation::cur()),
                     ),
                 ]
-            });
-        }
+        });
 
-        for sel in [
-            q_parent_hash,
-            q_state_root,
-            q_transactions_root,
-            q_receipts_root,
-            q_gas_used,
-            q_timestamp,
-            q_mix_hash,
-            q_base_fee_per_gas,
-            q_withdrawals_root,
-        ] {
-            meta.lookup_any(
-                "Block header: check reconstructed values for the hi parts of fields",
-                |meta| {
-                    let q_sel = and::expr([
-                        meta.query_fixed(sel, Rotation::cur()),
-                        meta.query_fixed(q_hi, Rotation::cur()),
-                        meta.query_fixed(q_lo, Rotation::next()),
-                    ]);
-                    vec![(
-                        q_sel.expr()
-                            * meta.query_advice(blk_hdr_reconstruct_value, Rotation::cur()),
-                        meta.query_advice(block_table.value, Rotation::cur()),
-                    )]
-                },
-            );
-        }
 
         // 2. Check RLC of RLP'd block header
         // Accumulate only bytes that have q_blk_hdr_rlp AND
         // NOT(blk_hdr_is_leading_zero) and skip RLP headers if value is <0x80
 
-        meta.create_gate("Block header RLC: `q_blk_hdr_rlp` is boolean", |meta| {
+        meta.create_gate("Block header RLC: `q_blk_hdr_rlc_acc` is boolean", |meta| {
             let mut cb = BaseConstraintBuilder::new(MAX_DEGREE);
             let q_blk_hdr_rlp = meta.query_selector(q_blk_hdr_rlp);
             let q_blk_hdr_rlc_acc = meta.query_advice(q_blk_hdr_rlc_acc, Rotation::cur());
@@ -1843,22 +1724,10 @@ impl<F: Field> PiCircuitConfig<F> {
         Error,
     > {
         let block_values = public_data.get_block_table_values();
-        let extra_values = public_data.get_extra_values();
         let randomness = challenges.evm_word();
         self.q_start.enable(region, 0)?;
         let mut rlc_acc = Value::known(F::zero());
         let mut cells = vec![];
-        let beneficiary_value = Value::known(public_data.beneficiary.as_fixed_bytes().iter().fold(
-            F::zero(),
-            |mut acc, &x| {
-                // doubling 8 times -> shift left by a byte
-                for _ in 0..8 {
-                    acc = acc.double();
-                }
-                acc += F::from(x as u64);
-                acc
-            },
-        ));
 
         for (offset, (name, val, not_in_table)) in [
             ("zero", Value::known(F::zero()), false),
@@ -1872,7 +1741,10 @@ impl<F: Field> PiCircuitConfig<F> {
                 Value::known(F::from(block_values.gas_limit)),
                 false,
             ),
-            ("number", Value::known(F::from(block_values.number)), false),
+            (
+                "number",
+                randomness.map(|randomness| rlc([0;32-NUMBER_SIZE].into_iter().chain(block_values.number.to_be_bytes().into_iter()).rev().collect::<Vec<u8>>().try_into().unwrap(), randomness)),
+                false),
             (
                 "timestamp",
                 randomness.map(|randomness| rlc(block_values.timestamp.to_le_bytes(), randomness)),
@@ -1914,164 +1786,53 @@ impl<F: Field> PiCircuitConfig<F> {
             )
         }))
         .chain([
-            ("beneficiary", beneficiary_value, false),
             (
-                "state_root_hi",
-                Value::known(F::from_u128(u128::from_be_bytes(
-                    public_data.state_root.to_fixed_bytes()[0..16]
-                        .try_into()
-                        .unwrap(),
-                ))),
+                "parent_hash",
+                randomness.map(|randomness| rlc(public_data.parent_hash.to_fixed_bytes().into_iter().rev().collect::<Vec<u8>>().try_into().unwrap(), randomness)),
                 false,
             ),
             (
-                "state_root_lo",
-                Value::known(F::from_u128(u128::from_be_bytes(
-                    public_data.state_root.to_fixed_bytes()[16..32]
-                        .try_into()
-                        .unwrap(),
-                ))),
+                "beneficiary",
+                randomness.map(|randomness| rlc(([0u8;32-BENEFICIARY_SIZE].into_iter().chain(public_data.beneficiary.to_fixed_bytes().into_iter())).rev().collect::<Vec<u8>>().try_into().unwrap(), randomness)),
+                false),
+            (
+                "state_root",
+                randomness.map(|randomness| rlc(public_data.state_root.to_fixed_bytes().into_iter().rev().collect::<Vec<u8>>().try_into().unwrap(), randomness)),
                 false,
             ),
             (
-                "transactions_root_hi",
-                Value::known(F::from_u128(u128::from_be_bytes(
-                    public_data.transactions_root.to_fixed_bytes()[0..16]
-                        .try_into()
-                        .unwrap(),
-                ))),
+                "transactions_root",
+                randomness.map(|randomness| rlc(public_data.transactions_root.to_fixed_bytes().into_iter().rev().collect::<Vec<u8>>().try_into().unwrap(), randomness)),
                 false,
             ),
             (
-                "transactions_root_lo",
-                Value::known(F::from_u128(u128::from_be_bytes(
-                    public_data.transactions_root.to_fixed_bytes()[16..32]
-                        .try_into()
-                        .unwrap(),
-                ))),
-                false,
-            ),
-            (
-                "receipts_root_hi",
-                Value::known(F::from_u128(u128::from_be_bytes(
-                    public_data.receipts_root.to_fixed_bytes()[0..16]
-                        .try_into()
-                        .unwrap(),
-                ))),
-                false,
-            ),
-            (
-                "receipts_root_lo",
-                Value::known(F::from_u128(u128::from_be_bytes(
-                    public_data.receipts_root.to_fixed_bytes()[16..32]
-                        .try_into()
-                        .unwrap(),
-                ))),
+                "receipts_root",
+                randomness.map(|randomness| rlc(public_data.receipts_root.to_fixed_bytes().into_iter().rev().collect::<Vec<u8>>().try_into().unwrap(), randomness)),
                 false,
             ),
             ("number", Value::known(F::from(block_values.number)), false),
             (
-                "gas_used_hi",
-                Value::known(F::from_u128(u128::from_be_bytes(
-                    public_data.gas_used.to_be_bytes()[0..16]
-                        .try_into()
-                        .unwrap(),
-                ))),
+                "gas_used",
+                randomness.map(|randomness| rlc(public_data.gas_used.to_be_bytes(), randomness)),
                 false,
             ),
             (
-                "gas_used_lo",
-                Value::known(F::from_u128(u128::from_be_bytes(
-                    public_data.gas_used.to_be_bytes()[16..32]
-                        .try_into()
-                        .unwrap(),
-                ))),
+                "mix_hash",
+                randomness.map(|randomness| rlc(public_data.mix_hash.to_fixed_bytes().into_iter().rev().collect::<Vec<u8>>().try_into().unwrap(), randomness)),
                 false,
             ),
             (
-                "timestamp_hi",
-                Value::known(F::from_u128(u128::from_be_bytes(
-                    block_values.timestamp.to_be_bytes()[0..16]
-                        .try_into()
-                        .unwrap(),
-                ))),
+                "base_fee",
+                randomness.map(|randomness| rlc(block_values.base_fee.to_be_bytes(), randomness)),
                 false,
             ),
             (
-                "timestamp_lo",
-                Value::known(F::from_u128(u128::from_be_bytes(
-                    block_values.timestamp.to_be_bytes()[16..32]
-                        .try_into()
-                        .unwrap(),
-                ))),
-                false,
-            ),
-            (
-                "mix_hash_hi",
-                Value::known(F::from_u128(u128::from_be_bytes(
-                    public_data.mix_hash.to_fixed_bytes()[0..16]
-                        .try_into()
-                        .unwrap(),
-                ))),
-                false,
-            ),
-            (
-                "mix_hash_lo",
-                Value::known(F::from_u128(u128::from_be_bytes(
-                    public_data.mix_hash.to_fixed_bytes()[16..32]
-                        .try_into()
-                        .unwrap(),
-                ))),
-                false,
-            ),
-            (
-                "base_fee_hi",
-                Value::known(F::from_u128(u128::from_be_bytes(
-                    block_values.base_fee.to_be_bytes()[0..16]
-                        .try_into()
-                        .unwrap(),
-                ))),
-                false,
-            ),
-            (
-                "base_fee_lo",
-                Value::known(F::from_u128(u128::from_be_bytes(
-                    block_values.base_fee.to_be_bytes()[16..32]
-                        .try_into()
-                        .unwrap(),
-                ))),
-                false,
-            ),
-            (
-                "withdrawals_root_hi",
-                Value::known(F::from_u128(u128::from_be_bytes(
-                    public_data.withdrawals_root.to_fixed_bytes()[0..16]
-                        .try_into()
-                        .unwrap(),
-                ))),
-                false,
-            ),
-            (
-                "withdrawals_root_lo",
-                Value::known(F::from_u128(u128::from_be_bytes(
-                    public_data.withdrawals_root.to_fixed_bytes()[16..32]
-                        .try_into()
-                        .unwrap(),
-                ))),
+                "withdrawals_root",
+                randomness.map(|randomness| rlc(public_data.withdrawals_root.to_fixed_bytes().into_iter().rev().collect::<Vec<u8>>().try_into().unwrap(), randomness)),
                 false,
             ),
         ])
         .chain([
-            (
-                "state.root",
-                randomness.map(|v| rlc(extra_values.state_root.to_fixed_bytes(), v)),
-                false,
-            ),
-            (
-                "parent_block.hash",
-                randomness.map(|v| rlc(extra_values.prev_state_root.to_fixed_bytes(), v)),
-                false,
-            ),
             (
                 "prover",
                 Value::known(public_data.prover.to_scalar().unwrap()),
@@ -2456,20 +2217,12 @@ impl<F: Field> PiCircuitConfig<F> {
         // Initialize columns to zero
         for i in 0..BLOCKHASH_TOTAL_ROWS {
             for col in [
-                self.blockhash_cols.q_parent_hash,
-                self.blockhash_cols.q_beneficiary,
-                self.blockhash_cols.q_state_root,
-                self.blockhash_cols.q_transactions_root,
-                self.blockhash_cols.q_receipts_root,
                 self.blockhash_cols.q_number,
                 self.blockhash_cols.q_gas_limit,
                 self.blockhash_cols.q_gas_used,
                 self.blockhash_cols.q_timestamp,
-                self.blockhash_cols.q_mix_hash,
                 self.blockhash_cols.q_base_fee_per_gas,
-                self.blockhash_cols.q_withdrawals_root,
-                self.blockhash_cols.q_lo,
-                self.blockhash_cols.q_hi,
+                self.blockhash_cols.q_reconstruct,
             ] {
                 region
                     .assign_fixed(|| "initializing column", col, i, || Value::known(F::zero()))
@@ -2613,20 +2366,14 @@ impl<F: Field> PiCircuitConfig<F> {
         }
 
         // Gets rid of CellNotAssigned occuring in the last row
-        for fixed_col in [self.blockhash_cols.q_parent_hash,
-                          self.blockhash_cols.q_beneficiary,
-                          self.blockhash_cols.q_state_root,
-                          self.blockhash_cols.q_transactions_root,
-                          self.blockhash_cols.q_receipts_root,
+        for fixed_col in [
                           self.blockhash_cols.q_number,
                           self.blockhash_cols.q_gas_limit,
                           self.blockhash_cols.q_gas_used,
                           self.blockhash_cols.q_timestamp,
-                          self.blockhash_cols.q_mix_hash,
                           self.blockhash_cols.q_base_fee_per_gas,
-                          self.blockhash_cols.q_withdrawals_root,
-                          self.blockhash_cols.q_lo,
-                          self.blockhash_cols.q_hi] {
+                        self.blockhash_cols.q_reconstruct,
+                          ] {
             region
                 .assign_fixed(
                     || "fixed column last row",
@@ -2654,44 +2401,32 @@ impl<F: Field> PiCircuitConfig<F> {
 
         // Calculate reconstructed values
         let mut reconstructed_values: Vec<Vec<Value<F>>> = vec![];
+        let randomness = challenges.evm_word();
         for value in [
-            public_data.parent_hash.as_fixed_bytes()[0..16].iter(),
-            public_data.parent_hash.as_fixed_bytes()[16..32].iter(),
+            public_data.parent_hash.as_fixed_bytes().iter(),
             public_data.beneficiary.as_fixed_bytes().iter(),
-            public_data.state_root.as_fixed_bytes()[0..16].iter(),
-            public_data.state_root.as_fixed_bytes()[16..32].iter(),
-            public_data.transactions_root.as_fixed_bytes()[0..16].iter(),
-            public_data.transactions_root.as_fixed_bytes()[16..32].iter(),
-            public_data.receipts_root.as_fixed_bytes()[0..16].iter(),
-            public_data.receipts_root.as_fixed_bytes()[16..32].iter(),
+            public_data.state_root.as_fixed_bytes().iter(),
+            public_data.transactions_root.as_fixed_bytes().iter(),
+            public_data.receipts_root.as_fixed_bytes().iter(),
             public_data
                 .block_constants
                 .number
                 .as_u64()
                 .to_be_bytes()
                 .iter(),
-            public_data.block_constants.gas_limit.to_be_bytes()[0..16].iter(),
-            public_data.block_constants.gas_limit.to_be_bytes()[16..32].iter(),
-            public_data.gas_used.to_be_bytes()[0..16].iter(),
-            public_data.gas_used.to_be_bytes()[16..32].iter(),
-            public_data.block_constants.timestamp.to_be_bytes()[0..16].iter(),
-            public_data.block_constants.timestamp.to_be_bytes()[16..32].iter(),
-            public_data.mix_hash.as_fixed_bytes()[0..16].iter(),
-            public_data.mix_hash.as_fixed_bytes()[16..32].iter(),
-            public_data.block_constants.base_fee.to_be_bytes()[0..16].iter(),
-            public_data.block_constants.base_fee.to_be_bytes()[16..32].iter(),
-            public_data.withdrawals_root.as_fixed_bytes()[0..16].iter(),
-            public_data.withdrawals_root.as_fixed_bytes()[16..32].iter(),
+            public_data.block_constants.gas_limit.to_be_bytes().iter(),
+            public_data.gas_used.to_be_bytes().iter(),
+            public_data.block_constants.timestamp.to_be_bytes().iter(),
+            public_data.mix_hash.as_fixed_bytes().iter(),
+            public_data.block_constants.base_fee.to_be_bytes().iter(),
+            public_data.withdrawals_root.as_fixed_bytes().iter(),
         ] {
             reconstructed_values.push(
                 value
                     .clone()
-                    .scan(F::zero(), |acc, &x| {
-                        for _ in 0..8 {
-                            *acc = (*acc).double();
-                        }
-                        *acc += F::from(x as u64);
-                        Some(Value::known(*acc))
+                    .scan(Value::known(F::zero()), |acc, &x| {
+                        *acc = *acc * randomness + Value::known(F::from(x as u64));
+                        Some(*acc)
                     })
                     .collect::<Vec<Value<F>>>(),
             );
@@ -2724,81 +2459,41 @@ impl<F: Field> PiCircuitConfig<F> {
         let mut length_calc;
         let mut length_calc_inv;
         for i in 0..32 {
-            region
-                .assign_fixed(
-                    || "q_parent_hash",
-                    self.blockhash_cols.q_parent_hash,
-                    PARENT_HASH_RLP_OFFSET + i,
-                    || Value::known(F::one()),
-                )
-                .unwrap();
-            region
-                .assign_fixed(
-                    || "q_state_root",
-                    self.blockhash_cols.q_state_root,
-                    STATE_ROOT_RLP_OFFSET + i,
-                    || Value::known(F::one()),
-                )
-                .unwrap();
-            region
-                .assign_fixed(
-                    || "q_transactions_root",
-                    self.blockhash_cols.q_transactions_root,
-                    TX_ROOT_RLP_OFFSET + i,
-                    || Value::known(F::one()),
-                )
-                .unwrap();
-            region
-                .assign_fixed(
-                    || "q_receipts_root",
-                    self.blockhash_cols.q_receipts_root,
-                    RECEIPTS_ROOT_RLP_OFFSET + i,
-                    || Value::known(F::one()),
-                )
-                .unwrap();
-            region
-                .assign_fixed(
-                    || "q_mix_hash",
-                    self.blockhash_cols.q_mix_hash,
-                    MIX_HASH_RLP_OFFSET + i,
-                    || Value::known(F::one()),
-                )
-                .unwrap();
-            region
-                .assign_fixed(
-                    || "q_withdrawals_root",
-                    self.blockhash_cols.q_withdrawals_root,
-                    WITHDRAWALS_ROOT_RLP_OFFSET + i,
-                    || Value::known(F::one()),
-                )
-                .unwrap();
-
-            if i < 20 {
+            for offset in [
+                PARENT_HASH_RLP_OFFSET,
+                STATE_ROOT_RLP_OFFSET,
+                TX_ROOT_RLP_OFFSET,
+                RECEIPTS_ROOT_RLP_OFFSET,
+                MIX_HASH_RLP_OFFSET,
+                WITHDRAWALS_ROOT_RLP_OFFSET,
+            ] {
                 region
                     .assign_fixed(
-                        || "q_beneficiary",
-                        self.blockhash_cols.q_beneficiary,
-                        BENEFICIARY_RLP_OFFSET + i,
+                        || "q_reconstruct",
+                        self.blockhash_cols.q_reconstruct,
+                        offset + i,
                         || Value::known(F::one()),
                     )
                     .unwrap();
+            }
+
+            if i < 20 {
                 region
                     .assign_advice(
                         || "reconstruct_value for beneficiary",
                         self.blockhash_cols.blk_hdr_reconstruct_value,
                         BENEFICIARY_RLP_OFFSET + i,
-                        || reconstructed_values[2][i],
+                        || reconstructed_values[1][i],
                     )
                     .unwrap();
-                // No actual use, Only for convenience in
-                // generating some gates elegantly
-                region.assign_fixed(
-                    || "q_hi",
-                    self.blockhash_cols.q_hi,
-                    BENEFICIARY_RLP_OFFSET + i,
-                    || Value::known(F::one()),
-                )
-                .unwrap();
+                region
+                    .assign_fixed(
+                        || "q_reconstruct for beneficiary",
+                        self.blockhash_cols.q_reconstruct,
+                        BENEFICIARY_RLP_OFFSET + i,
+                        || Value::known(F::one()),
+                    )
+                    .unwrap();
             }
 
             if i < 8 {
@@ -2806,6 +2501,14 @@ impl<F: Field> PiCircuitConfig<F> {
                     .assign_fixed(
                         || "q_number",
                         self.blockhash_cols.q_number,
+                        NUMBER_RLP_OFFSET + i,
+                        || Value::known(F::one()),
+                    )
+                    .unwrap();
+                region
+                    .assign_fixed(
+                        || "q_reconstruct for number",
+                        self.blockhash_cols.q_reconstruct,
                         NUMBER_RLP_OFFSET + i,
                         || Value::known(F::one()),
                     )
@@ -2847,17 +2550,9 @@ impl<F: Field> PiCircuitConfig<F> {
                         || "reconstruct_value for number",
                         self.blockhash_cols.blk_hdr_reconstruct_value,
                         NUMBER_RLP_OFFSET + i,
-                        || reconstructed_values[9][i],
+                        || reconstructed_values[5][i],
                     )
                     .unwrap();
-                // No actual use, Only for convenience in
-                // generating some gates elegantly
-                region.assign_fixed(
-                    || "q_hi",
-                    self.blockhash_cols.q_hi,
-                    NUMBER_RLP_OFFSET + i,
-                    || Value::known(F::one()),
-                ).unwrap();
             }
 
             for (str, field, selector, offset) in [
@@ -2931,170 +2626,62 @@ impl<F: Field> PiCircuitConfig<F> {
                     .unwrap();
             }
 
-            if i < 16 {
-                // q_hi for all fields
-                for offset in [
+            for (name, base_offset, reconstructed_val) in [
+                (
+                    "parent_hash",
                     PARENT_HASH_RLP_OFFSET,
+                    &reconstructed_values[0],
+                ),
+                (
+                    "state_root",
                     STATE_ROOT_RLP_OFFSET,
-                    TX_ROOT_RLP_OFFSET,
+                    &reconstructed_values[2],
+                ),
+                ("tx_root", TX_ROOT_RLP_OFFSET, &reconstructed_values[3]),
+                (
+                    "receipts_root",
                     RECEIPTS_ROOT_RLP_OFFSET,
+                    &reconstructed_values[4],
+                ),
+                (
+                    "gas_limit",
                     GAS_LIMIT_RLP_OFFSET,
+                    &reconstructed_values[6],
+                ),
+                (
+                    "gas_used",
                     GAS_USED_RLP_OFFSET,
+                    &reconstructed_values[7],
+                ),
+                (
+                    "timestamp",
                     TIMESTAMP_RLP_OFFSET,
+                    &reconstructed_values[8],
+                ),
+                (
+                    "mix_hash",
                     MIX_HASH_RLP_OFFSET,
+                    &reconstructed_values[9],
+                ),
+                (
+                    "base_fee_per_gas",
                     BASE_FEE_RLP_OFFSET,
+                    &reconstructed_values[10],
+                ),
+                (
+                    "withdrawals_root",
                     WITHDRAWALS_ROOT_RLP_OFFSET,
-                ] {
-                    region.assign_fixed(
-                        || "q_hi",
-                        self.blockhash_cols.q_hi,
-                        offset + i,
-                        || Value::known(F::one()),
-                    ).unwrap();
-                }
-
-                // reconstructing values for the _hi parts
-                for (name, base_offset, reconstructed_val) in [
-                    (
-                        "parent_hash_hi",
-                        PARENT_HASH_RLP_OFFSET,
-                        &reconstructed_values[0],
-                    ),
-                    (
-                        "state_root_hi",
-                        STATE_ROOT_RLP_OFFSET,
-                        &reconstructed_values[3],
-                    ),
-                    ("tx_root_hi", TX_ROOT_RLP_OFFSET, &reconstructed_values[5]),
-                    (
-                        "receipts_root_hi",
-                        RECEIPTS_ROOT_RLP_OFFSET,
-                        &reconstructed_values[7],
-                    ),
-                    (
-                        "gas_limit_hi",
-                        GAS_LIMIT_RLP_OFFSET,
-                        &reconstructed_values[10],
-                    ),
-                    (
-                        "gas_used_hi",
-                        GAS_USED_RLP_OFFSET,
-                        &reconstructed_values[12],
-                    ),
-                    (
-                        "timestamp_hi",
-                        TIMESTAMP_RLP_OFFSET,
-                        &reconstructed_values[14],
-                    ),
-                    (
-                        "mix_hash_hi",
-                        MIX_HASH_RLP_OFFSET,
-                        &reconstructed_values[16],
-                    ),
-                    (
-                        "base_fee_per_gas_hi",
-                        BASE_FEE_RLP_OFFSET,
-                        &reconstructed_values[18],
-                    ),
-                    (
-                        "withdrawals_root_hi",
-                        WITHDRAWALS_ROOT_RLP_OFFSET,
-                        &reconstructed_values[20],
-                    ),
-                ] {
-                    region
-                        .assign_advice(
-                            || "reconstruct_value for ".to_string() + name,
-                            self.blockhash_cols.blk_hdr_reconstruct_value,
-                            base_offset + i,
-                            || reconstructed_val[i],
-                        )
-                        .unwrap();
-                }
-            }
-
-            if i >= 16 {
-                // q_lo for all fields
-                for offset in [
-                    PARENT_HASH_RLP_OFFSET,
-                    STATE_ROOT_RLP_OFFSET,
-                    TX_ROOT_RLP_OFFSET,
-                    RECEIPTS_ROOT_RLP_OFFSET,
-                    GAS_LIMIT_RLP_OFFSET,
-                    GAS_USED_RLP_OFFSET,
-                    TIMESTAMP_RLP_OFFSET,
-                    MIX_HASH_RLP_OFFSET,
-                    BASE_FEE_RLP_OFFSET,
-                    WITHDRAWALS_ROOT_RLP_OFFSET,
-                ] {
-                    region
-                        .assign_fixed(
-                            || "q_lo",
-                            self.blockhash_cols.q_lo,
-                            offset + i,
-                            || Value::known(F::one()),
-                        )
-                        .unwrap();
-                }
-
-                // reconstructing values for the _lo parts
-                for (name, base_offset, reconstructed_val) in [
-                    (
-                        "parent_hash_lo",
-                        PARENT_HASH_RLP_OFFSET,
-                        &reconstructed_values[1],
-                    ),
-                    (
-                        "state_root_lo",
-                        STATE_ROOT_RLP_OFFSET,
-                        &reconstructed_values[4],
-                    ),
-                    ("tx_root_lo", TX_ROOT_RLP_OFFSET, &reconstructed_values[6]),
-                    (
-                        "receipts_root_lo",
-                        RECEIPTS_ROOT_RLP_OFFSET,
-                        &reconstructed_values[8],
-                    ),
-                    (
-                        "gas_limit_lo",
-                        GAS_LIMIT_RLP_OFFSET,
-                        &reconstructed_values[11],
-                    ),
-                    (
-                        "gas_used_lo",
-                        GAS_USED_RLP_OFFSET,
-                        &reconstructed_values[13],
-                    ),
-                    (
-                        "timestamp_lo",
-                        TIMESTAMP_RLP_OFFSET,
-                        &reconstructed_values[15],
-                    ),
-                    (
-                        "mix_hash_lo",
-                        MIX_HASH_RLP_OFFSET,
-                        &reconstructed_values[17],
-                    ),
-                    (
-                        "base_fee_per_gas_lo",
-                        BASE_FEE_RLP_OFFSET,
-                        &reconstructed_values[19],
-                    ),
-                    (
-                        "withdrawals_root_lo",
-                        WITHDRAWALS_ROOT_RLP_OFFSET,
-                        &reconstructed_values[21],
-                    ),
-                ] {
-                    region
-                        .assign_advice(
-                            || "reconstruct_value for ".to_string() + name,
-                            self.blockhash_cols.blk_hdr_reconstruct_value,
-                            base_offset + i,
-                            || reconstructed_val[i - 16],
-                        )
-                        .unwrap();
-                }
+                    &reconstructed_values[11],
+                ),
+            ] {
+                region
+                    .assign_advice(
+                        || "reconstruct_value for ".to_string() + name,
+                        self.blockhash_cols.blk_hdr_reconstruct_value,
+                        base_offset + i,
+                        || reconstructed_val[i],
+                    )
+                    .unwrap();
             }
         }
 
