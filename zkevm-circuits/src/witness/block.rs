@@ -233,7 +233,7 @@ pub fn block_convert<F: Field>(
             .txs()
             .iter()
             .enumerate()
-            .map(|(idx, tx)| tx_convert(tx, idx + 1))
+            .map(|(idx, tx)| tx_convert(tx, block.chain_id.as_u64(), idx + 1))
             .collect(),
         end_block_not_last: block.block_steps.end_block_not_last.clone(),
         end_block_last: block.block_steps.end_block_last.clone(),

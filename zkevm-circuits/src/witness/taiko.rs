@@ -2,11 +2,12 @@
 
 use std::iter;
 
-use crate::{evm_circuit::util::rlc, table::PiFieldTag};
-use eth_types::{Address, Field, Hash, ToBigEndian, ToLittleEndian, ToWord, Word, H256};
+use crate::{evm_circuit::util::rlc, table::PiFieldTag, util::rlc_be_bytes};
+use eth_types::{Address, Bytes, Field, Hash, ToBigEndian, ToLittleEndian, ToWord, Word, H256};
 use halo2_proofs::circuit::Value;
 use keccak256::plain::Keccak;
 
+// hash(anchor)
 const ANCHOR_TX_METHOD_SIGNATURE: u32 = 0x3d384a4b;
 
 /// Taiko witness
@@ -117,6 +118,18 @@ impl MetaHash {
 }
 
 impl Taiko {
+    /// gen anchor call
+    // anchor(l1_hash,signal_root,l1_height,parent_gas_used)
+    pub fn anchor_call(&self) -> Bytes {
+        let mut result = Vec::new();
+        result.extend_from_slice(&ANCHOR_TX_METHOD_SIGNATURE.to_be_bytes());
+        result.extend_from_slice(&self.meta_hash.l1_hash.to_fixed_bytes());
+        result.extend_from_slice(&self.signal_root.to_fixed_bytes());
+        result.extend_from_slice(&self.meta_hash.l1_height.to_be_bytes());
+        result.extend_from_slice(&(self.parent_gas_used as u64).to_be_bytes());
+        result.into()
+    }
+
     /// Assignments for pi table
     pub fn table_assignments<F: Field>(&self, randomness: Value<F>) -> [[Value<F>; 2]; 6] {
         [
@@ -130,15 +143,11 @@ impl Taiko {
             ],
             [
                 Value::known(F::from(PiFieldTag::L1Hash as u64)),
-                randomness.map(|randomness| {
-                    rlc::value(&self.meta_hash.l1_hash.to_word().to_le_bytes(), randomness)
-                }),
+                rlc_be_bytes(&self.meta_hash.l1_hash.to_fixed_bytes(), randomness),
             ],
             [
                 Value::known(F::from(PiFieldTag::L1SignalRoot as u64)),
-                randomness.map(|randomness| {
-                    rlc::value(&self.signal_root.to_word().to_le_bytes(), randomness)
-                }),
+                rlc_be_bytes(&self.signal_root.to_fixed_bytes(), randomness),
             ],
             [
                 Value::known(F::from(PiFieldTag::L1Height as u64)),

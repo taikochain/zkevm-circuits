@@ -13,13 +13,16 @@ use crate::{
     table::{LookupTable, PiFieldTag, PiTable, TxFieldTag, TxTable},
     tx_circuit::TX_LEN,
     util::{Challenges, SubCircuit, SubCircuitConfig},
-    witness::{self, Taiko},
+    witness::{self, Taiko, Transaction},
 };
-use eth_types::{geth_types::Transaction, Field, ToScalar};
-use gadgets::util::Expr;
+use eth_types::{Field, ToScalar};
+use gadgets::util::{select, Expr};
 use halo2_proofs::{
     circuit::{Layouter, Region, Value},
-    plonk::{Advice, Column, ConstraintSystem, Error, Expression, Fixed, SecondPhase, Selector},
+    plonk::{
+        Advice, Column, ConstraintSystem, Error, Expression, Fixed, SecondPhase, Selector,
+        ThirdPhase,
+    },
     poly::Rotation,
 };
 use sign_verify::SignVerifyConfig;
@@ -28,7 +31,7 @@ use std::marker::PhantomData;
 use self::sign_verify::GOLDEN_TOUCH_ADDRESS;
 
 // The first of txlist is the anchor tx
-const ANCHOR_TX_ID: usize = 0;
+const ANCHOR_TX_ID: usize = 1;
 const ANCHOR_TX_VALUE: u64 = 0;
 const ANCHOR_TX_IS_CREATE: bool = false;
 const ANCHOR_TX_GAS_PRICE: u64 = 0;
@@ -56,6 +59,7 @@ pub struct AnchorTxCircuitConfig<F: Field> {
     // Gas, GasPrice, CallerAddress, CalleeAddress, IsCreate, Value, CallDataLength,
     // 2 rows: 0, tag, 0, value
     tag: Column<Fixed>,
+    use_rlc: Column<Fixed>,
 
     // check: method_signature, l1Hash, l1SignalRoot, l1Height, parentGasUsed
     q_call_data_start: Selector,
@@ -91,6 +95,7 @@ impl<F: Field> SubCircuitConfig<F> for AnchorTxCircuitConfig<F> {
     ) -> Self {
         let q_tag = meta.complex_selector();
         let tag = meta.fixed_column();
+        let use_rlc = meta.fixed_column();
 
         let q_call_data_start = meta.complex_selector();
         let q_call_data_step = meta.complex_selector();
@@ -102,33 +107,21 @@ impl<F: Field> SubCircuitConfig<F> for AnchorTxCircuitConfig<F> {
         // anchor transaction constants
         meta.lookup_any("anchor fixed fields", |meta| {
             let q_anchor = meta.query_selector(q_tag);
-            let tx_id = ANCHOR_TX_ID.expr();
-            let value = meta.query_fixed(tag, Rotation::next());
-            let tag = meta.query_fixed(tag, Rotation::cur());
-            let index = 0.expr();
-            vec![
-                (
-                    q_anchor.expr() * tx_id,
-                    meta.query_advice(tx_table.tx_id, Rotation::cur()),
-                ),
-                (
-                    q_anchor.expr() * tag,
-                    meta.query_fixed(tx_table.tag, Rotation::cur()),
-                ),
-                (
-                    q_anchor.expr() * index,
-                    meta.query_advice(tx_table.index, Rotation::cur()),
-                ),
-                (
-                    q_anchor * value,
-                    meta.query_advice(tx_table.value, Rotation::cur()),
-                ),
+            [
+                ANCHOR_TX_ID.expr(),
+                meta.query_fixed(tag, Rotation::cur()),
+                0.expr(),
+                meta.query_fixed(tag, Rotation::next()),
             ]
+            .into_iter()
+            .zip(tx_table.table_exprs(meta).into_iter())
+            .map(|(arg, table)| (q_anchor.expr() * arg, table))
+            .collect()
         });
 
         // call data
         meta.create_gate(
-            "call_data_rlc_acc[i+1] = call_data_rlc_acc[i] * randomness + call_data[i+1]",
+            "call_data_rlc_acc[i+1] = call_data_rlc_acc[i] * t + call_data[i+1]",
             |meta| {
                 let mut cb = BaseConstraintBuilder::new(MAX_DEGREE);
 
@@ -136,25 +129,33 @@ impl<F: Field> SubCircuitConfig<F> for AnchorTxCircuitConfig<F> {
                 let call_data_rlc_acc_next = meta.query_advice(call_data_rlc_acc, Rotation::next());
                 let call_data_rlc_acc = meta.query_advice(call_data_rlc_acc, Rotation::cur());
                 let call_data_next = meta.query_advice(tx_table.value, Rotation::next());
+                let use_rlc = meta.query_fixed(use_rlc, Rotation::cur());
                 let randomness = challenges.evm_word();
+                let t = select::expr(use_rlc, randomness, BYTE_POW_BASE.expr());
                 cb.require_equal(
-                    "call_data_rlc_acc[i+1] = call_data_rlc_acc[i] * randomness + call_data[i+1]",
+                    "call_data_rlc_acc[i+1] = call_data_rlc_acc[i] * t + call_data[i+1]",
                     call_data_rlc_acc_next,
-                    call_data_rlc_acc * randomness + call_data_next,
+                    call_data_rlc_acc * t + call_data_next,
                 );
                 cb.gate(q_call_data_step)
             },
         );
-        meta.create_gate("call_data_acc[0] = call_data[0]", |meta| {
+
+        meta.create_gate("call_data_rlc_acc[0] = call_data[0]", |meta| {
             let mut cb = BaseConstraintBuilder::new(MAX_DEGREE);
 
             let q_call_data_start = meta.query_selector(q_call_data_start);
-            let call_data_acc = meta.query_advice(call_data_rlc_acc, Rotation::cur());
+            let call_data_rlc_acc = meta.query_advice(call_data_rlc_acc, Rotation::cur());
             let call_data = meta.query_advice(tx_table.value, Rotation::cur());
 
-            cb.require_equal("call_data_acc[0] = call_data[0]", call_data_acc, call_data);
+            cb.require_equal(
+                "call_data_rlc_acc[0] = call_data[0]",
+                call_data_rlc_acc,
+                call_data,
+            );
             cb.gate(q_call_data_start)
         });
+
         meta.lookup_any("call data in pi_table", |meta| {
             let q_call_data_end = meta.query_selector(q_call_data_end);
             let call_data_rlc_acc = meta.query_advice(call_data_rlc_acc, Rotation::cur());
@@ -173,6 +174,7 @@ impl<F: Field> SubCircuitConfig<F> for AnchorTxCircuitConfig<F> {
 
             q_tag,
             tag,
+            use_rlc,
 
             q_call_data_start,
             q_call_data_step,
@@ -247,7 +249,23 @@ impl<F: Field> AnchorTxCircuitConfig<F> {
         challenges: &Challenges<Value<F>>,
     ) -> Result<(), Error> {
         let mut offset = call_data.start;
-        let randomness = challenges.evm_word();
+        // for idx in 0..offset {
+        //     // fill zero
+        //     region.assign_advice(
+        //         || "zero value",
+        //         self.call_data_rlc_acc,
+        //         idx,
+        //         || Value::known(F::ZERO),
+        //     )?;
+        //     region.assign_fixed(
+        //         || "zero value",
+        //         self.call_data_tag,
+        //         idx,
+        //         || Value::known(F::ZERO),
+        //     )?;
+        //     region.assign_fixed(|| "zero value", self.use_rlc, idx, || Value::known(F::ZERO))?;
+        // }
+
         for (annotation, value, tag) in [
             (
                 "method_signature",
@@ -272,9 +290,14 @@ impl<F: Field> AnchorTxCircuitConfig<F> {
             ),
         ] {
             let mut rlc_acc = Value::known(F::ZERO);
+            let (use_rlc, t) = if value.len() * 8 > F::CAPACITY as usize {
+                (Value::known(F::ONE), challenges.evm_word())
+            } else {
+                (Value::known(F::ZERO), Value::known(F::from(BYTE_POW_BASE)))
+            };
             for (idx, byte) in value.iter().enumerate() {
                 let row_offset = offset + idx;
-                rlc_acc = rlc_acc * randomness + Value::known(F::from(*byte as u64));
+                rlc_acc = rlc_acc * t + Value::known(F::from(*byte as u64));
                 region.assign_advice(
                     || annotation,
                     self.call_data_rlc_acc,
@@ -287,6 +310,7 @@ impl<F: Field> AnchorTxCircuitConfig<F> {
                     row_offset,
                     || Value::known(F::from(tag as u64)),
                 )?;
+                region.assign_fixed(|| annotation, self.use_rlc, row_offset, || use_rlc)?;
                 // setup selector
                 if idx == 0 {
                     self.q_call_data_start.enable(region, row_offset)?;
@@ -300,20 +324,18 @@ impl<F: Field> AnchorTxCircuitConfig<F> {
             }
             offset += value.len();
         }
-        todo!()
+        Ok(())
     }
 
     fn assign(
         &self,
         layouter: &mut impl Layouter<F>,
         anchor_tx: &Transaction,
-        chain_id: u64,
         taiko: &Taiko,
         call_data: &CallData,
         challenges: &Challenges<Value<F>>,
     ) -> Result<(), Error> {
-        self.sign_verify
-            .assign(layouter, anchor_tx, chain_id, challenges)?;
+        self.sign_verify.assign(layouter, anchor_tx, challenges)?;
         layouter.assign_region(
             || "anchor transaction",
             |ref mut region| {
@@ -330,18 +352,16 @@ impl<F: Field> AnchorTxCircuitConfig<F> {
 pub struct AnchorTxCircuit<F: Field> {
     max_txs: usize,
     anchor_tx: Transaction,
-    chain_id: u64,
     taiko: Taiko,
     _marker: PhantomData<F>,
 }
 
 impl<F: Field> AnchorTxCircuit<F> {
     /// Return a new TxCircuit
-    pub fn new(max_txs: usize, anchor_tx: Transaction, chain_id: u64, taiko: Taiko) -> Self {
+    pub fn new(max_txs: usize, anchor_tx: Transaction, taiko: Taiko) -> Self {
         AnchorTxCircuit {
             max_txs,
             anchor_tx,
-            chain_id,
             taiko,
             _marker: PhantomData,
         }
@@ -349,17 +369,17 @@ impl<F: Field> AnchorTxCircuit<F> {
 
     /// Return the minimum number of rows required to prove an input of a
     /// particular size.
-    pub(crate) fn min_num_rows() -> usize {
+    pub(crate) fn min_num_rows(max_txs: usize) -> usize {
         let rows_sign_verify = SignVerifyConfig::<F>::min_num_rows();
-        std::cmp::max(ANCHOR_CALL_DATA_LEN, rows_sign_verify)
+        std::cmp::max(Self::call_data_end(max_txs), rows_sign_verify)
     }
 
-    fn call_data_start(&self) -> usize {
-        self.max_txs * TX_LEN + 1 // empty row
+    fn call_data_start(max_txs: usize) -> usize {
+        max_txs * TX_LEN + 1 // empty row
     }
 
-    fn call_data_end(&self) -> usize {
-        self.call_data_start() + ANCHOR_CALL_DATA_LEN
+    fn call_data_end(max_txs: usize) -> usize {
+        Self::call_data_start(max_txs) + ANCHOR_CALL_DATA_LEN
     }
 }
 
@@ -367,7 +387,7 @@ impl<F: Field> SubCircuit<F> for AnchorTxCircuit<F> {
     type Config = AnchorTxCircuitConfig<F>;
 
     fn unusable_rows() -> usize {
-        // No column queried at more than 1 distinct rotations, so returns 5 as
+        // No column queried at more than 2 distinct rotations, so returns 5 as
         // minimum unusable row.
         5
     }
@@ -375,14 +395,7 @@ impl<F: Field> SubCircuit<F> for AnchorTxCircuit<F> {
     fn new_from_block(block: &witness::Block<F>) -> Self {
         Self::new(
             block.circuits_params.max_txs,
-            block
-                .eth_block
-                .transactions
-                .iter()
-                .map(|tx| tx.into())
-                .next()
-                .unwrap(),
-            block.context.chain_id.as_u64(),
+            block.txs.iter().next().unwrap().clone(),
             block.taiko.clone(),
         )
     }
@@ -395,21 +408,23 @@ impl<F: Field> SubCircuit<F> for AnchorTxCircuit<F> {
         layouter: &mut impl Layouter<F>,
     ) -> Result<(), Error> {
         let call_data = CallData {
-            start: self.call_data_start(),
-            end: self.call_data_end(),
+            start: Self::call_data_start(self.max_txs),
+            end: Self::call_data_end(self.max_txs),
         };
         // the first transaction is the anchor transaction
         config.assign(
             layouter,
             &self.anchor_tx,
-            self.chain_id,
             &self.taiko,
             &call_data,
             challenges,
         )
     }
 
-    fn min_num_rows_block(_block: &witness::Block<F>) -> (usize, usize) {
-        (Self::min_num_rows(), Self::min_num_rows())
+    fn min_num_rows_block(block: &witness::Block<F>) -> (usize, usize) {
+        (
+            Self::min_num_rows(block.circuits_params.max_txs),
+            Self::min_num_rows(block.circuits_params.max_txs),
+        )
     }
 }

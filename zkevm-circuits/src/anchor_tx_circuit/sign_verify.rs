@@ -44,8 +44,9 @@ use crate::{
     },
     table::{LookupTable, TxFieldTag, TxTable},
     util::Challenges,
+    witness::Transaction,
 };
-use eth_types::{geth_types::Transaction, Address, Field, ToBigEndian, Word, U256};
+use eth_types::{address, word, Address, Field, ToBigEndian, Word, U256};
 use ethers_signers::LocalWallet;
 use gadgets::{
     is_equal::IsEqualChip,
@@ -57,24 +58,18 @@ use halo2_proofs::{
     plonk::{Advice, Column, ConstraintSystem, Error, Expression, Fixed, SecondPhase, Selector},
     poly::Rotation,
 };
-use log::error;
 use once_cell::sync::Lazy;
 use std::str::FromStr;
 
-const ANCHOR_TX_ID: usize = 0;
 const MAX_DEGREE: usize = 9;
 const BYTE_POW_BASE: u64 = 1 << 8;
 
 pub(crate) static GOLDEN_TOUCH_ADDRESS: Lazy<Address> =
-    Lazy::new(|| Address::from_str("0x0000777735367b36bC9B61C50022d9D0700dB4Ec").unwrap());
+    Lazy::new(|| address!("0x0000777735367b36bC9B61C50022d9D0700dB4Ec"));
 
 // 0x92954368afd3caa1f3ce3ead0069c1af414054aefe1ef9aeacc1bf426222ce38
-pub(crate) const GOLDEN_TOUCH_PRIVATEKEY: Word = U256([
-    0xacc1bf426222ce38,
-    0x414054aefe1ef9ae,
-    0xf3ce3ead0069c1af,
-    0x92954368afd3caa1,
-]);
+pub(crate) static GOLDEN_TOUCH_PRIVATEKEY: Lazy<Word> =
+    Lazy::new(|| word!("0x92954368afd3caa1f3ce3ead0069c1af414054aefe1ef9aeacc1bf426222ce38"));
 
 pub(crate) static GOLDEN_TOUCH_WALLET: Lazy<LocalWallet> = Lazy::new(|| {
     LocalWallet::from_str("0x92954368afd3caa1f3ce3ead0069c1af414054aefe1ef9aeacc1bf426222ce38")
@@ -82,51 +77,31 @@ pub(crate) static GOLDEN_TOUCH_WALLET: Lazy<LocalWallet> = Lazy::new(|| {
 });
 
 // 0x79BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798
-const GX1: Word = U256([
-    0x59F2815B16F81798,
-    0x029BFCDB2DCE28D9,
-    0x55A06295CE870B07,
-    0x79BE667EF9DCBBAC,
-]);
+pub(crate) static GX1: Lazy<Word> =
+    Lazy::new(|| word!("0x79BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798"));
 static GX1_LO_HI: Lazy<(U256, U256)> = Lazy::new(|| split_u256(&GX1));
 
 // 0xc6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5
-const GX2: Word = U256([
-    0xabac09b95c709ee5,
-    0x5c778e4b8cef3ca7,
-    0x3045406e95c07cd8,
-    0xc6047f9441ed7d6d,
-]);
+pub(crate) static GX2: Lazy<Word> =
+    Lazy::new(|| word!("0xc6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5"));
 static GX2_LO_HI: Lazy<(U256, U256)> = Lazy::new(|| split_u256(&GX2));
 
 // 0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141
-const N: Word = U256([
-    0xbfd25e8cd0364141,
-    0xbaaedce6af48a03b,
-    0xfffffffffffffffe,
-    0xffffffffffffffff,
-]);
+static N: Lazy<Word> =
+    Lazy::new(|| word!("0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141"));
 static N_LO_HI: Lazy<(U256, U256)> = Lazy::new(|| split_u256(&N));
 
 // private key 0x92954368afd3caa1f3ce3ead0069c1af414054aefe1ef9aeacc1bf426222ce38
 // GX1 * PRIVATEKEY(mod N) = 0x4341adf5a780b4a87939938fd7a032f6e6664c7da553c121d3b4947429639122
-const GX1_MUL_PRIVATEKEY: Word = U256([
-    0xd3b4947429639122,
-    0xe6664c7da553c121,
-    0x7939938fd7a032f6,
-    0x4341adf5a780b4a8,
-]);
+static GX1_MUL_PRIVATEKEY: Lazy<Word> =
+    Lazy::new(|| word!("0x4341adf5a780b4a87939938fd7a032f6e6664c7da553c121d3b4947429639122"));
 static GX1_MUL_PRIVATEKEY_LO_HI: Lazy<(U256, U256)> = Lazy::new(|| split_u256(&GX1_MUL_PRIVATEKEY));
 static GX1_MUL_PRIVATEKEY_LIMB64: Lazy<[U256; 4]> =
     Lazy::new(|| split_u256_limb64(&GX1_MUL_PRIVATEKEY));
 
 // GX2 * PRIVATEKEY(mod N) = 0x4a43b192ca74cab200d6c086df90fb729abca9e52d38b8fa0beb4eafe70956de
-const GX2_MUL_PRIVATEKEY: Word = U256([
-    0x0beb4eafe70956de,
-    0x9abca9e52d38b8fa,
-    0x00d6c086df90fb72,
-    0x4a43b192ca74cab2,
-]);
+static GX2_MUL_PRIVATEKEY: Lazy<Word> =
+    Lazy::new(|| word!("0x4a43b192ca74cab200d6c086df90fb729abca9e52d38b8fa0beb4eafe70956de"));
 static GX2_MUL_PRIVATEKEY_LO_HI: Lazy<(U256, U256)> = Lazy::new(|| split_u256(&GX2_MUL_PRIVATEKEY));
 
 // In mul_add chip, we have a * b + c == d
@@ -196,7 +171,7 @@ impl<F: Field> SignVerifyConfig<F> {
         let is_equal_gx2 = IsEqualChip::configure(
             meta,
             |meta| meta.query_selector(q_check),
-            |meta| meta.query_advice(sign_rlc_acc, Rotation(64)), // SigR == GX2
+            |meta| meta.query_advice(sign_rlc_acc, Rotation::cur()), // SigR == GX2
             |_| gx2_rlc.expr(),
         );
 
@@ -234,7 +209,7 @@ impl<F: Field> SignVerifyConfig<F> {
         meta.lookup_any("sign_r or msg_hash in tx_table", |meta| {
             let q_sign_end = meta.query_selector(q_sign_end);
 
-            let tx_id = ANCHOR_TX_ID.expr();
+            let tx_id = super::ANCHOR_TX_ID.expr();
             let tag = meta.query_fixed(tag, Rotation::cur());
             let index = 0.expr();
             let value = meta.query_advice(sign_rlc_acc, Rotation::cur());
@@ -383,6 +358,7 @@ impl<F: Field> SignVerifyConfig<F> {
                     self.q_u128_step.enable(region, row_offset)?;
                 }
             }
+            *offset += 16;
             Ok(())
         };
 
@@ -410,13 +386,13 @@ impl<F: Field> SignVerifyConfig<F> {
             // setup selector
             if idx == 0 {
                 self.q_sign_start.enable(region, row_offset)?;
-                if need_check {
-                    self.q_check.enable(region, row_offset)?;
-                }
             }
             // the last offset of field
             if idx == 31 {
                 self.q_sign_end.enable(region, row_offset)?;
+                if need_check {
+                    // self.q_check.enable(region, row_offset)?;
+                }
             } else {
                 self.q_sign_step.enable(region, row_offset)?;
             }
@@ -427,7 +403,11 @@ impl<F: Field> SignVerifyConfig<F> {
 
     fn load_mul_add(&self, region: &mut Region<'_, F>, msg_hash: Word) -> Result<(), Error> {
         let chip = MulAddChip::construct(self.mul_add.clone());
-        chip.assign(region, 0, [GX1_MUL_PRIVATEKEY, U256::one(), msg_hash, N])
+        chip.assign(
+            region,
+            0,
+            [GX1_MUL_PRIVATEKEY.clone(), U256::one(), msg_hash, N.clone()],
+        )
     }
 
     /// Return the minimum number of rows required to prove an input of a
@@ -440,22 +420,17 @@ impl<F: Field> SignVerifyConfig<F> {
         &self,
         layouter: &mut impl Layouter<F>,
         anchor_tx: &Transaction,
-        chain_id: u64,
         challenges: &Challenges<Value<F>>,
     ) -> Result<(), Error> {
         layouter.assign_region(
             || "anchor sign verify",
             |ref mut region| {
-                let sign_data = anchor_tx.sign_data(chain_id).map_err(|e| {
-                    error!("tx_to_sign_data error for tx {:?}", e);
-                    Error::Synthesis
-                })?;
-                let msg_hash = U256::from_big_endian(sign_data.msg_hash.to_bytes().as_ref());
+                let msg_hash = U256::from_big_endian(&anchor_tx.tx_sign_hash.to_fixed_bytes());
                 self.load_mul_add(region, msg_hash)?;
                 let mut offset = 0;
                 for (annotation, tag, need_check, value) in [
-                    ("msg_hash", TxFieldTag::TxSignHash, true, msg_hash),
-                    ("sign_r", TxFieldTag::SigR, false, anchor_tx.r),
+                    ("msg_hash", TxFieldTag::TxSignHash, false, msg_hash),
+                    ("sign_r", TxFieldTag::SigR, true, anchor_tx.r),
                 ] {
                     self.assign_field(
                         region,
