@@ -561,6 +561,7 @@ async fn main() -> Result<(), Error> {
                         CIRCUIT_CONFIG.max_txs,
                         CIRCUIT_CONFIG.max_calldata,
                         public_data,
+                        None,
                     ),
                 );
             assert!(block.txs.len() <= CIRCUIT_CONFIG.max_txs);

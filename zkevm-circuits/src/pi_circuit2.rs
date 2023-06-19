@@ -3526,7 +3526,7 @@ mod pi_circuit_test {
         let test_public_data = PublicData::new(&test_block, H160::default(), Default::default());
 
         let k = 17;
-        match run::<Fr, MAX_TXS, MAX_CALLDATA>(k, public_data.clone(), Some(test_public_data), None)
+        match run::<Fr, MAX_TXS, MAX_CALLDATA>(k, public_data, Some(test_public_data), None)
         {
             Ok(_) => unreachable!("this case must fail"),
             Err(errs) => {
