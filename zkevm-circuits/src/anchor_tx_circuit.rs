@@ -432,7 +432,6 @@ impl<F: Field> AnchorTxCircuitConfig<F> {
         call_data: &CallData,
         challenges: &Challenges<Value<F>>,
     ) -> Result<(), Error> {
-        self.sign_verify.assign(layouter, anchor_tx, challenges)?;
         layouter.assign_region(
             || "anchor transaction",
             |ref mut region| {
@@ -441,7 +440,8 @@ impl<F: Field> AnchorTxCircuitConfig<F> {
                 self.assign_call_data(region, anchor_tx, call_data, challenges)?;
                 Ok(())
             },
-        )
+        )?;
+        self.sign_verify.assign(layouter, anchor_tx, challenges)
     }
 }
 
@@ -495,9 +495,9 @@ impl<F: Field> SubCircuit<F> for AnchorTxCircuit<F> {
     type Config = AnchorTxCircuitConfig<F>;
 
     fn unusable_rows() -> usize {
-        // No column queried at more than 3 distinct rotations, so returns 5 as
+        // No column queried at more than 7 distinct rotations, so returns 10 as
         // minimum unusable row.
-        6
+        10
     }
 
     fn new_from_block(block: &witness::Block<F>) -> Self {

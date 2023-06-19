@@ -2,7 +2,10 @@
 use std::collections::HashMap;
 
 use super::{
-    sign_verify::{GOLDEN_TOUCH_ADDRESS, GOLDEN_TOUCH_PRIVATEKEY, GOLDEN_TOUCH_WALLET, GX1, GX2},
+    sign_verify::{
+        GOLDEN_TOUCH_ADDRESS, GOLDEN_TOUCH_PRIVATEKEY, GOLDEN_TOUCH_WALLET, GX1,
+        GX1_MUL_PRIVATEKEY, GX2, N,
+    },
     *,
 };
 use crate::{
@@ -17,7 +20,7 @@ use eth_types::{
     address, bytecode,
     geth_types::{GethData, Transaction},
     sign_types::{biguint_to_32bytes_le, ct_option_ok_or, sign, SignData, SECP256K1_Q},
-    word, Address, Field, ToBigEndian, ToLittleEndian, ToWord, Word, U256,
+    word, Address, Field, ToBigEndian, ToLittleEndian, ToWord, Word, H256, U256,
 };
 use ethers_core::types::TransactionRequest;
 use ethers_signers::{LocalWallet, Signer};
@@ -41,7 +44,7 @@ use halo2_proofs::{
 };
 use itertools::Itertools;
 use log::error;
-use mock::{AddrOrWallet, TestContext, MOCK_CHAIN_ID};
+use mock::{AddrOrWallet, MockTransaction, TestContext, MOCK_CHAIN_ID};
 use num::Integer;
 use num_bigint::BigUint;
 use once_cell::sync::Lazy;
@@ -105,13 +108,15 @@ pub(crate) fn anchor_sign(
     })
 }
 
-fn run<F: Field>(block: &Block<F>) -> Result<(), Vec<VerifyFailure>> {
+fn run<F: Field>(block: &Block<F>, sign_hash: Option<H256>) -> Result<(), Vec<VerifyFailure>> {
     let k = log2_ceil(
         AnchorTxCircuit::<Fr>::unusable_rows()
             + AnchorTxCircuit::<Fr>::min_num_rows(block.circuits_params.max_txs),
     );
-    let circuit = TestAnchorTxCircuit::<F>::new_from_block(block);
-
+    let mut circuit = TestAnchorTxCircuit::<F>::new_from_block(block);
+    if let Some(sign_hash) = sign_hash {
+        circuit.sign_hash(sign_hash);
+    }
     let prover = match MockProver::run(k + 3, &circuit, vec![]) {
         Ok(prover) => prover,
         Err(e) => panic!("{:#?}", e),
@@ -119,11 +124,16 @@ fn run<F: Field>(block: &Block<F>) -> Result<(), Vec<VerifyFailure>> {
     prover.verify()
 }
 
-fn gen_block<const NUM_TXS: usize>(max_txs: usize, max_calldata: usize, taiko: Taiko) -> Block<Fr> {
+fn gen_block<const NUM_TXS: usize>(
+    max_txs: usize,
+    max_calldata: usize,
+    taiko: Taiko,
+    extra_func_tx: fn(&mut MockTransaction),
+) -> Block<Fr> {
     let chain_id = (*MOCK_CHAIN_ID).as_u64();
     let mut wallets = HashMap::new();
     wallets.insert(
-        GOLDEN_TOUCH_ADDRESS.clone(),
+        *GOLDEN_TOUCH_ADDRESS,
         GOLDEN_TOUCH_WALLET.clone().with_chain_id(chain_id),
     );
 
@@ -139,7 +149,7 @@ fn gen_block<const NUM_TXS: usize>(max_txs: usize, max_calldata: usize, taiko: T
         None,
         |accs| {
             accs[0]
-                .address(GOLDEN_TOUCH_ADDRESS.clone())
+                .address(*GOLDEN_TOUCH_ADDRESS)
                 .balance(Word::from(1u64 << 20));
             accs[1].address(taiko.l2_contract).code(code);
         },
@@ -147,16 +157,12 @@ fn gen_block<const NUM_TXS: usize>(max_txs: usize, max_calldata: usize, taiko: T
             txs[0]
                 .gas(taiko.anchor_gas_cost.to_word())
                 .gas_price(ANCHOR_TX_GAS_PRICE.to_word())
-                .from(GOLDEN_TOUCH_ADDRESS.clone())
+                .from(*GOLDEN_TOUCH_ADDRESS)
                 .to(taiko.l2_contract)
                 .input(taiko.anchor_call())
                 .nonce(0)
                 .value(ANCHOR_TX_VALUE.to_word());
-            let tx: Transaction = txs[0].to_owned().into();
-            let sig_data = anchor_sign(&tx, chain_id).unwrap();
-            let sig_r = U256::from_little_endian(sig_data.signature.0.to_bytes().as_slice());
-            let sig_s = U256::from_little_endian(sig_data.signature.1.to_bytes().as_slice());
-            txs[0].sig_data((2712, sig_r, sig_s));
+            extra_func_tx(txs[0]);
         },
         |block, _tx| block,
     )
@@ -177,10 +183,52 @@ fn gen_block<const NUM_TXS: usize>(max_txs: usize, max_calldata: usize, taiko: T
     block
 }
 
+fn correct_sign(tx: &mut MockTransaction) {
+    let chain_id = (*MOCK_CHAIN_ID).as_u64();
+    let _tx: Transaction = tx.to_owned().into();
+    let sig_data = anchor_sign(&_tx, chain_id).unwrap();
+    let sig_r = U256::from_little_endian(sig_data.signature.0.to_bytes().as_slice());
+    let sig_s = U256::from_little_endian(sig_data.signature.1.to_bytes().as_slice());
+    tx.sig_data((2712, sig_r, sig_s));
+}
+
 #[test]
 fn test() {
-    let mut taiko = Taiko::default();
-    taiko.anchor_gas_cost = 150000;
-    let block = gen_block::<1>(2, 100, taiko);
-    assert_eq!(run::<Fr>(&block), Ok(()));
+    let taiko = Taiko {
+        anchor_gas_cost: 150000,
+        ..Default::default()
+    };
+    let block = gen_block::<1>(2, 100, taiko, correct_sign);
+    assert_eq!(run::<Fr>(&block, None), Ok(()));
+}
+
+fn sign_r_is_gx2(tx: &mut MockTransaction) {
+    let msg_hash = *N - *GX1_MUL_PRIVATEKEY;
+    let msg_hash = ct_option_ok_or(
+        secp256k1::Fq::from_repr(msg_hash.to_le_bytes()),
+        libsecp256k1::Error::InvalidMessage,
+    )
+    .unwrap();
+    let k2 = secp256k1::Fq::ONE + secp256k1::Fq::ONE;
+    let sk = ct_option_ok_or(
+        secp256k1::Fq::from_repr(GOLDEN_TOUCH_PRIVATEKEY.to_le_bytes()),
+        libsecp256k1::Error::InvalidSecretKey,
+    )
+    .unwrap();
+    let (sig_r, sig_s) = sign(k2, sk, msg_hash);
+    let sig_r = U256::from_little_endian(sig_r.to_bytes().as_slice());
+    let sig_s = U256::from_little_endian(sig_s.to_bytes().as_slice());
+    tx.sig_data((2712, sig_r, sig_s));
+}
+
+#[test]
+fn test_when_sign_r_is_gx2() {
+    let taiko = Taiko {
+        anchor_gas_cost: 150000,
+        ..Default::default()
+    };
+    let msg_hash = *N - *GX1_MUL_PRIVATEKEY;
+    let msg_hash = H256::from(msg_hash.to_le_bytes());
+    let block = gen_block::<1>(2, 100, taiko, sign_r_is_gx2);
+    assert_eq!(run::<Fr>(&block, Some(msg_hash)), Ok(()));
 }

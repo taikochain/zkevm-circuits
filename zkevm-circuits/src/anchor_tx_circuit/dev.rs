@@ -5,7 +5,7 @@ use crate::{
     util::{Challenges, SubCircuit, SubCircuitConfig},
     witness::{self, Taiko},
 };
-use eth_types::Field;
+use eth_types::{Field, H256};
 use halo2_proofs::{
     circuit::{Layouter, SimpleFloorPlanner},
     plonk::{Circuit, ConstraintSystem, Error},
@@ -29,6 +29,12 @@ impl<F: Field> TestAnchorTxCircuit<F> {
             max_calldata: block.circuits_params.max_calldata,
             circuit: AnchorTxCircuit::new_from_block(block),
         }
+    }
+
+    /// Modify the sign hash for test
+    pub fn sign_hash(&mut self, hash: H256) {
+        self.circuit.anchor_tx.tx_sign_hash = hash;
+        self.circuit.txs[0].tx_sign_hash = hash;
     }
 }
 

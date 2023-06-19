@@ -121,7 +121,9 @@ impl Transaction {
                 Value::known(F::from(self.id as u64)),
                 Value::known(F::from(TxContextFieldTag::TxSignHash as u64)),
                 Value::known(F::ZERO),
-                rlc_be_bytes(&self.tx_sign_hash.to_fixed_bytes(), challenges.evm_word()),
+                challenges
+                    .evm_word()
+                    .map(|challenge| rlc::value(&self.tx_sign_hash.to_fixed_bytes(), challenge)),
             ],
             [
                 Value::known(F::from(self.id as u64)),

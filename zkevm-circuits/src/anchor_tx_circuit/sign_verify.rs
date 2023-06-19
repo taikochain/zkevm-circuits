@@ -87,13 +87,13 @@ pub(crate) static GX2: Lazy<Word> =
 static GX2_LO_HI: Lazy<(U256, U256)> = Lazy::new(|| split_u256(&GX2));
 
 // 0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141
-static N: Lazy<Word> =
+pub(crate) static N: Lazy<Word> =
     Lazy::new(|| word!("0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141"));
 static N_LO_HI: Lazy<(U256, U256)> = Lazy::new(|| split_u256(&N));
 
 // private key 0x92954368afd3caa1f3ce3ead0069c1af414054aefe1ef9aeacc1bf426222ce38
 // GX1 * PRIVATEKEY(mod N) = 0x4341adf5a780b4a87939938fd7a032f6e6664c7da553c121d3b4947429639122
-static GX1_MUL_PRIVATEKEY: Lazy<Word> =
+pub(crate) static GX1_MUL_PRIVATEKEY: Lazy<Word> =
     Lazy::new(|| word!("0x4341adf5a780b4a87939938fd7a032f6e6664c7da553c121d3b4947429639122"));
 static GX1_MUL_PRIVATEKEY_LO_HI: Lazy<(U256, U256)> = Lazy::new(|| split_u256(&GX1_MUL_PRIVATEKEY));
 static GX1_MUL_PRIVATEKEY_LIMB64: Lazy<[U256; 4]> =
@@ -410,11 +410,7 @@ impl<F: Field> SignVerifyConfig<F> {
 
     fn load_mul_add(&self, region: &mut Region<'_, F>, msg_hash: Word) -> Result<(), Error> {
         let chip = MulAddChip::construct(self.mul_add.clone());
-        chip.assign(
-            region,
-            0,
-            [msg_hash, U256::one(), GX1_MUL_PRIVATEKEY.clone(), N.clone()],
-        )
+        chip.assign(region, 0, [msg_hash, U256::one(), *GX1_MUL_PRIVATEKEY, *N])
     }
 
     /// Return the minimum number of rows required to prove an input of a
@@ -434,7 +430,7 @@ impl<F: Field> SignVerifyConfig<F> {
             |ref mut region| {
                 self.q_check.enable(region, 0)?;
 
-                let msg_hash = U256::from_big_endian(&anchor_tx.tx_sign_hash.to_fixed_bytes());
+                let msg_hash = U256::from_little_endian(&anchor_tx.tx_sign_hash.to_fixed_bytes());
                 self.load_mul_add(region, msg_hash)?;
                 let mut offset = 0;
                 for (annotation, tag, need_check, value) in [
@@ -442,7 +438,7 @@ impl<F: Field> SignVerifyConfig<F> {
                         "msg_hash",
                         TxFieldTag::TxSignHash,
                         false,
-                        anchor_tx.tx_sign_hash.to_fixed_bytes(),
+                        msg_hash.to_be_bytes(),
                     ),
                     ("sign_r", TxFieldTag::SigR, true, anchor_tx.r.to_be_bytes()),
                 ] {
