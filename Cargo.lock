@@ -4383,7 +4383,7 @@ checksum = "a507befe795404456341dfab10cef66ead4c041f62b8b11bbb92bffe5d0953e0"
 [[package]]
 name = "snark-verifier"
 version = "0.1.0"
-source = "git+https://github.com/brechtpd/snark-verifier.git?branch=feat/add-sdk#f3f273a479930bd48bdd3260231d4e12b5e3a57f"
+source = "git+https://github.com/smtmfft/snark-verifier.git?branch=feat/add-sdk-generic#e22021dcd93080a5be897ed285d0e7e46ce2583c"
 dependencies = [
  "bytes",
  "ecc",
@@ -4407,7 +4407,7 @@ dependencies = [
 [[package]]
 name = "snark-verifier-sdk"
 version = "0.1.1"
-source = "git+https://github.com/brechtpd/snark-verifier.git?branch=feat/add-sdk#f3f273a479930bd48bdd3260231d4e12b5e3a57f"
+source = "git+https://github.com/smtmfft/snark-verifier.git?branch=feat/add-sdk-generic#e22021dcd93080a5be897ed285d0e7e46ce2583c"
 dependencies = [
  "ark-std",
  "bincode",
