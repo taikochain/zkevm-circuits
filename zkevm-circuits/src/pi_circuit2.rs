@@ -161,10 +161,7 @@ struct BlockhashColumns {
     blk_hdr_reconstruct_value: Column<Advice>,
     q_reconstruct: Column<Fixed>,
     q_number: Column<Fixed>,
-    q_gas_limit: Column<Fixed>,
-    q_gas_used: Column<Fixed>,
-    q_timestamp: Column<Fixed>,
-    q_base_fee_per_gas: Column<Fixed>,
+    q_var_field_256: Column<Fixed>,
     q_blk_hdr_rlc_start: Selector,
     q_blk_hdr_rlp_end: Selector,
     blk_hdr_rlc_acc: Column<Advice>,
@@ -583,10 +580,7 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
 
         // Selectors for each header field.
         let q_number = meta.fixed_column();
-        let q_gas_limit = meta.fixed_column();
-        let q_gas_used = meta.fixed_column();
-        let q_timestamp = meta.fixed_column();
-        let q_base_fee_per_gas = meta.fixed_column();
+        let q_var_field_256 = meta.fixed_column();
 
         let q_blk_hdr_rlc_start = meta.complex_selector();
         let q_blk_hdr_rlc_acc = meta.advice_column();
@@ -604,10 +598,7 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
             blk_hdr_reconstruct_value,
             q_reconstruct,
             q_number,
-            q_gas_limit,
-            q_gas_used,
-            q_timestamp,
-            q_base_fee_per_gas,
+            q_var_field_256,
             q_blk_hdr_rlc_start,
             q_blk_hdr_rlp_end,
             blk_hdr_rlc_acc,
@@ -961,10 +952,7 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
             cb.gate(and::expr([
                 not::expr(or::expr([
                     meta.query_fixed(q_number, Rotation::cur()),
-                    meta.query_fixed(q_gas_limit, Rotation::cur()),
-                    meta.query_fixed(q_gas_used, Rotation::cur()),
-                    meta.query_fixed(q_timestamp, Rotation::cur()),
-                    meta.query_fixed(q_base_fee_per_gas, Rotation::cur()),
+                    meta.query_fixed(q_var_field_256, Rotation::cur()),
                 ])),
                 meta.query_selector(q_blk_hdr_rlp),
             ]))
@@ -1002,10 +990,7 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
 
         for q_field in [
             q_number,
-            q_gas_limit,
-            q_gas_used,
-            q_timestamp,
-            q_base_fee_per_gas,
+            q_var_field_256,
         ] {
             meta.create_gate("Block header RLP: leading zeros checks", |meta| {
                 let mut cb = BaseConstraintBuilder::new(MAX_DEGREE);
@@ -1054,20 +1039,11 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
             |meta| {
                 let q_number_cur = meta.query_fixed(q_number, Rotation::cur());
                 let q_number_next = meta.query_fixed(q_number, Rotation::next());
-                let q_gas_limit_cur = meta.query_fixed(q_gas_limit, Rotation::cur());
-                let q_gas_limit_next = meta.query_fixed(q_gas_limit, Rotation::next());
-                let q_gas_used_cur = meta.query_fixed(q_gas_used, Rotation::cur());
-                let q_gas_used_next = meta.query_fixed(q_gas_used, Rotation::next());
-                let q_timestamp_cur = meta.query_fixed(q_timestamp, Rotation::cur());
-                let q_timestamp_next = meta.query_fixed(q_timestamp, Rotation::next());
-                let q_base_fee_cur = meta.query_fixed(q_base_fee_per_gas, Rotation::cur());
-                let q_base_fee_next = meta.query_fixed(q_base_fee_per_gas, Rotation::next());
+                let q_var_field_256_cur = meta.query_fixed(q_var_field_256, Rotation::cur());
+                let q_var_field_256_next = meta.query_fixed(q_var_field_256, Rotation::next());
                 or::expr([
                     and::expr([q_number_cur, not::expr(q_number_next)]),
-                    and::expr([q_gas_limit_cur, not::expr(q_gas_limit_next)]),
-                    and::expr([q_gas_used_cur, not::expr(q_gas_used_next)]),
-                    and::expr([q_timestamp_cur, not::expr(q_timestamp_next)]),
-                    and::expr([q_base_fee_cur, not::expr(q_base_fee_next)]),
+                    and::expr([q_var_field_256_cur, not::expr(q_var_field_256_next)]),
                 ])
             },
             |meta| meta.query_advice(blk_hdr_rlp, Rotation::cur()),
@@ -1080,10 +1056,7 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
         // 3. total_len = 0 if value <= 0x80
         for q_value in [
             q_number,
-            q_gas_limit,
-            q_gas_used,
-            q_timestamp,
-            q_base_fee_per_gas,
+            q_var_field_256,
         ] {
             meta.create_gate("Block header RLP: length calculation", |meta| {
                 let mut cb = BaseConstraintBuilder::new(MAX_DEGREE);
@@ -1145,24 +1118,22 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
             cb.gate(and::expr([q_number_next, not::expr(q_number_cur)]))
         });
 
-        for q_field in [q_gas_limit, q_gas_used, q_timestamp, q_base_fee_per_gas] {
-            meta.create_gate("Block header RLP: check RLP headers for `gas_limit`, `gas_used`, `timestamp`, `base_fee`", |meta| {
-                let mut cb = BaseConstraintBuilder::new(MAX_DEGREE);
+        meta.create_gate("Block header RLP: check RLP headers for `gas_limit`, `gas_used`, `timestamp`, `base_fee`", |meta| {
+            let mut cb = BaseConstraintBuilder::new(MAX_DEGREE);
 
-                let blk_hdr_rlp = meta.query_advice(blk_hdr_rlp, Rotation::cur());
-                let q_field_cur = meta.query_fixed(q_field, Rotation::cur());
-                let q_field_next = meta.query_fixed(q_field, Rotation::next());
+            let blk_hdr_rlp = meta.query_advice(blk_hdr_rlp, Rotation::cur());
+            let q_field_cur = meta.query_fixed(q_var_field_256, Rotation::cur());
+            let q_field_next = meta.query_fixed(q_var_field_256, Rotation::next());
 
-                // All these fields have their lengths calculated 32 rows away
-                cb.condition(q_field_next.clone(),
-                    |cb| {
-                        cb.require_equal("blk_hdr_rlp = 0x80 + Len(<field>)", blk_hdr_rlp, 0x80.expr() + meta.query_advice(blk_hdr_rlp_len_calc, Rotation(32)));
-                    }
-                );
-                // Enable when the selectors switch from 0 to 1
-                cb.gate(and::expr([q_field_next, not::expr(q_field_cur)]))
-            });
-        }
+            // All these fields have their lengths calculated 32 rows away
+            cb.condition(q_field_next.clone(),
+                |cb| {
+                    cb.require_equal("blk_hdr_rlp = 0x80 + Len(<field>)", blk_hdr_rlp, 0x80.expr() + meta.query_advice(blk_hdr_rlp_len_calc, Rotation(32)));
+                }
+            );
+            // Enable when the selectors switch from 0 to 1
+            cb.gate(and::expr([q_field_next, not::expr(q_field_cur)]))
+        });
 
         meta.create_gate("Block header RLP: check total length", |meta| {
             let mut cb = BaseConstraintBuilder::new(MAX_DEGREE);
@@ -2208,10 +2179,7 @@ impl<F: Field> PiCircuitConfig<F> {
         for i in 0..BLOCKHASH_TOTAL_ROWS {
             for col in [
                 self.blockhash_cols.q_number,
-                self.blockhash_cols.q_gas_limit,
-                self.blockhash_cols.q_gas_used,
-                self.blockhash_cols.q_timestamp,
-                self.blockhash_cols.q_base_fee_per_gas,
+                self.blockhash_cols.q_var_field_256,
                 self.blockhash_cols.q_reconstruct,
             ] {
                 region
@@ -2358,10 +2326,7 @@ impl<F: Field> PiCircuitConfig<F> {
         // Gets rid of CellNotAssigned occuring in the last row
         for fixed_col in [
                           self.blockhash_cols.q_number,
-                          self.blockhash_cols.q_gas_limit,
-                          self.blockhash_cols.q_gas_used,
-                          self.blockhash_cols.q_timestamp,
-                          self.blockhash_cols.q_base_fee_per_gas,
+                          self.blockhash_cols.q_var_field_256,
                         self.blockhash_cols.q_reconstruct,
                           ] {
             region
@@ -2545,34 +2510,32 @@ impl<F: Field> PiCircuitConfig<F> {
                     .unwrap();
             }
 
-            for (str, field, selector, offset) in [
+            for (str, field, offset) in [
                 (
                     "gas_limit",
                     public_data.block_constants.gas_limit,
-                    self.blockhash_cols.q_gas_limit,
                     GAS_LIMIT_RLP_OFFSET,
                 ),
                 (
                     "gas_used",
                     public_data.gas_used,
-                    self.blockhash_cols.q_gas_used,
                     GAS_USED_RLP_OFFSET,
                 ),
                 (
                     "timestamp",
                     public_data.block_constants.timestamp,
-                    self.blockhash_cols.q_timestamp,
                     TIMESTAMP_RLP_OFFSET,
                 ),
                 (
                     "base_fee",
                     public_data.block_constants.base_fee,
-                    self.blockhash_cols.q_base_fee_per_gas,
                     BASE_FEE_RLP_OFFSET,
                 ),
             ]
             .iter()
             {
+                let selector = &self.blockhash_cols.q_var_field_256;
+
                 let field_lead_zeros_num: usize = (field.leading_zeros() / 8) as usize;
                 region
                     .assign_fixed(
