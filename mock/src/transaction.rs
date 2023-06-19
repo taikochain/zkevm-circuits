@@ -42,7 +42,7 @@ lazy_static! {
             .nonce(0x105u64)
             .value(word!("0x3e8"))
             .gas_price(word!("0x4d2"))
-            .input(Bytes::from(b"hello"))
+            .input(Bytes::from(b"hello hello 2 "))
             .build(),
             MockTransaction::default()
             .from(AddrOrWallet::random(&mut rng))
@@ -137,6 +137,8 @@ pub struct MockTransaction {
     pub max_priority_fee_per_gas: Word,
     pub max_fee_per_gas: Word,
     pub chain_id: Word,
+    pub enable_skipping_invalid_tx: bool,
+    pub enable_skipping_invalid_signature: bool,
 }
 
 impl Default for MockTransaction {
@@ -161,6 +163,8 @@ impl Default for MockTransaction {
             max_priority_fee_per_gas: Word::zero(),
             max_fee_per_gas: Word::zero(),
             chain_id: *MOCK_CHAIN_ID,
+            enable_skipping_invalid_tx: false,
+            enable_skipping_invalid_signature: false,
         }
     }
 }
@@ -194,7 +198,10 @@ impl From<MockTransaction> for Transaction {
 
 impl From<MockTransaction> for GethTransaction {
     fn from(mock: MockTransaction) -> Self {
-        GethTransaction::from(&Transaction::from(mock))
+        let mut geth_transaction = GethTransaction::from(&Transaction::from(mock.clone()));
+        geth_transaction.enable_skipping_invalid_signature = mock.enable_skipping_invalid_signature;
+        // geth_transaction.r = geth_transaction.s;
+        geth_transaction
     }
 }
 
@@ -277,6 +284,12 @@ impl MockTransaction {
     /// Set transaction_type field for the MockTransaction.
     pub fn transaction_type(&mut self, transaction_type: u64) -> &mut Self {
         self.transaction_type = U64::from(transaction_type);
+        self
+    }
+
+    /// Set invalid_tx field for the MockTransaction.
+    pub fn enable_skipping_invalid_tx(&mut self, enable_skipping_invalid_tx: bool) -> &mut Self {
+        self.enable_skipping_invalid_tx = enable_skipping_invalid_tx;
         self
     }
 

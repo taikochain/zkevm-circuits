@@ -24,9 +24,9 @@ use halo2_proofs::{
     plonk::{Advice, Column, ConstraintSystem, Error, Expression, Fixed},
 };
 use itertools::Itertools;
-use log::error;
+use log::{self, error};
 use sign_verify::{AssignedSignatureVerify, SignVerifyChip, SignVerifyConfig};
-use std::marker::PhantomData;
+use std::{fmt::Debug, marker::PhantomData};
 
 /// Number of static fields per tx: [nonce, gas, gas_price,
 /// caller_address, callee_address, is_create, value, call_data_length,
@@ -243,6 +243,10 @@ impl<F: Field> TxCircuit<F> {
                             TxFieldTag::TxSignHash,
                             assigned_sig_verif.msg_hash_rlc.value().copied(),
                         ),
+                        (
+                            TxFieldTag::TxInvalid,
+                            assigned_sig_verif.is_invalid.value().copied(),
+                        ),
                     ] {
                         let assigned_cell =
                             config.assign_row(&mut region, offset, i + 1, tag, 0, value)?;
@@ -251,10 +255,6 @@ impl<F: Field> TxCircuit<F> {
                         // Ref. spec 0. Copy constraints using fixed offsets between the tx rows and
                         // the SignVerifyChip
                         match tag {
-                            TxFieldTag::CallerAddress => region.constrain_equal(
-                                assigned_cell.cell(),
-                                assigned_sig_verif.address.cell(),
-                            )?,
                             TxFieldTag::TxSignHash => region.constrain_equal(
                                 assigned_cell.cell(),
                                 assigned_sig_verif.msg_hash_rlc.cell(),
@@ -343,6 +343,7 @@ impl<F: Field> SubCircuit<F> for TxCircuit<F> {
         layouter: &mut impl Layouter<F>,
     ) -> Result<(), Error> {
         assert!(self.txs.len() <= self.max_txs);
+
         let sign_datas: Vec<SignData> = self
             .txs
             .iter()
@@ -355,9 +356,13 @@ impl<F: Field> SubCircuit<F> for TxCircuit<F> {
             .try_collect()?;
 
         config.load_aux_tables(layouter)?;
-        let assigned_sig_verifs =
-            self.sign_verify
-                .assign(&config.sign_verify, layouter, &sign_datas, challenges)?;
+        let assigned_sig_verifs = self.sign_verify.assign(
+            &config.sign_verify,
+            layouter,
+            &sign_datas,
+            challenges,
+            &self.txs,
+        )?;
         self.assign_tx_table(config, challenges, layouter, assigned_sig_verifs)?;
         Ok(())
     }

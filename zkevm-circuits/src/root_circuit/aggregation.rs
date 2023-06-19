@@ -28,6 +28,7 @@ use snark_verifier::{
     verifier::{self, plonk::PlonkProtocol, SnarkVerifier},
 };
 use std::{io, iter, rc::Rc};
+use maingate::MainGateInstructions;
 
 /// Number of limbs to decompose a elliptic curve base field element into.
 pub const LIMBS: usize = 4;
