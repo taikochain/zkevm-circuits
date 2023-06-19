@@ -125,10 +125,10 @@ pub(crate) struct SignVerifyConfig<F: Field> {
     sign: Column<Advice>,
     sign_rlc_acc: Column<Advice>,
     // split u256 to low and high
-    q_u128_start: Selector,
-    q_u128_step: Selector,
-    q_u128_end: Selector,
-    sign_u128_acc: Column<Advice>,
+    q_u64_start: Selector,
+    q_u64_step: Selector,
+    q_u64_end: Selector,
+    sign_u64_acc: Column<Advice>,
 
     q_check: Selector,
     mul_add: MulAddConfig<F>,
@@ -148,13 +148,10 @@ impl<F: Field> SignVerifyConfig<F> {
         let sign = meta.advice_column();
         let sign_rlc_acc = meta.advice_column_in(SecondPhase);
 
-        let q_u128_start = meta.complex_selector();
-        let q_u128_step = meta.complex_selector();
-        let q_u128_end = meta.complex_selector();
-        let sign_u128_acc = meta.advice_column();
-
-        let q_check = meta.complex_selector();
-        let mul_add = MulAddChip::configure(meta, |meta| meta.query_selector(q_check));
+        let q_u64_start = meta.complex_selector();
+        let q_u64_step = meta.complex_selector();
+        let q_u64_end = meta.complex_selector();
+        let sign_u64_acc = meta.advice_column();
 
         let gx1_rlc = crate::evm_circuit::util::rlc::expr(
             GX1.to_le_bytes()
@@ -169,12 +166,17 @@ impl<F: Field> SignVerifyConfig<F> {
                 .as_ref(),
             challenges.evm_word(),
         );
+        let q_check = meta.complex_selector();
         let is_equal_gx2 = IsEqualChip::configure(
             meta,
             |meta| meta.query_selector(q_check),
             |meta| meta.query_advice(sign_rlc_acc, Rotation(63)), // SigR == GX2
             |_| gx2_rlc.expr(),
         );
+
+        let mul_add = MulAddChip::configure(meta, |meta| {
+            is_equal_gx2.is_equal_expression.expr() * meta.query_selector(q_check)
+        });
 
         // signature rlc
         meta.create_gate(
@@ -222,39 +224,39 @@ impl<F: Field> SignVerifyConfig<F> {
                 .collect::<Vec<_>>()
         });
 
-        // signature u128
+        // signature u64
         meta.create_gate(
-            "sign_u128_acc[i+1] = sign_u128_acc[i] * BYTE_POW_BASE + sign[i+1]",
+            "sign_u64_acc[i+1] = sign_u64_acc[i] * BYTE_POW_BASE + sign[i+1]",
             |meta| {
                 let mut cb = BaseConstraintBuilder::new(MAX_DEGREE);
 
-                let q_u128_step = meta.query_selector(q_u128_step);
-                let sign_u128_acc_next = meta.query_advice(sign_u128_acc, Rotation::next());
-                let sign_u128_acc = meta.query_advice(sign_u128_acc, Rotation::cur());
+                let q_u64_step = meta.query_selector(q_u64_step);
+                let sign_u64_acc_next = meta.query_advice(sign_u64_acc, Rotation::next());
+                let sign_u64_acc = meta.query_advice(sign_u64_acc, Rotation::cur());
                 let sign_next = meta.query_advice(sign, Rotation::next());
                 cb.require_equal(
-                    "sign_u128_acc[i+1] = sign_u128_acc[i] * BYTE_POW_BASE + sign[i+1]",
-                    sign_u128_acc_next,
-                    sign_u128_acc * BYTE_POW_BASE.expr() + sign_next,
+                    "sign_u64_acc[i+1] = sign_u64_acc[i] * BYTE_POW_BASE + sign[i+1]",
+                    sign_u64_acc_next,
+                    sign_u64_acc * BYTE_POW_BASE.expr() + sign_next,
                 );
-                cb.gate(q_u128_step)
+                cb.gate(q_u64_step)
             },
         );
 
-        meta.create_gate("sign_u128_acc[start] = sign[start]", |meta| {
+        meta.create_gate("sign_u64_acc[start] = sign[start]", |meta| {
             let mut cb = BaseConstraintBuilder::new(MAX_DEGREE);
 
-            let q_u128_start = meta.query_selector(q_u128_start);
-            let sign_u128_acc = meta.query_advice(sign_u128_acc, Rotation::cur());
+            let q_u64_start = meta.query_selector(q_u64_start);
+            let sign_u64_acc = meta.query_advice(sign_u64_acc, Rotation::cur());
             let sign = meta.query_advice(sign, Rotation::cur());
 
-            cb.require_equal("sign_u128_acc[start] = sign[start]", sign_u128_acc, sign);
-            cb.gate(q_u128_start)
+            cb.require_equal("sign_u64_acc[start] = sign[start]", sign_u64_acc, sign);
+            cb.gate(q_u64_start)
         });
 
         // check SigR
         meta.create_gate(
-            "IF r == GX2 THEN a(GX1_MUL_PRIVATEKEY) * b(1) + c(msg_hash) == d(N)",
+            "IF r == GX2 THEN a(msg_hash) * b(1) + c(GX1_MUL_PRIVATEKEY) == d(N)",
             |meta| {
                 let mut cb = BaseConstraintBuilder::new(MAX_DEGREE);
 
@@ -264,40 +266,45 @@ impl<F: Field> SignVerifyConfig<F> {
 
                 cb.require_in_set("r in (GX1, GX2)", sign_rlc_acc, vec![gx1_rlc, gx2_rlc]);
 
-                cb.condition(is_equal_gx2.is_equal_expression.expr(), |cb| {
-                    // a == GX1_MUL_PRIVATEKEY
-                    let (a_limb0, a_limb1, a_limb2, a_limb3) = mul_add.a_limbs_cur(meta);
-                    let a_limb = GX1_MUL_PRIVATEKEY_LIMB64
-                        .map(|v| Expression::Constant(F::from(v.as_u64())));
-                    cb.require_equal("a_limb0", a_limb0, a_limb[0].expr());
-                    cb.require_equal("a_limb1", a_limb1, a_limb[1].expr());
-                    cb.require_equal("a_limb2", a_limb2, a_limb[2].expr());
-                    cb.require_equal("a_limb3", a_limb3, a_limb[3].expr());
+                // a == msg_hash
+                let (a_limbs_cur0, a_limbs_cur1, a_limbs_cur2, a_limbs_cur3) =
+                    mul_add.a_limbs_cur(meta);
 
-                    // b == 1
-                    let (b_limb0, b_limb1, b_limb2, b_limb3) = mul_add.b_limbs_cur(meta);
-                    let b_limb = split_u256_limb64(&U256::one())
-                        .map(|v| Expression::Constant(F::from(v.as_u64())));
-                    cb.require_equal("b_limb0", b_limb0, b_limb[0].expr());
-                    cb.require_equal("b_limb1", b_limb1, b_limb[1].expr());
-                    cb.require_equal("b_limb2", b_limb2, b_limb[2].expr());
-                    cb.require_equal("b_limb3", b_limb3, b_limb[3].expr());
+                // c == msg_hash
+                let a_limb0 = meta.query_advice(sign_u64_acc, Rotation(31));
+                let a_limb1 = meta.query_advice(sign_u64_acc, Rotation(23));
+                let a_limb2 = meta.query_advice(sign_u64_acc, Rotation(15));
+                let a_limb3 = meta.query_advice(sign_u64_acc, Rotation(7));
+                cb.require_equal("a_limb0", a_limbs_cur0, a_limb0);
+                cb.require_equal("a_limb1", a_limbs_cur1, a_limb1);
+                cb.require_equal("a_limb2", a_limbs_cur2, a_limb2);
+                cb.require_equal("a_limb3", a_limbs_cur3, a_limb3);
 
-                    // c == msg_hash
-                    let c_lo_hi0 = meta.query_advice(sign_u128_acc, Rotation(16));
-                    let c_lo_hi1 = meta.query_advice(sign_u128_acc, Rotation(32));
-                    let (c_lo_cur, c_hi_cur) = mul_add.c_lo_hi_cur(meta);
-                    cb.require_equal("c_lo_cur", c_lo_hi0, c_lo_cur);
-                    cb.require_equal("c_hi_cur", c_lo_hi1, c_hi_cur);
+                // b == 1
+                let (b_limb0, b_limb1, b_limb2, b_limb3) = mul_add.b_limbs_cur(meta);
+                let b_limb = split_u256_limb64(&U256::one())
+                    .map(|v| Expression::Constant(F::from(v.as_u64())));
+                cb.require_equal("b_limb0", b_limb0, b_limb[0].expr());
+                cb.require_equal("b_limb1", b_limb1, b_limb[1].expr());
+                cb.require_equal("b_limb2", b_limb2, b_limb[2].expr());
+                cb.require_equal("b_limb3", b_limb3, b_limb[3].expr());
 
-                    // d == N
-                    let (d_lo_cur, d_hi_cur) = mul_add.c_lo_hi_cur(meta);
-                    let d_lo_cur_expr = Expression::Constant(F::from_u128(N_LO_HI.0.as_u128()));
-                    let d_hi_cur_expr = Expression::Constant(F::from_u128(N_LO_HI.1.as_u128()));
+                // c == GX1_MUL_PRIVATEKEY
+                let c_lo_hi0 =
+                    Expression::Constant(F::from_u128(GX1_MUL_PRIVATEKEY_LO_HI.0.as_u128()));
+                let c_lo_hi1 =
+                    Expression::Constant(F::from_u128(GX1_MUL_PRIVATEKEY_LO_HI.1.as_u128()));
+                let (c_lo_cur, c_hi_cur) = mul_add.c_lo_hi_cur(meta);
+                cb.require_equal("c_lo_cur", c_lo_hi0, c_lo_cur);
+                cb.require_equal("c_hi_cur", c_lo_hi1, c_hi_cur);
 
-                    cb.require_equal("d_lo_cur", d_lo_cur_expr, d_lo_cur);
-                    cb.require_equal("d_hi_cur", d_hi_cur_expr, d_hi_cur);
-                });
+                // d == N
+                let (d_lo_cur, d_hi_cur) = mul_add.d_lo_hi_cur(meta);
+                let d_lo_cur_expr = Expression::Constant(F::from_u128(N_LO_HI.0.as_u128()));
+                let d_hi_cur_expr = Expression::Constant(F::from_u128(N_LO_HI.1.as_u128()));
+
+                cb.require_equal("d_lo_cur", d_lo_cur_expr, d_lo_cur);
+                cb.require_equal("d_hi_cur", d_hi_cur_expr, d_hi_cur);
                 cb.gate(q_check)
             },
         );
@@ -312,10 +319,10 @@ impl<F: Field> SignVerifyConfig<F> {
             sign,
             sign_rlc_acc,
 
-            q_u128_start,
-            q_u128_step,
-            q_u128_end,
-            sign_u128_acc,
+            q_u64_start,
+            q_u64_step,
+            q_u64_end,
+            sign_u64_acc,
 
             q_check,
             mul_add,
@@ -331,42 +338,43 @@ impl<F: Field> SignVerifyConfig<F> {
         offset: &mut usize,
         tag: TxFieldTag,
         value: [u8; 32],
-        need_check: bool,
         challenges: &Challenges<Value<F>>,
-    ) -> Result<(), Error> {
+    ) -> Result<Value<F>, Error> {
         let mut rlc_acc = Value::known(F::ZERO);
         let randomness = challenges.evm_word();
 
-        let mut assign_u128 = |offset: &mut usize, value: &[u8]| -> Result<(), Error> {
-            let mut u128_acc = Value::known(F::ZERO);
+        let mut assign_u64 = |offset: &mut usize, value: &[u8]| -> Result<(), Error> {
+            let mut u64_acc = Value::known(F::ZERO);
             for (idx, byte) in value.iter().enumerate() {
                 let row_offset = *offset + idx;
-                u128_acc = u128_acc * Value::known(F::from(BYTE_POW_BASE))
+                u64_acc = u64_acc * Value::known(F::from(BYTE_POW_BASE))
                     + Value::known(F::from(*byte as u64));
                 region.assign_advice(
-                    || "sign_u128_acc",
-                    self.sign_u128_acc,
+                    || "sign_u64_acc",
+                    self.sign_u64_acc,
                     row_offset,
-                    || u128_acc,
+                    || u64_acc,
                 )?;
                 // setup selector
                 if idx == 0 {
-                    self.q_u128_start.enable(region, row_offset)?;
+                    self.q_u64_start.enable(region, row_offset)?;
                 }
                 // the last offset of field
-                if idx == 15 {
-                    self.q_u128_end.enable(region, row_offset)?;
+                if idx == 7 {
+                    self.q_u64_end.enable(region, row_offset)?;
                 } else {
-                    self.q_u128_step.enable(region, row_offset)?;
+                    self.q_u64_step.enable(region, row_offset)?;
                 }
             }
-            *offset += 16;
+            *offset += 8;
             Ok(())
         };
 
-        let mut assign_u128_offset = *offset;
-        assign_u128(&mut assign_u128_offset, &value[..16])?;
-        assign_u128(&mut assign_u128_offset, &value[16..])?;
+        let mut assign_u64_offset = *offset;
+        assign_u64(&mut assign_u64_offset, &value[..8])?;
+        assign_u64(&mut assign_u64_offset, &value[8..16])?;
+        assign_u64(&mut assign_u64_offset, &value[16..24])?;
+        assign_u64(&mut assign_u64_offset, &value[24..])?;
 
         for (idx, byte) in value.iter().enumerate() {
             let row_offset = *offset + idx;
@@ -396,15 +404,8 @@ impl<F: Field> SignVerifyConfig<F> {
                 self.q_sign_step.enable(region, row_offset)?;
             }
         }
-        if need_check {
-            let gx2_rlc = randomness.map(|randomness| {
-                crate::evm_circuit::util::rlc::value(&GX2.to_le_bytes(), randomness)
-            });
-            let chip = IsEqualChip::construct(self.is_equal_gx2.clone());
-            chip.assign(region, 0, rlc_acc, gx2_rlc)?;
-        }
         *offset += 32;
-        Ok(())
+        Ok(rlc_acc)
     }
 
     fn load_mul_add(&self, region: &mut Region<'_, F>, msg_hash: Word) -> Result<(), Error> {
@@ -412,7 +413,7 @@ impl<F: Field> SignVerifyConfig<F> {
         chip.assign(
             region,
             0,
-            [GX1_MUL_PRIVATEKEY.clone(), U256::one(), msg_hash, N.clone()],
+            [msg_hash, U256::one(), GX1_MUL_PRIVATEKEY.clone(), N.clone()],
         )
     }
 
@@ -437,18 +438,23 @@ impl<F: Field> SignVerifyConfig<F> {
                 self.load_mul_add(region, msg_hash)?;
                 let mut offset = 0;
                 for (annotation, tag, need_check, value) in [
-                    ("msg_hash", TxFieldTag::TxSignHash, false, msg_hash),
-                    ("sign_r", TxFieldTag::SigR, true, anchor_tx.r),
+                    (
+                        "msg_hash",
+                        TxFieldTag::TxSignHash,
+                        false,
+                        anchor_tx.tx_sign_hash.to_fixed_bytes(),
+                    ),
+                    ("sign_r", TxFieldTag::SigR, true, anchor_tx.r.to_be_bytes()),
                 ] {
-                    self.assign_field(
-                        region,
-                        annotation,
-                        &mut offset,
-                        tag,
-                        value.to_be_bytes(),
-                        need_check,
-                        challenges,
-                    )?;
+                    let rlc_acc =
+                        self.assign_field(region, annotation, &mut offset, tag, value, challenges)?;
+                    if need_check {
+                        let gx2_rlc = challenges.evm_word().map(|randomness| {
+                            crate::evm_circuit::util::rlc::value(&GX2.to_le_bytes(), randomness)
+                        });
+                        let chip = IsEqualChip::construct(self.is_equal_gx2.clone());
+                        chip.assign(region, 0, rlc_acc, gx2_rlc)?;
+                    }
                 }
                 Ok(())
             },
