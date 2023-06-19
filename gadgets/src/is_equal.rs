@@ -3,7 +3,7 @@
 use eth_types::Field;
 use halo2_proofs::{
     circuit::{Chip, Region, Value},
-    plonk::{ConstraintSystem, Error, Expression, VirtualCells},
+    plonk::{ConstraintSystem, Error, Expression, SecondPhase, VirtualCells},
 };
 
 use super::is_zero::{IsZeroChip, IsZeroInstruction};
@@ -45,7 +45,7 @@ impl<F: Field> IsEqualChip<F> {
         rhs: impl FnOnce(&mut VirtualCells<'_, F>) -> Expression<F>,
     ) -> IsEqualConfig<F> {
         let value = |meta: &mut VirtualCells<F>| lhs(meta) - rhs(meta);
-        let value_inv = meta.advice_column();
+        let value_inv = meta.advice_column_in(SecondPhase);
 
         let is_zero_config = IsZeroChip::configure(meta, q_enable, value, value_inv);
         let is_equal_expression = is_zero_config.is_zero_expression.clone();

@@ -10,7 +10,7 @@ mod test;
 
 use crate::{
     evm_circuit::util::constraint_builder::{BaseConstraintBuilder, ConstrainBuilderCommon},
-    table::{LookupTable, PiFieldTag, PiTable, TxFieldTag, TxTable},
+    table::{LookupTable, PiFieldTag, PiTable, TxContextFieldTag, TxFieldTag, TxTable},
     tx_circuit::TX_LEN,
     util::{Challenges, SubCircuit, SubCircuitConfig},
     witness::{self, Taiko, Transaction},
@@ -19,10 +19,7 @@ use eth_types::{Field, ToScalar};
 use gadgets::util::{select, Expr};
 use halo2_proofs::{
     circuit::{Layouter, Region, Value},
-    plonk::{
-        Advice, Column, ConstraintSystem, Error, Expression, Fixed, SecondPhase, Selector,
-        ThirdPhase,
-    },
+    plonk::{Advice, Column, ConstraintSystem, Error, Expression, Fixed, SecondPhase, Selector},
     poly::Rotation,
 };
 use sign_verify::SignVerifyConfig;
@@ -106,7 +103,7 @@ impl<F: Field> SubCircuitConfig<F> for AnchorTxCircuitConfig<F> {
 
         // anchor transaction constants
         meta.lookup_any("anchor fixed fields", |meta| {
-            let q_anchor = meta.query_selector(q_tag);
+            let q_tag = meta.query_selector(q_tag);
             [
                 ANCHOR_TX_ID.expr(),
                 meta.query_fixed(tag, Rotation::cur()),
@@ -115,7 +112,7 @@ impl<F: Field> SubCircuitConfig<F> for AnchorTxCircuitConfig<F> {
             ]
             .into_iter()
             .zip(tx_table.table_exprs(meta).into_iter())
-            .map(|(arg, table)| (q_anchor.expr() * arg, table))
+            .map(|(arg, table)| (q_tag.expr() * arg, table))
             .collect()
         });
 
@@ -130,7 +127,7 @@ impl<F: Field> SubCircuitConfig<F> for AnchorTxCircuitConfig<F> {
                 let call_data_rlc_acc = meta.query_advice(call_data_rlc_acc, Rotation::cur());
                 let call_data_next = meta.query_advice(tx_table.value, Rotation::next());
                 let use_rlc = meta.query_fixed(use_rlc, Rotation::cur());
-                let randomness = challenges.evm_word();
+                let randomness = challenges.lookup_input();
                 let t = select::expr(use_rlc, randomness, BYTE_POW_BASE.expr());
                 cb.require_equal(
                     "call_data_rlc_acc[i+1] = call_data_rlc_acc[i] * t + call_data[i+1]",
@@ -249,23 +246,6 @@ impl<F: Field> AnchorTxCircuitConfig<F> {
         challenges: &Challenges<Value<F>>,
     ) -> Result<(), Error> {
         let mut offset = call_data.start;
-        // for idx in 0..offset {
-        //     // fill zero
-        //     region.assign_advice(
-        //         || "zero value",
-        //         self.call_data_rlc_acc,
-        //         idx,
-        //         || Value::known(F::ZERO),
-        //     )?;
-        //     region.assign_fixed(
-        //         || "zero value",
-        //         self.call_data_tag,
-        //         idx,
-        //         || Value::known(F::ZERO),
-        //     )?;
-        //     region.assign_fixed(|| "zero value", self.use_rlc, idx, || Value::known(F::ZERO))?;
-        // }
-
         for (annotation, value, tag) in [
             (
                 "method_signature",
@@ -327,10 +307,127 @@ impl<F: Field> AnchorTxCircuitConfig<F> {
         Ok(())
     }
 
+    fn load_tx_table(
+        &self,
+        region: &mut Region<'_, F>,
+        txs: &[Transaction],
+        max_txs: usize,
+        max_calldata: usize,
+        challenges: &Challenges<Value<F>>,
+    ) -> Result<(), Error> {
+        assert!(
+            txs.len() <= max_txs,
+            "txs.len() <= max_txs: txs.len()={}, max_txs={}",
+            txs.len(),
+            max_txs
+        );
+        let sum_txs_calldata = txs.iter().map(|tx| tx.call_data.len()).sum();
+        assert!(
+            sum_txs_calldata <= max_calldata,
+            "sum_txs_calldata <= max_calldata: sum_txs_calldata={}, max_calldata={}",
+            sum_txs_calldata,
+            max_calldata,
+        );
+
+        fn assign_row<F: Field>(
+            region: &mut Region<'_, F>,
+            offset: usize,
+            advice_columns: &[Column<Advice>],
+            tag: &Column<Fixed>,
+            row: &[Value<F>; 4],
+            msg: &str,
+        ) -> Result<(), Error> {
+            for (index, column) in advice_columns.iter().enumerate() {
+                region.assign_advice(
+                    || format!("tx table {} row {}", msg, offset),
+                    *column,
+                    offset,
+                    || row[if index > 0 { index + 1 } else { index }],
+                )?;
+            }
+            region.assign_fixed(
+                || format!("tx table {} row {}", msg, offset),
+                *tag,
+                offset,
+                || row[1],
+            )?;
+            Ok(())
+        }
+
+        let mut offset = 0;
+        let advice_columns = [
+            self.tx_table.tx_id,
+            self.tx_table.index,
+            self.tx_table.value,
+        ];
+        assign_row(
+            region,
+            offset,
+            &advice_columns,
+            &self.tx_table.tag,
+            &[(); 4].map(|_| Value::known(F::ZERO)),
+            "all-zero",
+        )?;
+        offset += 1;
+
+        // Tx Table contains an initial region that has a size parametrized by max_txs
+        // with all the tx data except for calldata, and then a second
+        // region that has a size parametrized by max_calldata with all
+        // the tx calldata.  This is required to achieve a constant fixed column tag
+        // regardless of the number of input txs or the calldata size of each tx.
+        let mut calldata_assignments: Vec<[Value<F>; 4]> = Vec::new();
+        // Assign Tx data (all tx fields except for calldata)
+        let padding_txs: Vec<_> = (txs.len()..max_txs)
+            .map(|i| Transaction {
+                id: i + 1,
+                ..Default::default()
+            })
+            .collect();
+        for tx in txs.iter().chain(padding_txs.iter()) {
+            let [tx_data, tx_calldata] = tx.table_assignments(*challenges);
+            for row in tx_data {
+                assign_row(
+                    region,
+                    offset,
+                    &advice_columns,
+                    &self.tx_table.tag,
+                    &row,
+                    "",
+                )?;
+                offset += 1;
+            }
+            calldata_assignments.extend(tx_calldata.iter());
+        }
+        // Assign Tx calldata
+        let padding_calldata = (sum_txs_calldata..max_calldata).map(|_| {
+            [
+                Value::known(F::ZERO),
+                Value::known(F::from(TxContextFieldTag::CallData as u64)),
+                Value::known(F::ZERO),
+                Value::known(F::ZERO),
+            ]
+        });
+        for row in calldata_assignments.into_iter().chain(padding_calldata) {
+            assign_row(
+                region,
+                offset,
+                &advice_columns,
+                &self.tx_table.tag,
+                &row,
+                "",
+            )?;
+            offset += 1;
+        }
+        Ok(())
+    }
+
     fn assign(
         &self,
         layouter: &mut impl Layouter<F>,
         anchor_tx: &Transaction,
+        txs: &[Transaction],
+        max_txs: usize,
+        max_calldata: usize,
         taiko: &Taiko,
         call_data: &CallData,
         challenges: &Challenges<Value<F>>,
@@ -339,6 +436,7 @@ impl<F: Field> AnchorTxCircuitConfig<F> {
         layouter.assign_region(
             || "anchor transaction",
             |ref mut region| {
+                self.load_tx_table(region, txs, max_txs, max_calldata, challenges)?;
                 self.assign_anchor_tx(region, anchor_tx, taiko, challenges)?;
                 self.assign_call_data(region, anchor_tx, call_data, challenges)?;
                 Ok(())
@@ -351,17 +449,27 @@ impl<F: Field> AnchorTxCircuitConfig<F> {
 #[derive(Clone, Default, Debug)]
 pub struct AnchorTxCircuit<F: Field> {
     max_txs: usize,
+    max_calldata: usize,
     anchor_tx: Transaction,
+    txs: Vec<Transaction>,
     taiko: Taiko,
     _marker: PhantomData<F>,
 }
 
 impl<F: Field> AnchorTxCircuit<F> {
     /// Return a new TxCircuit
-    pub fn new(max_txs: usize, anchor_tx: Transaction, taiko: Taiko) -> Self {
+    pub fn new(
+        max_txs: usize,
+        max_calldata: usize,
+        anchor_tx: Transaction,
+        txs: Vec<Transaction>,
+        taiko: Taiko,
+    ) -> Self {
         AnchorTxCircuit {
             max_txs,
+            max_calldata,
             anchor_tx,
+            txs,
             taiko,
             _marker: PhantomData,
         }
@@ -387,15 +495,17 @@ impl<F: Field> SubCircuit<F> for AnchorTxCircuit<F> {
     type Config = AnchorTxCircuitConfig<F>;
 
     fn unusable_rows() -> usize {
-        // No column queried at more than 2 distinct rotations, so returns 5 as
+        // No column queried at more than 3 distinct rotations, so returns 5 as
         // minimum unusable row.
-        5
+        6
     }
 
     fn new_from_block(block: &witness::Block<F>) -> Self {
         Self::new(
             block.circuits_params.max_txs,
+            block.circuits_params.max_calldata,
             block.txs.iter().next().unwrap().clone(),
+            block.txs.clone(),
             block.taiko.clone(),
         )
     }
@@ -415,6 +525,9 @@ impl<F: Field> SubCircuit<F> for AnchorTxCircuit<F> {
         config.assign(
             layouter,
             &self.anchor_tx,
+            &self.txs,
+            self.max_txs,
+            self.max_calldata,
             &self.taiko,
             &call_data,
             challenges,

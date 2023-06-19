@@ -112,7 +112,7 @@ fn run<F: Field>(block: &Block<F>) -> Result<(), Vec<VerifyFailure>> {
     );
     let circuit = TestAnchorTxCircuit::<F>::new_from_block(block);
 
-    let prover = match MockProver::run(k + 1, &circuit, vec![]) {
+    let prover = match MockProver::run(k + 3, &circuit, vec![]) {
         Ok(prover) => prover,
         Err(e) => panic!("{:#?}", e),
     };

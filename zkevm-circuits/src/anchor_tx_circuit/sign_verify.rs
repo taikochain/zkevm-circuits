@@ -46,10 +46,10 @@ use crate::{
     util::Challenges,
     witness::Transaction,
 };
-use eth_types::{address, word, Address, Field, ToBigEndian, Word, U256};
+use eth_types::{address, word, Address, Field, ToBigEndian, ToLittleEndian, Word, U256};
 use ethers_signers::LocalWallet;
 use gadgets::{
-    is_equal::IsEqualChip,
+    is_equal::{IsEqualChip, IsEqualConfig, IsEqualInstruction},
     mul_add::{MulAddChip, MulAddConfig},
     util::{split_u256, Expr},
 };
@@ -132,6 +132,7 @@ pub(crate) struct SignVerifyConfig<F: Field> {
 
     q_check: Selector,
     mul_add: MulAddConfig<F>,
+    is_equal_gx2: IsEqualConfig<F>,
 }
 
 impl<F: Field> SignVerifyConfig<F> {
@@ -156,14 +157,14 @@ impl<F: Field> SignVerifyConfig<F> {
         let mul_add = MulAddChip::configure(meta, |meta| meta.query_selector(q_check));
 
         let gx1_rlc = crate::evm_circuit::util::rlc::expr(
-            GX1.to_be_bytes()
+            GX1.to_le_bytes()
                 .map(|v| Expression::Constant(F::from(v as u64)))
                 .as_ref(),
             challenges.evm_word(),
         );
 
         let gx2_rlc = crate::evm_circuit::util::rlc::expr(
-            GX2.to_be_bytes()
+            GX2.to_le_bytes()
                 .map(|v| Expression::Constant(F::from(v as u64)))
                 .as_ref(),
             challenges.evm_word(),
@@ -171,7 +172,7 @@ impl<F: Field> SignVerifyConfig<F> {
         let is_equal_gx2 = IsEqualChip::configure(
             meta,
             |meta| meta.query_selector(q_check),
-            |meta| meta.query_advice(sign_rlc_acc, Rotation::cur()), // SigR == GX2
+            |meta| meta.query_advice(sign_rlc_acc, Rotation(63)), // SigR == GX2
             |_| gx2_rlc.expr(),
         );
 
@@ -259,11 +260,11 @@ impl<F: Field> SignVerifyConfig<F> {
 
                 let q_check = meta.query_selector(q_check);
 
-                let sign_rlc_acc = meta.query_advice(sign_rlc_acc, Rotation(64));
+                let sign_rlc_acc = meta.query_advice(sign_rlc_acc, Rotation(63));
 
                 cb.require_in_set("r in (GX1, GX2)", sign_rlc_acc, vec![gx1_rlc, gx2_rlc]);
 
-                cb.condition(is_equal_gx2.is_equal_expression, |cb| {
+                cb.condition(is_equal_gx2.is_equal_expression.expr(), |cb| {
                     // a == GX1_MUL_PRIVATEKEY
                     let (a_limb0, a_limb1, a_limb2, a_limb3) = mul_add.a_limbs_cur(meta);
                     let a_limb = GX1_MUL_PRIVATEKEY_LIMB64
@@ -318,6 +319,7 @@ impl<F: Field> SignVerifyConfig<F> {
 
             q_check,
             mul_add,
+            is_equal_gx2,
         }
     }
 
@@ -390,12 +392,16 @@ impl<F: Field> SignVerifyConfig<F> {
             // the last offset of field
             if idx == 31 {
                 self.q_sign_end.enable(region, row_offset)?;
-                if need_check {
-                    // self.q_check.enable(region, row_offset)?;
-                }
             } else {
                 self.q_sign_step.enable(region, row_offset)?;
             }
+        }
+        if need_check {
+            let gx2_rlc = randomness.map(|randomness| {
+                crate::evm_circuit::util::rlc::value(&GX2.to_le_bytes(), randomness)
+            });
+            let chip = IsEqualChip::construct(self.is_equal_gx2.clone());
+            chip.assign(region, 0, rlc_acc, gx2_rlc)?;
         }
         *offset += 32;
         Ok(())
@@ -425,6 +431,8 @@ impl<F: Field> SignVerifyConfig<F> {
         layouter.assign_region(
             || "anchor sign verify",
             |ref mut region| {
+                self.q_check.enable(region, 0)?;
+
                 let msg_hash = U256::from_big_endian(&anchor_tx.tx_sign_hash.to_fixed_bytes());
                 self.load_mul_add(region, msg_hash)?;
                 let mut offset = 0;

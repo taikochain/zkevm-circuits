@@ -1,6 +1,6 @@
 use bus_mapping::circuit_input_builder;
 use eth_types::{
-    sign_types::SignData, Address, Field, ToBigEndian, ToLittleEndian, ToScalar, Word, H256, U256,
+    sign_types::SignData, Address, Field, ToBigEndian, ToLittleEndian, ToScalar, Word, H256,
 };
 use halo2_proofs::circuit::Value;
 

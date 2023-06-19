@@ -67,13 +67,6 @@ impl<F: Field> Circuit<F> for TestAnchorTxCircuit<F> {
         mut layouter: impl Layouter<F>,
     ) -> Result<(), Error> {
         let challenges = challenges.values(&mut layouter);
-        config.tx_table.load(
-            &mut layouter,
-            &self.txs[..],
-            self.circuit.max_txs,
-            self.max_calldata,
-            &challenges,
-        )?;
         config
             .pi_table
             .load(&mut layouter, &self.taiko, &challenges)?;

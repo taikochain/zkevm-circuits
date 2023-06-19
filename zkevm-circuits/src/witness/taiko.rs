@@ -2,8 +2,8 @@
 
 use std::iter;
 
-use crate::{evm_circuit::util::rlc, table::PiFieldTag, util::rlc_be_bytes};
-use eth_types::{Address, Bytes, Field, Hash, ToBigEndian, ToLittleEndian, ToWord, Word, H256};
+use crate::{table::PiFieldTag, util::rlc_be_bytes};
+use eth_types::{Address, Bytes, Field, Hash, ToBigEndian, ToWord, Word, H256};
 use halo2_proofs::circuit::Value;
 use keccak256::plain::Keccak;
 
