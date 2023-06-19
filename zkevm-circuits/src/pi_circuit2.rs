@@ -47,7 +47,7 @@ use lazy_static::lazy_static;
 
 /// Fixed by the spec
 const TX_LEN: usize = 10;
-const BLOCK_LEN: usize = 7 + 256 * 2 + 8;
+const BLOCK_LEN: usize = 7 + 256 + 6;
 const EXTRA_LEN: usize = 2;
 const ZERO_BYTE_GAS_COST: u64 = 4;
 const NONZERO_BYTE_GAS_COST: u64 = 16;
@@ -1712,6 +1712,7 @@ impl<F: Field> PiCircuitConfig<F> {
         &self,
         region: &mut Region<'_, F>,
         public_data: &PublicData<F>,
+        test_public_data: &Option<PublicData<F>>,
         challenges: &Challenges<Value<F>>,
     ) -> Result<
         (
@@ -1723,7 +1724,13 @@ impl<F: Field> PiCircuitConfig<F> {
         ),
         Error,
     > {
-        let block_values = public_data.get_block_table_values();
+
+        let mut pb = public_data;
+        if let Some(x) = test_public_data {
+            pb = x;
+        }
+
+        let block_values = pb.get_block_table_values();
         let randomness = challenges.evm_word();
         self.q_start.enable(region, 0)?;
         let mut rlc_acc = Value::known(F::zero());
@@ -1756,11 +1763,6 @@ impl<F: Field> PiCircuitConfig<F> {
                 false,
             ),
             (
-                "base_fee",
-                randomness.map(|randomness| rlc(block_values.base_fee.to_le_bytes(), randomness)),
-                false,
-            ),
-            (
                 "chain_id",
                 Value::known(F::from(block_values.chain_id)),
                 false,
@@ -1769,56 +1771,44 @@ impl<F: Field> PiCircuitConfig<F> {
         .into_iter()
         .chain(block_values.history_hashes.iter().map(|h| {
             (
-                "prev_hash_hi",
-                Value::known(F::from_u128(u128::from_be_bytes(
-                    h.to_be_bytes()[0..16].try_into().unwrap(),
-                ))),
-                false,
-            )
-        }))
-        .chain(block_values.history_hashes.iter().map(|h| {
-            (
-                "prev_hash_lo",
-                Value::known(F::from_u128(u128::from_be_bytes(
-                    h.to_be_bytes()[16..32].try_into().unwrap(),
-                ))),
+                "prev_hash",
+                randomness.map(|randomness| rlc(h.to_be_bytes(), randomness)),
                 false,
             )
         }))
         .chain([
             (
                 "parent_hash",
-                randomness.map(|randomness| rlc(public_data.parent_hash.to_fixed_bytes().into_iter().rev().collect::<Vec<u8>>().try_into().unwrap(), randomness)),
+                randomness.map(|randomness| rlc(pb.parent_hash.to_fixed_bytes().into_iter().rev().collect::<Vec<u8>>().try_into().unwrap(), randomness)),
                 false,
             ),
             (
                 "beneficiary",
-                randomness.map(|randomness| rlc(([0u8;32-BENEFICIARY_SIZE].into_iter().chain(public_data.beneficiary.to_fixed_bytes().into_iter())).rev().collect::<Vec<u8>>().try_into().unwrap(), randomness)),
+                randomness.map(|randomness| rlc(([0u8;32-BENEFICIARY_SIZE].into_iter().chain(pb.beneficiary.to_fixed_bytes().into_iter())).rev().collect::<Vec<u8>>().try_into().unwrap(), randomness)),
                 false),
             (
                 "state_root",
-                randomness.map(|randomness| rlc(public_data.state_root.to_fixed_bytes().into_iter().rev().collect::<Vec<u8>>().try_into().unwrap(), randomness)),
+                randomness.map(|randomness| rlc(pb.state_root.to_fixed_bytes().into_iter().rev().collect::<Vec<u8>>().try_into().unwrap(), randomness)),
                 false,
             ),
             (
                 "transactions_root",
-                randomness.map(|randomness| rlc(public_data.transactions_root.to_fixed_bytes().into_iter().rev().collect::<Vec<u8>>().try_into().unwrap(), randomness)),
+                randomness.map(|randomness| rlc(pb.transactions_root.to_fixed_bytes().into_iter().rev().collect::<Vec<u8>>().try_into().unwrap(), randomness)),
                 false,
             ),
             (
                 "receipts_root",
-                randomness.map(|randomness| rlc(public_data.receipts_root.to_fixed_bytes().into_iter().rev().collect::<Vec<u8>>().try_into().unwrap(), randomness)),
+                randomness.map(|randomness| rlc(pb.receipts_root.to_fixed_bytes().into_iter().rev().collect::<Vec<u8>>().try_into().unwrap(), randomness)),
                 false,
             ),
-            ("number", Value::known(F::from(block_values.number)), false),
             (
                 "gas_used",
-                randomness.map(|randomness| rlc(public_data.gas_used.to_be_bytes(), randomness)),
+                randomness.map(|randomness| rlc(pb.gas_used.to_be_bytes(), randomness)),
                 false,
             ),
             (
                 "mix_hash",
-                randomness.map(|randomness| rlc(public_data.mix_hash.to_fixed_bytes().into_iter().rev().collect::<Vec<u8>>().try_into().unwrap(), randomness)),
+                randomness.map(|randomness| rlc(pb.mix_hash.to_fixed_bytes().into_iter().rev().collect::<Vec<u8>>().try_into().unwrap(), randomness)),
                 false,
             ),
             (
@@ -1828,18 +1818,18 @@ impl<F: Field> PiCircuitConfig<F> {
             ),
             (
                 "withdrawals_root",
-                randomness.map(|randomness| rlc(public_data.withdrawals_root.to_fixed_bytes().into_iter().rev().collect::<Vec<u8>>().try_into().unwrap(), randomness)),
+                randomness.map(|randomness| rlc(pb.withdrawals_root.to_fixed_bytes().into_iter().rev().collect::<Vec<u8>>().try_into().unwrap(), randomness)),
                 false,
             ),
         ])
         .chain([
             (
                 "prover",
-                Value::known(public_data.prover.to_scalar().unwrap()),
+                Value::known(pb.prover.to_scalar().unwrap()),
                 true,
             ),
-            ("txs_hash_hi", Value::known(public_data.txs_hash_hi), true),
-            ("txs_hash_lo", Value::known(public_data.txs_hash_lo), true),
+            ("txs_hash_hi", Value::known(pb.txs_hash_hi), true),
+            ("txs_hash_lo", Value::known(pb.txs_hash_lo), true),
         ])
         .enumerate()
         {
@@ -1861,7 +1851,7 @@ impl<F: Field> PiCircuitConfig<F> {
         self.q_rpi_encoding.enable(region, offset)?;
         region.assign_advice(|| "block_rlc_acc", self.rpi_encoding, offset, || rlc_acc)?;
         offset += 1;
-        let block_rlp_rlc = public_data.get_block_rlp_rlc(challenges);
+        let block_rlp_rlc = pb.get_block_rlp_rlc(challenges);
         region.assign_advice(
             || "block_rlp_rlc",
             self.rpi_encoding,
@@ -1873,21 +1863,21 @@ impl<F: Field> PiCircuitConfig<F> {
             || "block_rlp_len",
             self.rpi_encoding,
             offset,
-            || Value::known(F::from(public_data.block_rlp.len() as u64)),
+            || Value::known(F::from(pb.block_rlp.len() as u64)),
         )?;
         offset += 1;
         let block_hash_hi_cell = region.assign_advice(
             || "block_hash_hi",
             self.rpi_encoding,
             offset,
-            || Value::known(public_data.block_hash_hi),
+            || Value::known(pb.block_hash_hi),
         )?;
         offset += 1;
         let block_hash_lo_cell = region.assign_advice(
             || "block_hash_lo",
             self.rpi_encoding,
             offset,
-            || Value::known(public_data.block_hash_lo),
+            || Value::known(pb.block_hash_lo),
         )?;
 
         Ok((
@@ -2725,6 +2715,7 @@ impl<F: Field> PiCircuitConfig<F> {
         &self,
         layouter: &mut impl Layouter<F>,
         public_data: &PublicData<F>,
+        test_public_data: &Option<PublicData<F>>,
         challenges: &Challenges<Value<F>>,
     ) -> Result<(), Error> {
         self.assign_fixed_u8(layouter)?;
@@ -2740,7 +2731,7 @@ impl<F: Field> PiCircuitConfig<F> {
                     txs_hash_hi_cell,
                     txs_hash_lo_cell,
                     block_rlc_acc,
-                ) = self.assign_block(&mut region, public_data, challenges)?;
+                ) = self.assign_block(&mut region, public_data, test_public_data, challenges)?;
 
                 // Assign Tx table
                 let mut offset = 0;
@@ -2923,17 +2914,19 @@ pub struct PiCircuit<F: Field> {
     max_calldata: usize,
     /// PublicInputs data known by the verifier
     pub public_data: PublicData<F>,
+    test_public_data: Option<PublicData<F>>,
 
     _marker: PhantomData<F>,
 }
 
 impl<F: Field> PiCircuit<F> {
     /// Creates a new PiCircuit
-    pub fn new(max_txs: usize, max_calldata: usize, public_data: PublicData<F>) -> Self {
+    pub fn new(max_txs: usize, max_calldata: usize, public_data: PublicData<F>, test_public_data: Option<PublicData<F>>) -> Self {
         Self {
             max_txs,
             max_calldata,
             public_data,
+            test_public_data,
             _marker: PhantomData,
         }
     }
@@ -2950,6 +2943,7 @@ impl<F: Field> PiCircuit<F> {
             block.circuits_params.max_txs,
             block.circuits_params.max_calldata,
             PublicData::new(block, prover, txs_rlp),
+            None,
         )
     }
 }
@@ -2962,6 +2956,7 @@ impl<F: Field> SubCircuit<F> for PiCircuit<F> {
             block.circuits_params.max_txs,
             block.circuits_params.max_calldata,
             PublicData::new(block, Address::default(), Bytes::default()),
+            None,
         )
     }
 
@@ -2980,7 +2975,7 @@ impl<F: Field> SubCircuit<F> for PiCircuit<F> {
         challenges: &Challenges<Value<F>>,
         layouter: &mut impl Layouter<F>,
     ) -> Result<(), Error> {
-        config.assign(layouter, &self.public_data, challenges)
+        config.assign(layouter, &self.public_data, &self.test_public_data, challenges)
     }
 }
 
@@ -3069,12 +3064,14 @@ mod pi_circuit_test {
     fn run<F: Field, const MAX_TXS: usize, const MAX_CALLDATA: usize>(
         k: u32,
         public_data: PublicData<F>,
+        test_public_data: Option<PublicData<F>>,
         pi: Option<Vec<Vec<F>>>,
     ) -> Result<(), Vec<VerifyFailure>> {
         let circuit = PiTestCircuit::<F, MAX_TXS, MAX_CALLDATA>(PiCircuit::new(
             MAX_TXS,
             MAX_CALLDATA,
             public_data,
+            test_public_data,
         ));
         let public_inputs = pi.unwrap_or_else(|| circuit.0.instance());
 
@@ -3114,7 +3111,7 @@ mod pi_circuit_test {
 
         let k = 17;
         assert_eq!(
-            run::<Fr, MAX_TXS, MAX_CALLDATA>(k, public_data, None),
+            run::<Fr, MAX_TXS, MAX_CALLDATA>(k, public_data, None, None),
             Ok(())
         );
     }
@@ -3129,6 +3126,7 @@ mod pi_circuit_test {
         match run::<Fr, MAX_TXS, MAX_CALLDATA>(
             k,
             public_data,
+            None,
             Some(vec![vec![Fr::zero(), Fr::one()]]),
         ) {
             Ok(_) => unreachable!("this case must fail"),
@@ -3160,6 +3158,7 @@ mod pi_circuit_test {
         match run::<Fr, MAX_TXS, MAX_CALLDATA>(
             k,
             public_data,
+            None,
             Some(vec![vec![prover, Fr::zero(), Fr::one()]]),
         ) {
             Ok(_) => unreachable!("this case must fail"),
@@ -3194,7 +3193,7 @@ mod pi_circuit_test {
 
         let k = 17;
         assert_eq!(
-            run::<Fr, MAX_TXS, MAX_CALLDATA>(k, public_data, None),
+            run::<Fr, MAX_TXS, MAX_CALLDATA>(k, public_data, None, None),
             Ok(())
         );
     }
@@ -3234,7 +3233,7 @@ mod pi_circuit_test {
         let k = 17;
 
         assert_eq!(
-            run::<Fr, MAX_TXS, MAX_CALLDATA>(k, public_data, None),
+            run::<Fr, MAX_TXS, MAX_CALLDATA>(k, public_data, None, None),
             Ok(())
         );
     }
@@ -3275,7 +3274,7 @@ mod pi_circuit_test {
         let k = 17;
 
         assert_eq!(
-            run::<Fr, MAX_TXS, MAX_CALLDATA>(k, public_data, None),
+            run::<Fr, MAX_TXS, MAX_CALLDATA>(k, public_data, None, None),
             Ok(())
         );
     }
@@ -3316,7 +3315,7 @@ mod pi_circuit_test {
         let k = 17;
 
         assert_eq!(
-            run::<Fr, MAX_TXS, MAX_CALLDATA>(k, public_data, None),
+            run::<Fr, MAX_TXS, MAX_CALLDATA>(k, public_data, None, None),
             Ok(())
         );
     }
@@ -3357,7 +3356,7 @@ mod pi_circuit_test {
         let k = 17;
 
         assert_eq!(
-            run::<Fr, MAX_TXS, MAX_CALLDATA>(k, public_data, None),
+            run::<Fr, MAX_TXS, MAX_CALLDATA>(k, public_data, None, None),
             Ok(())
         );
     }
@@ -3398,7 +3397,7 @@ mod pi_circuit_test {
         let k = 17;
 
         assert_eq!(
-            run::<Fr, MAX_TXS, MAX_CALLDATA>(k, public_data, None),
+            run::<Fr, MAX_TXS, MAX_CALLDATA>(k, public_data, None, None),
             Ok(())
         );
     }
@@ -3451,8 +3450,72 @@ mod pi_circuit_test {
         let k = 17;
 
         assert_eq!(
-            run::<Fr, MAX_TXS, MAX_CALLDATA>(k, public_data, None),
+            run::<Fr, MAX_TXS, MAX_CALLDATA>(k, public_data, None, None),
             Ok(())
         );
+    }
+
+    #[test]
+    fn test_blockhash_calc_fail_lookups() {
+        const MAX_TXS: usize = 8;
+        const MAX_CALLDATA: usize = 200;
+        let prover =
+            Address::from_slice(&hex::decode("df08f82de32b8d460adbe8d72043e3a7e25a3b39").unwrap());
+
+        let mut block = witness::Block::<Fr>::default();
+        block.eth_block.parent_hash = *OMMERS_HASH;
+        block.eth_block.author = Some(prover);
+        block.eth_block.state_root = H256::from_slice(
+            &hex::decode("21223344dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49349")
+                .unwrap(),
+        );
+        block.eth_block.transactions_root = H256::from_slice(
+            &hex::decode("31223344dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49350")
+                .unwrap(),
+        );
+        block.eth_block.receipts_root = H256::from_slice(
+            &hex::decode("41223344dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49351")
+                .unwrap(),
+        );
+        block.eth_block.logs_bloom = Some([0; LOGS_BLOOM_SIZE].into());
+        block.eth_block.extra_data = eth_types::Bytes::from([0; 0]);
+        block.eth_block.mix_hash = Some(H256::from_slice(
+            &hex::decode("51223344dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49352")
+                .unwrap(),
+        ));
+        block.eth_block.nonce = Some(H64::from([0, 0, 0, 0, 0, 0, 0, 0]));
+        block.context.number = U256::from(0x9090909090909090_u128);
+        block.context.gas_limit = 0x9191919191919191;
+        block.eth_block.gas_used = U256::from(0x92) << (31 * 8);
+        block.context.timestamp = U256::from(0x93) << (31 * 8);
+        block.context.base_fee = U256::from(0x94) << (31 * 8);
+        block.context.difficulty = U256::from(0);
+        block.eth_block.withdrawals_root = Some(H256::from_slice(
+            &hex::decode("61223344dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49353")
+                .unwrap(),
+        ));
+        block.context.history_hashes = vec![U256::zero(); 256];
+        block.context.history_hashes[255] =
+            U256::from_big_endian(block.eth_block.parent_hash.as_fixed_bytes());
+
+        let public_data = PublicData::new(&block, prover, Default::default());
+        let test_block = witness::Block::<Fr>::default();
+        let test_public_data = PublicData::new(&test_block, H160::default(), Default::default());
+
+        let k = 17;
+        match run::<Fr, MAX_TXS, MAX_CALLDATA>(k, public_data.clone(), Some(test_public_data), None)
+        {
+            Ok(_) => unreachable!("this case must fail"),
+            Err(errs) => {
+                assert_eq!(errs.len(), 14);
+                for err in errs {
+                    match err {
+                        VerifyFailure::Lookup { .. } => return,
+                        _ => unreachable!("unexpected error"),
+                    }
+                }
+            }
+        }
+
     }
 }
