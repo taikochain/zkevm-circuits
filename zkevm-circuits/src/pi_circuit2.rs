@@ -988,10 +988,7 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
             blk_hdr_rlp_len_calc_inv,
         );
 
-        for q_field in [
-            q_number,
-            q_var_field_256,
-        ] {
+        for q_field in [q_number, q_var_field_256] {
             meta.create_gate("Block header RLP: leading zeros checks", |meta| {
                 let mut cb = BaseConstraintBuilder::new(MAX_DEGREE);
 
@@ -1008,10 +1005,7 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
                 cb.require_equal(
                     "Leading zeros must be continuous or we are at the begining of the field",
                     1.expr(),
-                    or::expr([
-                        blk_hdr_is_leading_zero_prev,
-                        q_field_prev,
-                    ]),
+                    or::expr([blk_hdr_is_leading_zero_prev, q_field_prev]),
                 );
 
                 cb.gate(and::expr([blk_hdr_is_leading_zero_cur, q_field_cur]))
@@ -1054,10 +1048,7 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
         // 1. len = 0 for leading zeros
         // 2. len = len_prev + 1 otherwise
         // 3. total_len = 0 if value <= 0x80
-        for q_value in [
-            q_number,
-            q_var_field_256,
-        ] {
+        for q_value in [q_number, q_var_field_256] {
             meta.create_gate("Block header RLP: length calculation", |meta| {
                 let mut cb = BaseConstraintBuilder::new(MAX_DEGREE);
 
@@ -1198,33 +1189,30 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
         });
 
         // Reconstruct field values
-        meta.create_gate(
-            "Block header RLP: Calculate fields' value RLC",
-            |meta| {
-                let mut cb = BaseConstraintBuilder::new(MAX_DEGREE);
+        meta.create_gate("Block header RLP: Calculate fields' value RLC", |meta| {
+            let mut cb = BaseConstraintBuilder::new(MAX_DEGREE);
 
-                let q_reconstruct_cur = meta.query_fixed(q_reconstruct, Rotation::cur());
-                let q_reconstruct_next = meta.query_fixed(q_reconstruct, Rotation::next());
-                let blk_hdr_rlp_next = meta.query_advice(blk_hdr_rlp, Rotation::next());
-                let blk_hdr_reconstruct_value_cur =
-                    meta.query_advice(blk_hdr_reconstruct_value, Rotation::cur());
-                let blk_hdr_reconstruct_value_next =
-                    meta.query_advice(blk_hdr_reconstruct_value, Rotation::next());
+            let q_reconstruct_cur = meta.query_fixed(q_reconstruct, Rotation::cur());
+            let q_reconstruct_next = meta.query_fixed(q_reconstruct, Rotation::next());
+            let blk_hdr_rlp_next = meta.query_advice(blk_hdr_rlp, Rotation::next());
+            let blk_hdr_reconstruct_value_cur =
+                meta.query_advice(blk_hdr_reconstruct_value, Rotation::cur());
+            let blk_hdr_reconstruct_value_next =
+                meta.query_advice(blk_hdr_reconstruct_value, Rotation::next());
 
-                let r = challenges.evm_word();
+            let r = challenges.evm_word();
 
-                // TODO(George): decide to either skip leading zeros here or
-                //               include leading zeros on the block_table rlc values calculation.
-                //               For now keeping leading zeros in RLC.
-                cb.require_equal(
-                    "reconstruct[n+1] = reconstruct[n] * r + byte[n+1]",
-                    blk_hdr_reconstruct_value_next,
-                    blk_hdr_reconstruct_value_cur * r + blk_hdr_rlp_next,
-                );
+            // TODO(George): decide to either skip leading zeros here or
+            //               include leading zeros on the block_table rlc values
+            // calculation.               For now keeping leading zeros in RLC.
+            cb.require_equal(
+                "reconstruct[n+1] = reconstruct[n] * r + byte[n+1]",
+                blk_hdr_reconstruct_value_next,
+                blk_hdr_reconstruct_value_cur * r + blk_hdr_rlp_next,
+            );
 
-                cb.gate(and::expr([q_reconstruct_cur, q_reconstruct_next]))
-            },
-        );
+            cb.gate(and::expr([q_reconstruct_cur, q_reconstruct_next]))
+        });
 
         meta.create_gate(
             "Block header RLP: Field RLC starts from the byte value",
@@ -1239,29 +1227,26 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
                 cb.require_equal(
                     "reconstruct[0] = byte[0]",
                     blk_hdr_reconstruct_value_next,
-                    blk_hdr_rlp_next
+                    blk_hdr_rlp_next,
                 );
 
                 cb.gate(and::expr([
                     not::expr(q_reconstruct_cur),
-                    q_reconstruct_next
+                    q_reconstruct_next,
                 ]))
             },
         );
 
         meta.lookup_any("Block header: Check RLC of field values", |meta| {
-                let q_sel = and::expr([
-                                meta.query_fixed(q_reconstruct, Rotation::cur()),
-                                not::expr(meta.query_fixed(q_reconstruct, Rotation::next())),
-                ]);
-                vec![
-                    (
-                        q_sel.expr() * meta.query_advice(blk_hdr_reconstruct_value, Rotation::cur()),
-                        meta.query_advice(block_table.value, Rotation::cur()),
-                    ),
-                ]
+            let q_sel = and::expr([
+                meta.query_fixed(q_reconstruct, Rotation::cur()),
+                not::expr(meta.query_fixed(q_reconstruct, Rotation::next())),
+            ]);
+            vec![(
+                q_sel.expr() * meta.query_advice(blk_hdr_reconstruct_value, Rotation::cur()),
+                meta.query_advice(block_table.value, Rotation::cur()),
+            )]
         });
-
 
         // 2. Check RLC of RLP'd block header
         // Accumulate only bytes that have q_blk_hdr_rlp AND
@@ -1695,7 +1680,6 @@ impl<F: Field> PiCircuitConfig<F> {
         ),
         Error,
     > {
-
         let mut pb = public_data;
         if let Some(x) = test_public_data {
             pb = x;
@@ -1721,8 +1705,20 @@ impl<F: Field> PiCircuitConfig<F> {
             ),
             (
                 "number",
-                randomness.map(|randomness| rlc([0;32-NUMBER_SIZE].into_iter().chain(block_values.number.to_be_bytes().into_iter()).rev().collect::<Vec<u8>>().try_into().unwrap(), randomness)),
-                false),
+                randomness.map(|randomness| {
+                    rlc(
+                        [0; 32 - NUMBER_SIZE]
+                            .into_iter()
+                            .chain(block_values.number.to_be_bytes().into_iter())
+                            .rev()
+                            .collect::<Vec<u8>>()
+                            .try_into()
+                            .unwrap(),
+                        randomness,
+                    )
+                }),
+                false,
+            ),
             (
                 "timestamp",
                 randomness.map(|randomness| rlc(block_values.timestamp.to_le_bytes(), randomness)),
@@ -1750,26 +1746,82 @@ impl<F: Field> PiCircuitConfig<F> {
         .chain([
             (
                 "parent_hash",
-                randomness.map(|randomness| rlc(pb.parent_hash.to_fixed_bytes().into_iter().rev().collect::<Vec<u8>>().try_into().unwrap(), randomness)),
+                randomness.map(|randomness| {
+                    rlc(
+                        pb.parent_hash
+                            .to_fixed_bytes()
+                            .into_iter()
+                            .rev()
+                            .collect::<Vec<u8>>()
+                            .try_into()
+                            .unwrap(),
+                        randomness,
+                    )
+                }),
                 false,
             ),
             (
                 "beneficiary",
-                randomness.map(|randomness| rlc(([0u8;32-BENEFICIARY_SIZE].into_iter().chain(pb.beneficiary.to_fixed_bytes().into_iter())).rev().collect::<Vec<u8>>().try_into().unwrap(), randomness)),
-                false),
+                randomness.map(|randomness| {
+                    rlc(
+                        ([0u8; 32 - BENEFICIARY_SIZE]
+                            .into_iter()
+                            .chain(pb.beneficiary.to_fixed_bytes().into_iter()))
+                        .rev()
+                        .collect::<Vec<u8>>()
+                        .try_into()
+                        .unwrap(),
+                        randomness,
+                    )
+                }),
+                false,
+            ),
             (
                 "state_root",
-                randomness.map(|randomness| rlc(pb.state_root.to_fixed_bytes().into_iter().rev().collect::<Vec<u8>>().try_into().unwrap(), randomness)),
+                randomness.map(|randomness| {
+                    rlc(
+                        pb.state_root
+                            .to_fixed_bytes()
+                            .into_iter()
+                            .rev()
+                            .collect::<Vec<u8>>()
+                            .try_into()
+                            .unwrap(),
+                        randomness,
+                    )
+                }),
                 false,
             ),
             (
                 "transactions_root",
-                randomness.map(|randomness| rlc(pb.transactions_root.to_fixed_bytes().into_iter().rev().collect::<Vec<u8>>().try_into().unwrap(), randomness)),
+                randomness.map(|randomness| {
+                    rlc(
+                        pb.transactions_root
+                            .to_fixed_bytes()
+                            .into_iter()
+                            .rev()
+                            .collect::<Vec<u8>>()
+                            .try_into()
+                            .unwrap(),
+                        randomness,
+                    )
+                }),
                 false,
             ),
             (
                 "receipts_root",
-                randomness.map(|randomness| rlc(pb.receipts_root.to_fixed_bytes().into_iter().rev().collect::<Vec<u8>>().try_into().unwrap(), randomness)),
+                randomness.map(|randomness| {
+                    rlc(
+                        pb.receipts_root
+                            .to_fixed_bytes()
+                            .into_iter()
+                            .rev()
+                            .collect::<Vec<u8>>()
+                            .try_into()
+                            .unwrap(),
+                        randomness,
+                    )
+                }),
                 false,
             ),
             (
@@ -1779,7 +1831,18 @@ impl<F: Field> PiCircuitConfig<F> {
             ),
             (
                 "mix_hash",
-                randomness.map(|randomness| rlc(pb.mix_hash.to_fixed_bytes().into_iter().rev().collect::<Vec<u8>>().try_into().unwrap(), randomness)),
+                randomness.map(|randomness| {
+                    rlc(
+                        pb.mix_hash
+                            .to_fixed_bytes()
+                            .into_iter()
+                            .rev()
+                            .collect::<Vec<u8>>()
+                            .try_into()
+                            .unwrap(),
+                        randomness,
+                    )
+                }),
                 false,
             ),
             (
@@ -1789,16 +1852,23 @@ impl<F: Field> PiCircuitConfig<F> {
             ),
             (
                 "withdrawals_root",
-                randomness.map(|randomness| rlc(pb.withdrawals_root.to_fixed_bytes().into_iter().rev().collect::<Vec<u8>>().try_into().unwrap(), randomness)),
+                randomness.map(|randomness| {
+                    rlc(
+                        pb.withdrawals_root
+                            .to_fixed_bytes()
+                            .into_iter()
+                            .rev()
+                            .collect::<Vec<u8>>()
+                            .try_into()
+                            .unwrap(),
+                        randomness,
+                    )
+                }),
                 false,
             ),
         ])
         .chain([
-            (
-                "prover",
-                Value::known(pb.prover.to_scalar().unwrap()),
-                true,
-            ),
+            ("prover", Value::known(pb.prover.to_scalar().unwrap()), true),
             ("txs_hash_hi", Value::known(pb.txs_hash_hi), true),
             ("txs_hash_lo", Value::known(pb.txs_hash_lo), true),
         ])
@@ -2325,10 +2395,10 @@ impl<F: Field> PiCircuitConfig<F> {
 
         // Gets rid of CellNotAssigned occuring in the last row
         for fixed_col in [
-                          self.blockhash_cols.q_number,
-                          self.blockhash_cols.q_var_field_256,
-                        self.blockhash_cols.q_reconstruct,
-                          ] {
+            self.blockhash_cols.q_number,
+            self.blockhash_cols.q_var_field_256,
+            self.blockhash_cols.q_reconstruct,
+        ] {
             region
                 .assign_fixed(
                     || "fixed column last row",
@@ -2345,13 +2415,13 @@ impl<F: Field> PiCircuitConfig<F> {
             self.blockhash_cols.blk_hdr_reconstruct_value,
         ] {
             region
-            .assign_advice(
-                || "advice column last row",
-                advice_col,
-                BLOCKHASH_TOTAL_ROWS,
-                || Value::known(F::zero()),
-            )
-            .unwrap();
+                .assign_advice(
+                    || "advice column last row",
+                    advice_col,
+                    BLOCKHASH_TOTAL_ROWS,
+                    || Value::known(F::zero()),
+                )
+                .unwrap();
         }
 
         // Calculate reconstructed values
@@ -2516,11 +2586,7 @@ impl<F: Field> PiCircuitConfig<F> {
                     public_data.block_constants.gas_limit,
                     GAS_LIMIT_RLP_OFFSET,
                 ),
-                (
-                    "gas_used",
-                    public_data.gas_used,
-                    GAS_USED_RLP_OFFSET,
-                ),
+                ("gas_used", public_data.gas_used, GAS_USED_RLP_OFFSET),
                 (
                     "timestamp",
                     public_data.block_constants.timestamp,
@@ -2596,26 +2662,10 @@ impl<F: Field> PiCircuitConfig<F> {
                     RECEIPTS_ROOT_RLP_OFFSET,
                     &reconstructed_values[4],
                 ),
-                (
-                    "gas_limit",
-                    GAS_LIMIT_RLP_OFFSET,
-                    &reconstructed_values[6],
-                ),
-                (
-                    "gas_used",
-                    GAS_USED_RLP_OFFSET,
-                    &reconstructed_values[7],
-                ),
-                (
-                    "timestamp",
-                    TIMESTAMP_RLP_OFFSET,
-                    &reconstructed_values[8],
-                ),
-                (
-                    "mix_hash",
-                    MIX_HASH_RLP_OFFSET,
-                    &reconstructed_values[9],
-                ),
+                ("gas_limit", GAS_LIMIT_RLP_OFFSET, &reconstructed_values[6]),
+                ("gas_used", GAS_USED_RLP_OFFSET, &reconstructed_values[7]),
+                ("timestamp", TIMESTAMP_RLP_OFFSET, &reconstructed_values[8]),
+                ("mix_hash", MIX_HASH_RLP_OFFSET, &reconstructed_values[9]),
                 (
                     "base_fee_per_gas",
                     BASE_FEE_RLP_OFFSET,
@@ -2884,7 +2934,12 @@ pub struct PiCircuit<F: Field> {
 
 impl<F: Field> PiCircuit<F> {
     /// Creates a new PiCircuit
-    pub fn new(max_txs: usize, max_calldata: usize, public_data: PublicData<F>, test_public_data: Option<PublicData<F>>) -> Self {
+    pub fn new(
+        max_txs: usize,
+        max_calldata: usize,
+        public_data: PublicData<F>,
+        test_public_data: Option<PublicData<F>>,
+    ) -> Self {
         Self {
             max_txs,
             max_calldata,
@@ -2938,7 +2993,12 @@ impl<F: Field> SubCircuit<F> for PiCircuit<F> {
         challenges: &Challenges<Value<F>>,
         layouter: &mut impl Layouter<F>,
     ) -> Result<(), Error> {
-        config.assign(layouter, &self.public_data, &self.test_public_data, challenges)
+        config.assign(
+            layouter,
+            &self.public_data,
+            &self.test_public_data,
+            challenges,
+        )
     }
 }
 
@@ -3479,6 +3539,5 @@ mod pi_circuit_test {
                 }
             }
         }
-
     }
 }
