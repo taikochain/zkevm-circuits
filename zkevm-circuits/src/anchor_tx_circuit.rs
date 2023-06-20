@@ -27,17 +27,22 @@ use std::marker::PhantomData;
 
 use self::sign_verify::GOLDEN_TOUCH_ADDRESS;
 
-// The first of txlist is the anchor tx
+// The anchor tx is the first tx
 const ANCHOR_TX_ID: usize = 1;
 const ANCHOR_TX_VALUE: u64 = 0;
 const ANCHOR_TX_IS_CREATE: bool = false;
 const ANCHOR_TX_GAS_PRICE: u64 = 0;
-// TODO: calculate the method_signature
-const ANCHOR_TX_METHOD_SIGNATURE: u32 = 0;
 const MAX_DEGREE: usize = 9;
 const BYTE_POW_BASE: u64 = 1 << 8;
 
-// anchor(bytes32,bytes32,uint64,uint64) = method_signature(4B)+1st(32B)+2nd(32B)+3rd(8B)+4th(8B)
+// function anchor(
+//     bytes32 l1Hash,
+//     bytes32 l1SignalRoot,
+//     uint64 l1Height,
+//     uint64 parentGasUsed
+// )
+// anchor(bytes32,bytes32,uint64,uint64) =
+// method_signature(4B)+l1Hash(32B)+l1SignalRoot(32B)+l1Height(8B)+parentGasUsed(8B)
 const ANCHOR_CALL_DATA_LEN: usize = 84;
 
 struct CallData {
@@ -59,11 +64,11 @@ pub struct AnchorTxCircuitConfig<F: Field> {
     use_rlc: Column<Fixed>,
 
     // check: method_signature, l1Hash, l1SignalRoot, l1Height, parentGasUsed
-    q_call_data_start: Selector,
-    q_call_data_step: Selector,
-    q_call_data_end: Selector,
-    call_data_rlc_acc: Column<Advice>,
-    call_data_tag: Column<Fixed>,
+    q_call_data_part_start: Selector,
+    q_call_data_part_step: Selector,
+    q_call_data_part_end: Selector,
+    call_data_part_rlc_acc: Column<Advice>,
+    call_data_part_tag: Column<Fixed>,
 
     sign_verify: SignVerifyConfig<F>,
 }
@@ -94,14 +99,17 @@ impl<F: Field> SubCircuitConfig<F> for AnchorTxCircuitConfig<F> {
         let tag = meta.fixed_column();
         let use_rlc = meta.fixed_column();
 
-        let q_call_data_start = meta.complex_selector();
-        let q_call_data_step = meta.complex_selector();
-        let q_call_data_end = meta.complex_selector();
-        let call_data_rlc_acc = meta.advice_column_in(SecondPhase);
-        let call_data_tag = meta.fixed_column();
+        let q_call_data_part_start = meta.complex_selector();
+        let q_call_data_part_step = meta.complex_selector();
+        let q_call_data_part_end = meta.complex_selector();
+        let call_data_part_rlc_acc = meta.advice_column_in(SecondPhase);
+        let call_data_part_tag = meta.fixed_column();
         let sign_verify = SignVerifyConfig::configure(meta, tx_table.clone(), &challenges);
 
-        // anchor transaction constants
+        // Verify the constant values of the anchor tx in the tx table.
+        // The tag and its corresponding constant value are stored next to each other vertically.
+        // (if the tag is at row i, its value is at row i + 1).
+        // Because of this, this lookup is enabled every other row.
         meta.lookup_any("anchor fixed fields", |meta| {
             let q_tag = meta.query_selector(q_tag);
             [
@@ -116,15 +124,16 @@ impl<F: Field> SubCircuitConfig<F> for AnchorTxCircuitConfig<F> {
             .collect()
         });
 
-        // call data
+        // RLC/decode the calldata (per part) of the anchor tx (all bytes except the first one)
         meta.create_gate(
             "call_data_rlc_acc[i+1] = call_data_rlc_acc[i] * t + call_data[i+1]",
             |meta| {
                 let mut cb = BaseConstraintBuilder::new(MAX_DEGREE);
 
-                let q_call_data_step = meta.query_selector(q_call_data_step);
-                let call_data_rlc_acc_next = meta.query_advice(call_data_rlc_acc, Rotation::next());
-                let call_data_rlc_acc = meta.query_advice(call_data_rlc_acc, Rotation::cur());
+                let q_call_data_step = meta.query_selector(q_call_data_part_step);
+                let call_data_rlc_acc_next =
+                    meta.query_advice(call_data_part_rlc_acc, Rotation::next());
+                let call_data_rlc_acc = meta.query_advice(call_data_part_rlc_acc, Rotation::cur());
                 let call_data_next = meta.query_advice(tx_table.value, Rotation::next());
                 let use_rlc = meta.query_fixed(use_rlc, Rotation::cur());
                 let randomness = challenges.lookup_input();
@@ -137,12 +146,12 @@ impl<F: Field> SubCircuitConfig<F> for AnchorTxCircuitConfig<F> {
                 cb.gate(q_call_data_step)
             },
         );
-
+        // RLC/decode the calldata (per part) of the anchor tx (first byte)
         meta.create_gate("call_data_rlc_acc[0] = call_data[0]", |meta| {
             let mut cb = BaseConstraintBuilder::new(MAX_DEGREE);
 
-            let q_call_data_start = meta.query_selector(q_call_data_start);
-            let call_data_rlc_acc = meta.query_advice(call_data_rlc_acc, Rotation::cur());
+            let q_call_data_start = meta.query_selector(q_call_data_part_start);
+            let call_data_rlc_acc = meta.query_advice(call_data_part_rlc_acc, Rotation::cur());
             let call_data = meta.query_advice(tx_table.value, Rotation::cur());
 
             cb.require_equal(
@@ -153,10 +162,12 @@ impl<F: Field> SubCircuitConfig<F> for AnchorTxCircuitConfig<F> {
             cb.gate(q_call_data_start)
         });
 
+        // After RLC/decode of an input in the calldata, verify that the value matches the expected
+        // value in the public input table.
         meta.lookup_any("call data in pi_table", |meta| {
-            let q_call_data_end = meta.query_selector(q_call_data_end);
-            let call_data_rlc_acc = meta.query_advice(call_data_rlc_acc, Rotation::cur());
-            let call_data_tag = meta.query_fixed(call_data_tag, Rotation::cur());
+            let q_call_data_end = meta.query_selector(q_call_data_part_end);
+            let call_data_rlc_acc = meta.query_advice(call_data_part_rlc_acc, Rotation::cur());
+            let call_data_tag = meta.query_fixed(call_data_part_tag, Rotation::cur());
 
             [call_data_tag, call_data_rlc_acc]
                 .into_iter()
@@ -173,18 +184,18 @@ impl<F: Field> SubCircuitConfig<F> for AnchorTxCircuitConfig<F> {
             tag,
             use_rlc,
 
-            q_call_data_start,
-            q_call_data_step,
-            q_call_data_end,
-            call_data_rlc_acc,
-            call_data_tag,
+            q_call_data_part_start,
+            q_call_data_part_step,
+            q_call_data_part_end,
+            call_data_part_rlc_acc,
+            call_data_part_tag,
             sign_verify,
         }
     }
 }
 
 impl<F: Field> AnchorTxCircuitConfig<F> {
-    fn assign_anchor_tx(
+    fn assign_anchor_tx_values(
         &self,
         region: &mut Region<'_, F>,
         _anchor_tx: &Transaction,
@@ -270,6 +281,7 @@ impl<F: Field> AnchorTxCircuitConfig<F> {
             ),
         ] {
             let mut rlc_acc = Value::known(F::ZERO);
+            // Use RLC encoding if the input doesn't fit within the field
             let (use_rlc, t) = if value.len() * 8 > F::CAPACITY as usize {
                 (Value::known(F::ONE), challenges.evm_word())
             } else {
@@ -277,29 +289,35 @@ impl<F: Field> AnchorTxCircuitConfig<F> {
             };
             for (idx, byte) in value.iter().enumerate() {
                 let row_offset = offset + idx;
+
+                // RLC/Decode bytes
+                region.assign_fixed(|| annotation, self.use_rlc, row_offset, || use_rlc)?;
                 rlc_acc = rlc_acc * t + Value::known(F::from(*byte as u64));
                 region.assign_advice(
                     || annotation,
-                    self.call_data_rlc_acc,
+                    self.call_data_part_rlc_acc,
                     row_offset,
                     || rlc_acc,
                 )?;
+
+                // Set the tag for this input
                 region.assign_fixed(
                     || annotation,
-                    self.call_data_tag,
+                    self.call_data_part_tag,
                     row_offset,
                     || Value::known(F::from(tag as u64)),
                 )?;
-                region.assign_fixed(|| annotation, self.use_rlc, row_offset, || use_rlc)?;
-                // setup selector
+
+                // Always enable the `start` selector at the first byte
                 if idx == 0 {
-                    self.q_call_data_start.enable(region, row_offset)?;
+                    self.q_call_data_part_start.enable(region, row_offset)?;
                 }
-                // the last offset of field
+                // If we're at the last byte, enable the `end` selector.
+                // Otherwise enable the `step` selector.
                 if idx == value.len() - 1 {
-                    self.q_call_data_end.enable(region, row_offset)?;
+                    self.q_call_data_part_end.enable(region, row_offset)?;
                 } else {
-                    self.q_call_data_step.enable(region, row_offset)?;
+                    self.q_call_data_part_step.enable(region, row_offset)?;
                 }
             }
             offset += value.len();
@@ -437,7 +455,7 @@ impl<F: Field> AnchorTxCircuitConfig<F> {
             || "anchor transaction",
             |ref mut region| {
                 self.load_tx_table(region, txs, max_txs, max_calldata, challenges)?;
-                self.assign_anchor_tx(region, anchor_tx, taiko, challenges)?;
+                self.assign_anchor_tx_values(region, anchor_tx, taiko, challenges)?;
                 self.assign_call_data(region, anchor_tx, call_data, challenges)?;
                 Ok(())
             },
