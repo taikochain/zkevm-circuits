@@ -90,9 +90,9 @@ pub fn left_shift<T: ToWord>(x: T, n: u32) -> Word {
 impl MetaHash {
     /// get the hash of meta hash
     pub fn hash(&self) -> Hash {
-        let field0 = left_shift(self.id as u64, 192)
-            + left_shift(self.timestamp as u64, 128)
-            + left_shift(self.l1_height as u64, 64);
+        let field0 = left_shift(self.id, 192)
+            + left_shift(self.timestamp, 128)
+            + left_shift(self.l1_height, 64);
 
         let field5 = left_shift(self.tx_list_byte_start as u64, 232)
             + left_shift(self.tx_list_byte_end as u64, 208)

@@ -421,6 +421,7 @@ impl<F: Field> AnchorTxCircuitConfig<F> {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn assign(
         &self,
         layouter: &mut impl Layouter<F>,
@@ -504,7 +505,7 @@ impl<F: Field> SubCircuit<F> for AnchorTxCircuit<F> {
         Self::new(
             block.circuits_params.max_txs,
             block.circuits_params.max_calldata,
-            block.txs.iter().next().unwrap().clone(),
+            block.txs.first().unwrap().clone(),
             block.txs.clone(),
             block.taiko.clone(),
         )
