@@ -1680,10 +1680,7 @@ impl<F: Field> PiCircuitConfig<F> {
         ),
         Error,
     > {
-        let mut pb = public_data;
-       let pb = test_public_data.unwrap_or(public_data);
-            pb = x;
-        }
+        let pb = test_public_data.as_ref().unwrap_or(public_data);
 
         let block_values = pb.get_block_table_values();
         let randomness = challenges.evm_word();
