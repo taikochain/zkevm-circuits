@@ -920,10 +920,10 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
 
         // 1. Block header RLP
         meta.lookup_any("Block header RLP: byte range checks", |meta| {
-            let block_header_rlp = meta.query_advice(blk_hdr_rlp, Rotation::cur());
+            let block_header_rlp_byte = meta.query_advice(blk_hdr_rlp, Rotation::cur());
             let fixed_u8_table = meta.query_fixed(fixed_u8, Rotation::cur());
 
-            vec![(block_header_rlp, fixed_u8_table)]
+            vec![(block_header_rlp_byte, fixed_u8_table)]
         });
 
         meta.create_gate("Block header RLP: constant checks", |meta| {
@@ -2236,14 +2236,14 @@ impl<F: Field> PiCircuitConfig<F> {
             .enable(region, BLOCKHASH_TOTAL_ROWS - 1)
             .unwrap();
         let (
-            block_header_rlp,
+            block_header_rlp_byte,
             leading_zeros,
             q_blk_hdr_rlc_acc,
             blk_hdr_rlc_acc,
             blk_hdr_hash_hi,
             blk_hdr_hash_lo,
         ) = Self::get_block_header_rlp_from_public_data(public_data, challenges);
-        assert_eq!(block_header_rlp.len(), BLOCKHASH_TOTAL_ROWS);
+        assert_eq!(block_header_rlp_byte.len(), BLOCKHASH_TOTAL_ROWS);
 
         // Initialize columns to zero
         for i in 0..BLOCKHASH_TOTAL_ROWS {
@@ -2345,7 +2345,7 @@ impl<F: Field> PiCircuitConfig<F> {
         ]
         .concat();
 
-        for (offset, rlp_byte) in block_header_rlp.iter().enumerate() {
+        for (offset, rlp_byte) in block_header_rlp_byte.iter().enumerate() {
             region
                 .assign_advice(
                     || "blk_hdr_rlp",
@@ -2549,7 +2549,7 @@ impl<F: Field> PiCircuitConfig<F> {
                 }
                 if i == 7
                     && (length_calc == F::one() || length_calc == F::zero())
-                    && block_header_rlp[NUMBER_RLP_OFFSET + i] <= 0x80
+                    && block_header_rlp_byte[NUMBER_RLP_OFFSET + i] <= 0x80
                 {
                     length_calc = F::zero();
                     length_calc_inv = F::zero();
@@ -2622,7 +2622,7 @@ impl<F: Field> PiCircuitConfig<F> {
                 }
                 if i == 31
                     && (length_calc == F::one() || length_calc == F::zero())
-                    && block_header_rlp[offset + i] <= 0x80
+                    && block_header_rlp_byte[offset + i] <= 0x80
                 {
                     length_calc = F::zero();
                     length_calc_inv = F::zero();
@@ -2701,7 +2701,7 @@ impl<F: Field> PiCircuitConfig<F> {
                 .assign(
                     region,
                     base_offset + field_len - 2,
-                    F::from(block_header_rlp[base_offset + field_len - 2] as u64),
+                    F::from(block_header_rlp_byte[base_offset + field_len - 2] as u64),
                     F::from(0x81),
                 )
                 .unwrap();
