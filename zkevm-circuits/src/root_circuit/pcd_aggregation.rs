@@ -7,7 +7,7 @@ use halo2_proofs::{
 };
 use itertools::Itertools;
 use maingate::{MainGateInstructions, RangeInstructions};
-use snark_verifier_sdk::{CircuitExt, LIMBS, SHPLONK};
+use snark_verifier_sdk::{CircuitExt, LIMBS};
 use std::fmt;
 
 pub use snark_verifier::system::halo2::{compile, Config};

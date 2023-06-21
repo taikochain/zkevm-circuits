@@ -515,8 +515,8 @@ dependencies = [
  "rand_chacha",
  "rand_xorshift",
  "serde",
- "snark-verifier",
- "snark-verifier-sdk",
+ "snark-verifier 0.1.0 (git+https://github.com/smtmfft/snark-verifier.git?branch=feat/add-sdk-generic)",
+ "snark-verifier-sdk 0.1.1 (git+https://github.com/smtmfft/snark-verifier.git?branch=feat/add-sdk-generic)",
  "zkevm-circuits",
 ]
 
@@ -4383,6 +4383,30 @@ checksum = "a507befe795404456341dfab10cef66ead4c041f62b8b11bbb92bffe5d0953e0"
 [[package]]
 name = "snark-verifier"
 version = "0.1.0"
+source = "git+https://github.com/brechtpd/snark-verifier.git?branch=feat/add-sdk#3f7e31d32058f87ae4ec45a4c42a955895eb25c6"
+dependencies = [
+ "bytes",
+ "ecc",
+ "halo2_proofs 0.2.0",
+ "halo2curves",
+ "hex",
+ "itertools",
+ "lazy_static",
+ "num-bigint",
+ "num-integer",
+ "num-traits",
+ "poseidon",
+ "primitive-types",
+ "rand",
+ "rayon",
+ "revm",
+ "rlp",
+ "sha3 0.10.7",
+]
+
+[[package]]
+name = "snark-verifier"
+version = "0.1.0"
 source = "git+https://github.com/smtmfft/snark-verifier.git?branch=feat/add-sdk-generic#e22021dcd93080a5be897ed285d0e7e46ce2583c"
 dependencies = [
  "bytes",
@@ -4407,6 +4431,31 @@ dependencies = [
 [[package]]
 name = "snark-verifier-sdk"
 version = "0.1.1"
+source = "git+https://github.com/brechtpd/snark-verifier.git?branch=feat/add-sdk#3f7e31d32058f87ae4ec45a4c42a955895eb25c6"
+dependencies = [
+ "ark-std",
+ "bincode",
+ "ecc",
+ "ethereum-types",
+ "halo2_proofs 0.2.0",
+ "halo2curves",
+ "hex",
+ "itertools",
+ "lazy_static",
+ "num-bigint",
+ "num-integer",
+ "num-traits",
+ "poseidon",
+ "rand",
+ "rand_chacha",
+ "serde",
+ "serde_json",
+ "snark-verifier 0.1.0 (git+https://github.com/brechtpd/snark-verifier.git?branch=feat/add-sdk)",
+]
+
+[[package]]
+name = "snark-verifier-sdk"
+version = "0.1.1"
 source = "git+https://github.com/smtmfft/snark-verifier.git?branch=feat/add-sdk-generic#e22021dcd93080a5be897ed285d0e7e46ce2583c"
 dependencies = [
  "ark-std",
@@ -4426,7 +4475,7 @@ dependencies = [
  "rand_chacha",
  "serde",
  "serde_json",
- "snark-verifier",
+ "snark-verifier 0.1.0 (git+https://github.com/smtmfft/snark-verifier.git?branch=feat/add-sdk-generic)",
 ]
 
 [[package]]
@@ -5423,8 +5472,8 @@ dependencies = [
  "serde",
  "serde_json",
  "sha3 0.10.7",
- "snark-verifier",
- "snark-verifier-sdk",
+ "snark-verifier 0.1.0 (git+https://github.com/brechtpd/snark-verifier.git?branch=feat/add-sdk)",
+ "snark-verifier-sdk 0.1.1 (git+https://github.com/brechtpd/snark-verifier.git?branch=feat/add-sdk)",
  "strum",
  "strum_macros",
 ]
