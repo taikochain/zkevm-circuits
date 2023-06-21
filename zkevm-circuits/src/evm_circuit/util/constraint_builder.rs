@@ -142,7 +142,7 @@ impl<F: Field> ReversionInfo<F> {
 pub struct BaseConstraintBuilder<F> {
     pub constraints: Vec<(&'static str, Expression<F>)>,
     pub max_degree: usize,
-    pub condition: Option<Expression<F>>,
+    pub conditions: Vec<Expression<F>>,
 }
 
 impl<F: Field> BaseConstraintBuilder<F> {
@@ -150,7 +150,7 @@ impl<F: Field> BaseConstraintBuilder<F> {
         BaseConstraintBuilder {
             constraints: Vec::new(),
             max_degree,
-            condition: None,
+            conditions: Vec::new(),
         }
     }
 
@@ -189,14 +189,22 @@ impl<F: Field> BaseConstraintBuilder<F> {
         condition: Expression<F>,
         constraint: impl FnOnce(&mut Self) -> R,
     ) -> R {
-        debug_assert!(
-            self.condition.is_none(),
-            "Nested condition is not supported"
-        );
-        self.condition = Some(condition);
+        self.conditions.push(condition);
         let ret = constraint(self);
-        self.condition = None;
+        self.conditions.pop();
         ret
+    }
+
+    pub(crate) fn get_condition(&self) -> Option<Expression<F>> {
+        if self.conditions.is_empty() {
+            None
+        } else {
+            Some(and::expr(self.conditions.iter()))
+        }
+    }
+
+    pub(crate) fn get_condition_expr(&self) -> Expression<F> {
+        self.get_condition().unwrap_or_else(|| 1.expr())
     }
 
     pub(crate) fn add_constraints(&mut self, constraints: Vec<(&'static str, Expression<F>)>) {
@@ -206,10 +214,7 @@ impl<F: Field> BaseConstraintBuilder<F> {
     }
 
     pub(crate) fn add_constraint(&mut self, name: &'static str, constraint: Expression<F>) {
-        let constraint = match &self.condition {
-            Some(condition) => condition.clone() * constraint,
-            None => constraint,
-        };
+        let constraint = self.get_condition_expr() * constraint;
         self.validate_degree(constraint.degree(), name);
         self.constraints.push((name, constraint));
     }
