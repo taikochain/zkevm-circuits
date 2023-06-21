@@ -1,6 +1,6 @@
 use super::*;
 
-/// Is byte table
+/// byte table stores the value from 0 to 255 which is used to check whether the input is a byte
 #[derive(Clone, Debug)]
 pub struct ByteTable {
     range256: Column<Fixed>,

@@ -107,6 +107,7 @@ impl TxTable {
 
     /// Assign the `TxTable` from a list of block `Transaction`s, followig the
     /// same layout that the Tx Circuit uses.
+    /// NOTE: This function is used by passing the region directly
     pub fn load_with_region<F: Field>(
         &self,
         region: &mut Region<'_, F>,

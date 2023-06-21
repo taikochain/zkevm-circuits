@@ -172,6 +172,7 @@ impl<F: Field> SignVerifyConfig<F> {
         let q_check = meta.complex_selector();
         let is_equal_gx2 = IsEqualChip::configure(
             meta,
+            |meta| meta.advice_column_in(SecondPhase),
             |meta| meta.query_selector(q_check),
             |meta| meta.query_advice(sig_rlc_acc, Rotation(63)), // SigR == GX2
             |_| gx2_rlc.expr(),

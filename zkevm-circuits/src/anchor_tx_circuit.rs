@@ -346,6 +346,9 @@ impl<F: Field> AnchorTxCircuitConfig<F> {
         layouter.assign_region(
             || "anchor transaction",
             |ref mut region| {
+                // halo2 doesn't support create gates between different regions,
+                // so we need to load TxTable in the same region in order to create
+                // gate with TxTable's column
                 self.tx_table
                     .load_with_region(region, txs, max_txs, max_calldata, challenges)?;
                 self.assign_anchor_tx_values(region, anchor_tx, taiko, challenges)?;

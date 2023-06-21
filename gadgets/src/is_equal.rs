@@ -3,7 +3,7 @@
 use eth_types::Field;
 use halo2_proofs::{
     circuit::{Chip, Region, Value},
-    plonk::{ConstraintSystem, Error, Expression, SecondPhase, VirtualCells},
+    plonk::{Advice, Column, ConstraintSystem, Error, Expression, SecondPhase, VirtualCells},
 };
 
 use super::is_zero::{IsZeroChip, IsZeroInstruction};
@@ -40,13 +40,13 @@ impl<F: Field> IsEqualChip<F> {
     /// Configure the IsEqual chip.
     pub fn configure(
         meta: &mut ConstraintSystem<F>,
+        value_inv: impl FnOnce(&mut ConstraintSystem<F>) -> Column<Advice>,
         q_enable: impl FnOnce(&mut VirtualCells<'_, F>) -> Expression<F>,
         lhs: impl FnOnce(&mut VirtualCells<'_, F>) -> Expression<F>,
         rhs: impl FnOnce(&mut VirtualCells<'_, F>) -> Expression<F>,
     ) -> IsEqualConfig<F> {
         let value = |meta: &mut VirtualCells<F>| lhs(meta) - rhs(meta);
-        let value_inv = meta.advice_column_in(SecondPhase);
-
+        let value_inv = value_inv(meta);
         let is_zero_config = IsZeroChip::configure(meta, q_enable, value, value_inv);
         let is_equal_expression = is_zero_config.is_zero_expression.clone();
 
@@ -138,8 +138,13 @@ mod tests {
             let lhs = |meta: &mut VirtualCells<F>| meta.query_advice(value, Rotation::cur());
             let rhs = |_meta: &mut VirtualCells<F>| RHS.expr();
 
-            let is_equal =
-                IsEqualChip::configure(meta, |meta| meta.query_selector(q_enable), lhs, rhs);
+            let is_equal = IsEqualChip::configure(
+                meta,
+                |meta| meta.advice_column(),
+                |meta| meta.query_selector(q_enable),
+                lhs,
+                rhs,
+            );
 
             let config = Self::Config {
                 q_enable,
