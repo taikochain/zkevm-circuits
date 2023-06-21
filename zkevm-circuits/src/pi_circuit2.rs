@@ -1681,7 +1681,7 @@ impl<F: Field> PiCircuitConfig<F> {
         Error,
     > {
         let mut pb = public_data;
-        if let Some(x) = test_public_data {
+       let pb = test_public_data.unwrap_or(public_data);
             pb = x;
         }
 
