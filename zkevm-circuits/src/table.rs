@@ -28,6 +28,8 @@ use strum_macros::{EnumCount, EnumIter};
 
 /// block table
 pub(crate) mod block_table;
+/// byte table
+pub(crate) mod byte_table;
 /// bytecode table
 pub(crate) mod bytecode_table;
 /// copy Table

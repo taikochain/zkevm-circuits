@@ -10,7 +10,7 @@ mod test;
 
 use crate::{
     evm_circuit::util::constraint_builder::{BaseConstraintBuilder, ConstrainBuilderCommon},
-    table::{LookupTable, PiFieldTag, PiTable, TxContextFieldTag, TxFieldTag, TxTable},
+    table::{byte_table::ByteTable, LookupTable, PiFieldTag, PiTable, TxFieldTag, TxTable},
     tx_circuit::TX_LEN,
     util::{Challenges, SubCircuit, SubCircuitConfig},
     witness::{self, Taiko, Transaction},
@@ -55,6 +55,7 @@ struct CallData {
 pub struct AnchorTxCircuitConfig<F: Field> {
     tx_table: TxTable,
     pi_table: PiTable,
+    byte_table: ByteTable,
 
     q_tag: Selector,
     // the anchor transaction fixed fields
@@ -79,6 +80,8 @@ pub struct AnchorTxCircuitConfigArgs<F: Field> {
     pub tx_table: TxTable,
     /// PiTable
     pub pi_table: PiTable,
+    /// ByteTable
+    pub byte_table: ByteTable,
     /// Challenges
     pub challenges: Challenges<Expression<F>>,
 }
@@ -92,6 +95,7 @@ impl<F: Field> SubCircuitConfig<F> for AnchorTxCircuitConfig<F> {
         Self::ConfigArgs {
             tx_table,
             pi_table,
+            byte_table,
             challenges,
         }: Self::ConfigArgs,
     ) -> Self {
@@ -104,7 +108,8 @@ impl<F: Field> SubCircuitConfig<F> for AnchorTxCircuitConfig<F> {
         let q_call_data_part_end = meta.complex_selector();
         let call_data_part_rlc_acc = meta.advice_column_in(SecondPhase);
         let call_data_part_tag = meta.fixed_column();
-        let sign_verify = SignVerifyConfig::configure(meta, tx_table.clone(), &challenges);
+        let sign_verify =
+            SignVerifyConfig::configure(meta, tx_table.clone(), byte_table.clone(), &challenges);
 
         // Verify the constant values of the anchor tx in the tx table.
         // The tag and its corresponding constant value are stored next to each other vertically.
@@ -179,6 +184,7 @@ impl<F: Field> SubCircuitConfig<F> for AnchorTxCircuitConfig<F> {
         Self {
             tx_table,
             pi_table,
+            byte_table,
 
             q_tag,
             tag,
@@ -325,120 +331,6 @@ impl<F: Field> AnchorTxCircuitConfig<F> {
         Ok(())
     }
 
-    fn load_tx_table(
-        &self,
-        region: &mut Region<'_, F>,
-        txs: &[Transaction],
-        max_txs: usize,
-        max_calldata: usize,
-        challenges: &Challenges<Value<F>>,
-    ) -> Result<(), Error> {
-        assert!(
-            txs.len() <= max_txs,
-            "txs.len() <= max_txs: txs.len()={}, max_txs={}",
-            txs.len(),
-            max_txs
-        );
-        let sum_txs_calldata = txs.iter().map(|tx| tx.call_data.len()).sum();
-        assert!(
-            sum_txs_calldata <= max_calldata,
-            "sum_txs_calldata <= max_calldata: sum_txs_calldata={}, max_calldata={}",
-            sum_txs_calldata,
-            max_calldata,
-        );
-
-        fn assign_row<F: Field>(
-            region: &mut Region<'_, F>,
-            offset: usize,
-            advice_columns: &[Column<Advice>],
-            tag: &Column<Fixed>,
-            row: &[Value<F>; 4],
-            msg: &str,
-        ) -> Result<(), Error> {
-            for (index, column) in advice_columns.iter().enumerate() {
-                region.assign_advice(
-                    || format!("tx table {} row {}", msg, offset),
-                    *column,
-                    offset,
-                    || row[if index > 0 { index + 1 } else { index }],
-                )?;
-            }
-            region.assign_fixed(
-                || format!("tx table {} row {}", msg, offset),
-                *tag,
-                offset,
-                || row[1],
-            )?;
-            Ok(())
-        }
-
-        let mut offset = 0;
-        let advice_columns = [
-            self.tx_table.tx_id,
-            self.tx_table.index,
-            self.tx_table.value,
-        ];
-        assign_row(
-            region,
-            offset,
-            &advice_columns,
-            &self.tx_table.tag,
-            &[(); 4].map(|_| Value::known(F::ZERO)),
-            "all-zero",
-        )?;
-        offset += 1;
-
-        // Tx Table contains an initial region that has a size parametrized by max_txs
-        // with all the tx data except for calldata, and then a second
-        // region that has a size parametrized by max_calldata with all
-        // the tx calldata.  This is required to achieve a constant fixed column tag
-        // regardless of the number of input txs or the calldata size of each tx.
-        let mut calldata_assignments: Vec<[Value<F>; 4]> = Vec::new();
-        // Assign Tx data (all tx fields except for calldata)
-        let padding_txs: Vec<_> = (txs.len()..max_txs)
-            .map(|i| Transaction {
-                id: i + 1,
-                ..Default::default()
-            })
-            .collect();
-        for tx in txs.iter().chain(padding_txs.iter()) {
-            let [tx_data, tx_calldata] = tx.table_assignments(*challenges);
-            for row in tx_data {
-                assign_row(
-                    region,
-                    offset,
-                    &advice_columns,
-                    &self.tx_table.tag,
-                    &row,
-                    "",
-                )?;
-                offset += 1;
-            }
-            calldata_assignments.extend(tx_calldata.iter());
-        }
-        // Assign Tx calldata
-        let padding_calldata = (sum_txs_calldata..max_calldata).map(|_| {
-            [
-                Value::known(F::ZERO),
-                Value::known(F::from(TxContextFieldTag::CallData as u64)),
-                Value::known(F::ZERO),
-                Value::known(F::ZERO),
-            ]
-        });
-        for row in calldata_assignments.into_iter().chain(padding_calldata) {
-            assign_row(
-                region,
-                offset,
-                &advice_columns,
-                &self.tx_table.tag,
-                &row,
-                "",
-            )?;
-            offset += 1;
-        }
-        Ok(())
-    }
-
     #[allow(clippy::too_many_arguments)]
     fn assign(
         &self,
@@ -454,7 +346,8 @@ impl<F: Field> AnchorTxCircuitConfig<F> {
         layouter.assign_region(
             || "anchor transaction",
             |ref mut region| {
-                self.load_tx_table(region, txs, max_txs, max_calldata, challenges)?;
+                self.tx_table
+                    .load_with_region(region, txs, max_txs, max_calldata, challenges)?;
                 self.assign_anchor_tx_values(region, anchor_tx, taiko, challenges)?;
                 self.assign_call_data(region, anchor_tx, call_data, challenges)?;
                 Ok(())

@@ -1,7 +1,7 @@
 pub use super::AnchorTxCircuit;
 use crate::{
     anchor_tx_circuit::{AnchorTxCircuitConfig, AnchorTxCircuitConfigArgs},
-    table::{PiTable, TxTable},
+    table::{byte_table::ByteTable, PiTable, TxTable},
     util::{Challenges, SubCircuit, SubCircuitConfig},
     witness::{self, Taiko},
 };
@@ -50,6 +50,7 @@ impl<F: Field> Circuit<F> for TestAnchorTxCircuit<F> {
     fn configure(meta: &mut ConstraintSystem<F>) -> Self::Config {
         let tx_table = TxTable::construct(meta);
         let pi_table = PiTable::construct(meta);
+        let byte_table = ByteTable::construct(meta);
         let challenges = Challenges::construct(meta);
 
         let config = {
@@ -59,6 +60,7 @@ impl<F: Field> Circuit<F> for TestAnchorTxCircuit<F> {
                 AnchorTxCircuitConfigArgs {
                     tx_table,
                     pi_table,
+                    byte_table,
                     challenges,
                 },
             )
@@ -76,6 +78,7 @@ impl<F: Field> Circuit<F> for TestAnchorTxCircuit<F> {
         config
             .pi_table
             .load(&mut layouter, &self.taiko, &challenges)?;
+        config.byte_table.load(&mut layouter)?;
         self.circuit
             .synthesize_sub(&config, &challenges, &mut layouter)
     }
