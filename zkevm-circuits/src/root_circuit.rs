@@ -13,7 +13,7 @@ use snark_verifier::{util::arithmetic::MultiMillerLoop, verifier::plonk::PlonkPr
 use std::iter;
 
 mod aggregation;
-mod pcd_aggregation;
+pub mod pcd_aggregation;
 
 pub use pcd_aggregation::PCDAggregationCircuit;
 

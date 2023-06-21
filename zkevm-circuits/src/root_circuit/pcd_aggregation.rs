@@ -7,27 +7,58 @@ use halo2_proofs::{
 };
 use itertools::Itertools;
 use maingate::{MainGateInstructions, RangeInstructions};
-use snark_verifier_sdk::{CircuitExt, GWC};
+use snark_verifier_sdk::{CircuitExt, LIMBS};
 use std::fmt;
 
-pub use super::aggregation::{
-    aggregate, EccChip, Halo2Loader, KzgAs, KzgDk, KzgSvk, PlonkSuccinctVerifier, PlonkVerifier,
-    PoseidonTranscript, BITS, LIMBS,
-};
 pub use snark_verifier::system::halo2::{compile, Config};
 use snark_verifier_sdk::{
-    halo2::aggregation::{AggregationCircuit, AggregationConfig},
+    halo2::aggregation::{AccumulationSchemeSDK, AggregationCircuit, AggregationConfig},
     Snark,
 };
 
+// TODO: move this to snark-verifier-sdk
+/// AggregationType is used to specify which accumulation scheme to use.
+#[derive(Clone, Copy, Debug)]
+pub enum AccumulationSchemeType {
+    /// using GWC
+    GwcType,
+    /// using SHPLONK
+    ShplonkType,
+}
+
+impl From<AccumulationSchemeType> for u64 {
+    fn from(t: AccumulationSchemeType) -> u64 {
+        match t {
+            AccumulationSchemeType::GwcType => 0,
+            AccumulationSchemeType::ShplonkType => 1,
+        }
+    }
+}
+
+impl From<u64> for AccumulationSchemeType {
+    fn from(t: u64) -> AccumulationSchemeType {
+        match t {
+            0 => AccumulationSchemeType::GwcType,
+            1 => AccumulationSchemeType::ShplonkType,
+            _ => panic!("Invalid aggregation type"),
+        }
+    }
+}
+
 /// PCDAggregationCircuit for aggregating various sub circuits into a smaller proof.
 #[derive(Clone)]
-pub struct PCDAggregationCircuit<GWC> {
-    aggregation_circuit: AggregationCircuit<GWC>,
+pub struct PCDAggregationCircuit<AS>
+where
+    AS: AccumulationSchemeSDK,
+{
+    aggregation_circuit: AggregationCircuit<AS>,
     input_snarks: Vec<Snark>,
 }
 
-impl PCDAggregationCircuit<GWC> {
+impl<AS> PCDAggregationCircuit<AS>
+where
+    AS: AccumulationSchemeSDK,
+{
     /// Create a `PCDAggregationCircuit` with accumulator computed by
     /// Snark array. Returns `None` if given proof is invalid.
     pub fn new(
@@ -36,7 +67,7 @@ impl PCDAggregationCircuit<GWC> {
     ) -> Result<Self, snark_verifier::Error> {
         let input_snarks = snarks.into_iter().collect_vec();
         Ok(Self {
-            aggregation_circuit: AggregationCircuit::<GWC>::new(params, input_snarks.clone()),
+            aggregation_circuit: AggregationCircuit::<AS>::new(params, input_snarks.clone()),
             input_snarks,
         })
     }
@@ -87,7 +118,10 @@ impl PCDAggregationCircuit<GWC> {
     }
 }
 
-impl fmt::Display for PCDAggregationCircuit<GWC> {
+impl<AS> fmt::Display for PCDAggregationCircuit<AS>
+where
+    AS: AccumulationSchemeSDK,
+{
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
@@ -98,7 +132,10 @@ impl fmt::Display for PCDAggregationCircuit<GWC> {
     }
 }
 
-impl CircuitExt<Fr> for PCDAggregationCircuit<GWC> {
+impl<AS> CircuitExt<Fr> for PCDAggregationCircuit<AS>
+where
+    AS: AccumulationSchemeSDK,
+{
     fn num_instance(&self) -> Vec<usize> {
         self.num_instance()
     }
@@ -108,7 +145,10 @@ impl CircuitExt<Fr> for PCDAggregationCircuit<GWC> {
     }
 }
 
-impl Circuit<Fr> for PCDAggregationCircuit<GWC> {
+impl<AS> Circuit<Fr> for PCDAggregationCircuit<AS>
+where
+    AS: AccumulationSchemeSDK,
+{
     type Config = AggregationConfig;
     type FloorPlanner = SimpleFloorPlanner;
     type Params = ();
@@ -121,7 +161,7 @@ impl Circuit<Fr> for PCDAggregationCircuit<GWC> {
     }
 
     fn configure(meta: &mut ConstraintSystem<Fr>) -> Self::Config {
-        AggregationCircuit::<GWC>::configure(meta)
+        AggregationCircuit::<AS>::configure(meta)
     }
 
     fn synthesize(
@@ -171,7 +211,10 @@ mod pcd_test {
     };
     use rand::RngCore;
     use rand_chacha::rand_core::OsRng;
-    use snark_verifier_sdk::halo2::{gen_proof, gen_srs};
+    use snark_verifier_sdk::{
+        halo2::{gen_proof, gen_srs},
+        GWC,
+    };
 
     #[derive(Clone, Copy)]
     pub struct StandardPlonkConfig {
@@ -321,7 +364,7 @@ mod pcd_test {
         app_params.downsize(k - 3);
         let snarks = (0..2).map(|_| gen_app_snark(&app_params)).collect_vec();
 
-        let root_circuit = PCDAggregationCircuit::new(&params, snarks).unwrap();
+        let root_circuit = PCDAggregationCircuit::<GWC>::new(&params, snarks).unwrap();
         assert_eq!(
             MockProver::run(k, &root_circuit, root_circuit.instance())
                 .unwrap()
