@@ -50,14 +50,6 @@ use num_bigint::BigUint;
 use once_cell::sync::Lazy;
 use sha3::{Digest, Keccak256};
 
-#[test]
-fn tx_circuit_unusable_rows() {
-    assert_eq!(
-        AnchorTxCircuit::<Fr>::unusable_rows(),
-        unusable_rows::<Fr, TestAnchorTxCircuit::<Fr>>(()),
-    )
-}
-
 pub(crate) fn anchor_sign(
     anchor_tx: &Transaction,
     chain_id: u64,
@@ -183,7 +175,7 @@ fn gen_block<const NUM_TXS: usize>(
     block
 }
 
-fn correct_sign(tx: &mut MockTransaction) {
+fn sign_tx(tx: &mut MockTransaction) {
     let chain_id = (*MOCK_CHAIN_ID).as_u64();
     let _tx: Transaction = tx.to_owned().into();
     let sig_data = anchor_sign(&_tx, chain_id).unwrap();
@@ -192,17 +184,7 @@ fn correct_sign(tx: &mut MockTransaction) {
     tx.sig_data((2712, sig_r, sig_s));
 }
 
-#[test]
-fn test() {
-    let taiko = Taiko {
-        anchor_gas_cost: 150000,
-        ..Default::default()
-    };
-    let block = gen_block::<1>(2, 100, taiko, correct_sign);
-    assert_eq!(run::<Fr>(&block, None), Ok(()));
-}
-
-fn sign_r_is_gx2(tx: &mut MockTransaction) {
+fn sign_tx_r_is_gx2(tx: &mut MockTransaction) {
     let msg_hash = *N - *GX1_MUL_PRIVATEKEY;
     let msg_hash = ct_option_ok_or(
         secp256k1::Fq::from_repr(msg_hash.to_le_bytes()),
@@ -222,13 +204,31 @@ fn sign_r_is_gx2(tx: &mut MockTransaction) {
 }
 
 #[test]
-fn test_when_sign_r_is_gx2() {
+fn anchor_tx_circuit_unusable_rows() {
+    assert_eq!(
+        AnchorTxCircuit::<Fr>::unusable_rows(),
+        unusable_rows::<Fr, TestAnchorTxCircuit::<Fr>>(()),
+    )
+}
+
+#[test]
+fn anchor_test() {
+    let taiko = Taiko {
+        anchor_gas_cost: 150000,
+        ..Default::default()
+    };
+    let block = gen_block::<1>(2, 100, taiko, sign_tx);
+    assert_eq!(run::<Fr>(&block, None), Ok(()));
+}
+
+#[test]
+fn anchor_test_when_sign_r_is_gx2() {
     let taiko = Taiko {
         anchor_gas_cost: 150000,
         ..Default::default()
     };
     let msg_hash = *N - *GX1_MUL_PRIVATEKEY;
     let msg_hash = H256::from(msg_hash.to_le_bytes());
-    let block = gen_block::<1>(2, 100, taiko, sign_r_is_gx2);
+    let block = gen_block::<1>(2, 100, taiko, sign_tx_r_is_gx2);
     assert_eq!(run::<Fr>(&block, Some(msg_hash)), Ok(()));
 }
