@@ -47,13 +47,15 @@ use lazy_static::lazy_static;
 
 /// Fixed by the spec
 const TX_LEN: usize = 10;
-const BLOCK_LEN: usize = 7 + 256 + 6;
+// Total number of entries in the block table
+const BLOCK_TABLE_LEN: usize = 7 + 256 + 6;
 const EXTRA_LEN: usize = 2;
 const ZERO_BYTE_GAS_COST: u64 = 4;
 const NONZERO_BYTE_GAS_COST: u64 = 16;
 const MAX_DEGREE: usize = 8;
 const BYTE_POW_BASE: u64 = 1 << 8;
 
+// Maximum size of block header fields in bytes
 const PARENT_HASH_SIZE: usize = 32;
 const OMMERS_HASH_SIZE: usize = 32;
 const BENEFICIARY_SIZE: usize = 20;
@@ -72,6 +74,7 @@ const NONCE_SIZE: usize = 8;
 const BASE_FEE_SIZE: usize = 32;
 const WITHDRAWALS_ROOT_SIZE: usize = 32;
 
+// Helper contants for the offset calculations below
 const PARENT_HASH_RLP_LEN: usize = PARENT_HASH_SIZE + 1;
 const OMMERS_HASH_RLP_LEN: usize = OMMERS_HASH_SIZE + 1;
 const BENEFICIARY_RLP_LEN: usize = BENEFICIARY_SIZE + 1;
@@ -90,6 +93,7 @@ const NONCE_RLP_LEN: usize = NONCE_SIZE + 1;
 const BASE_FEE_RLP_LEN: usize = BASE_FEE_SIZE + 1;
 const WITHDRAWALS_ROOT_RLP_LEN: usize = WITHDRAWALS_ROOT_SIZE;
 
+// Row offsets where the value of block header fields start (after their RLP header)
 const PARENT_HASH_RLP_OFFSET: usize = 4;
 const BENEFICIARY_RLP_OFFSET: usize =
     PARENT_HASH_RLP_OFFSET + PARENT_HASH_RLP_LEN + OMMERS_HASH_RLP_LEN;
@@ -700,7 +704,7 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
             vec![q_block_table * (block_value - rpi_block_value)]
         });
 
-        let offset = BLOCK_LEN + 1 + EXTRA_LEN + 3;
+        let offset = BLOCK_TABLE_LEN + 1 + EXTRA_LEN + 3;
         let tx_table_len = max_txs * TX_LEN + 1;
 
         //  0.3 Tx table -> {tx_id, index, value} column match with raw_public_inputs
@@ -1005,7 +1009,7 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
                 // `q_rlc_acc` needs to be boolean
                 cb.require_boolean("q_rlc_acc boolean", q_rlc_acc.expr());
 
-                // Covers a corner case where LSB leading zeros can be skipped.
+                // Covers a corner case where MSB bytes can be skipped by annotating them as leading zeroes.
                 // This can occur when `blk_hdr_is_leading_zero` is set to 0 wrongly (the actual
                 // byte value is non-zero)
                 cb.condition(not::expr(rlp_is_zero.expr()), |cb| {
@@ -1024,12 +1028,11 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
                     // Loading zeros needs to be continuous, except at the beginning of the field
                     let is_leading_zero_prev =
                         meta.query_advice(blk_hdr_is_leading_zero, Rotation::prev());
-                    cb.condition(q_field_prev.expr(), |cb| {
-                        cb.require_boolean(
-                            "Leading zeros must be continuous",
-                            is_leading_zero_prev.expr() - is_leading_zero.expr(),
-                        );
-                    });
+                    cb.require_equal(
+                        "Leading zeros must be continuous or we are at the begining of the field",
+                        1.expr(),
+                        or::expr([is_leading_zero_prev, not::expr(q_field_prev)]),
+                    );
                 });
             }
 
@@ -1252,7 +1255,7 @@ impl<F: Field> PiCircuitConfig<F> {
         // +3 prover, txs_hash_hi, txs_hash_lo
         // EXTRA_LEN: state_root, prev_root
         // total = 269
-        BLOCK_LEN + 1 + EXTRA_LEN + 3
+        BLOCK_TABLE_LEN + 1 + EXTRA_LEN + 3
     }
 
     #[inline]
