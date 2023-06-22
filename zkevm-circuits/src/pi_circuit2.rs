@@ -3077,29 +3077,24 @@ mod pi_circuit_test {
         );
     }
 
-    #[test]
-    fn test_blockhash_verify() {
-        const MAX_TXS: usize = 8;
-        const MAX_CALLDATA: usize = 200;
+    fn default_test_block() -> (witness::Block::<Fr>, Address) {
         let prover =
             Address::from_slice(&hex::decode("Df08F82De32B8d460adbE8D72043E3a7e25A3B39").unwrap());
 
-        let logs_bloom:[u8;LOGS_BLOOM_SIZE] = hex::decode("112d60abc05141f1302248e0f4329627f002380f1413820692911863e7d0871261aa07e90cc01a10c3ce589153570dc2db27b8783aa52bc19a5a4a836722e813190401b4214c3908cb8b468b510c3fe482603b00ca694c806206bf099279919c334541094bd2e085210373c0b064083242d727790d2eecdb2e0b90353b66461050447626366328f0965602e8a9802d25740ad4a33162142b08a1b15292952de423fac45d235622bb0ef3b2d2d4c21690d280a0b948a8a3012136542c1c4d0955a501a022e1a1a4582220d1ae50ba475d88ce0310721a9076702d29a27283e68c2278b93a1c60d8f812069c250042cc3180a8fd54f034a2da9a03098c32b03445").unwrap().try_into().unwrap();
-
         let mut block = witness::Block::<Fr>::default();
-        block.eth_block.parent_hash = *OMMERS_HASH;
+        block.eth_block.parent_hash = H256::zero();
         block.eth_block.author = Some(prover);
-        block.eth_block.state_root = *OMMERS_HASH;
-        block.eth_block.transactions_root = *OMMERS_HASH;
-        block.eth_block.receipts_root = *OMMERS_HASH;
-        block.eth_block.logs_bloom = Some(logs_bloom.into());
+        block.eth_block.state_root = H256::zero();
+        block.eth_block.transactions_root = H256::zero();
+        block.eth_block.receipts_root = H256::zero();
+        block.eth_block.logs_bloom = Some([0; LOGS_BLOOM_SIZE].into());
         block.eth_block.difficulty = U256::from(0);
         block.eth_block.number = Some(U64::from(0));
         block.eth_block.gas_limit = U256::from(0);
         block.eth_block.gas_used = U256::from(0);
         block.eth_block.timestamp = U256::from(0);
         block.eth_block.extra_data = eth_types::Bytes::from([0; 0]);
-        block.eth_block.mix_hash = Some(*OMMERS_HASH);
+        block.eth_block.mix_hash = Some(H256::zero());
         block.eth_block.nonce = Some(H64::from([0, 0, 0, 0, 0, 0, 0, 0]));
         block.eth_block.base_fee_per_gas = Some(U256::from(0));
         block.eth_block.withdrawals_root = Some(H256::zero());
@@ -3107,9 +3102,17 @@ mod pi_circuit_test {
         block.context.history_hashes[255] =
             U256::from_big_endian(block.eth_block.parent_hash.as_fixed_bytes());
 
-        let public_data = PublicData::new(&block, prover, Default::default());
+        (block, prover)
+    }
 
+    #[test]
+    fn test_blockhash_verify() {
+        const MAX_TXS: usize = 8;
+        const MAX_CALLDATA: usize = 200;
         let k = 17;
+
+        let (block, prover) = default_test_block();
+        let public_data = PublicData::new(&block, prover, Default::default());
 
         assert_eq!(
             run::<Fr, MAX_TXS, MAX_CALLDATA>(k, public_data, None, None),
@@ -3121,36 +3124,16 @@ mod pi_circuit_test {
     fn test_blockhash_calc_short_values() {
         const MAX_TXS: usize = 8;
         const MAX_CALLDATA: usize = 200;
-        let prover: H160 =
-            Address::from_slice(&hex::decode("df08f82de32b8d460adbe8d72043e3a7e25a3b39").unwrap());
+        let k = 17;
 
-        let mut block = witness::Block::<Fr>::default();
-        block.eth_block.parent_hash = *OMMERS_HASH;
-        block.eth_block.author = Some(prover);
-        block.eth_block.state_root = *OMMERS_HASH;
-        block.eth_block.transactions_root = *OMMERS_HASH;
-        block.eth_block.receipts_root = *OMMERS_HASH;
-        block.eth_block.logs_bloom = Some([0; LOGS_BLOOM_SIZE].into());
-        block.eth_block.extra_data = eth_types::Bytes::from([0; 0]);
-        block.eth_block.mix_hash = Some(*OMMERS_HASH);
-        block.eth_block.nonce = Some(H64::from([0, 0, 0, 0, 0, 0, 0, 0]));
+        let (mut block, prover) = default_test_block();
         block.context.number = U256::from(0x75);
         block.context.gas_limit = 0x76;
         block.eth_block.gas_used = U256::from(0x77);
         block.context.timestamp = U256::from(0x78);
         block.context.base_fee = U256::from(0x79);
-        block.context.difficulty = U256::from(0);
-        block.eth_block.withdrawals_root = Some(H256::from_slice(
-            &hex::decode("61223344dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49353")
-                .unwrap(),
-        ));
-        block.context.history_hashes = vec![U256::zero(); 256];
-        block.context.history_hashes[255] =
-            U256::from_big_endian(block.eth_block.parent_hash.as_fixed_bytes());
 
         let public_data = PublicData::new(&block, prover, Default::default());
-
-        let k = 17;
 
         assert_eq!(
             run::<Fr, MAX_TXS, MAX_CALLDATA>(k, public_data, None, None),
@@ -3162,36 +3145,16 @@ mod pi_circuit_test {
     fn test_blockhash_calc_one_byte_non_short_values() {
         const MAX_TXS: usize = 8;
         const MAX_CALLDATA: usize = 200;
-        let prover =
-            Address::from_slice(&hex::decode("df08f82de32b8d460adbe8d72043e3a7e25a3b39").unwrap());
+        let k = 17;
 
-        let mut block = witness::Block::<Fr>::default();
-        block.eth_block.parent_hash = *OMMERS_HASH;
-        block.eth_block.author = Some(prover);
-        block.eth_block.state_root = *OMMERS_HASH;
-        block.eth_block.transactions_root = *OMMERS_HASH;
-        block.eth_block.receipts_root = *OMMERS_HASH;
-        block.eth_block.logs_bloom = Some([0; LOGS_BLOOM_SIZE].into());
-        block.eth_block.extra_data = eth_types::Bytes::from([0; 0]);
-        block.eth_block.mix_hash = Some(*OMMERS_HASH);
-        block.eth_block.nonce = Some(H64::from([0, 0, 0, 0, 0, 0, 0, 0]));
+        let (mut block, prover) = default_test_block();
         block.context.number = U256::from(0x81);
         block.context.gas_limit = 0x81;
         block.eth_block.gas_used = U256::from(0x81);
         block.context.timestamp = U256::from(0x81);
         block.context.base_fee = U256::from(0x81);
-        block.context.difficulty = U256::from(0);
-        block.eth_block.withdrawals_root = Some(H256::from_slice(
-            &hex::decode("61223344dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49353")
-                .unwrap(),
-        ));
-        block.context.history_hashes = vec![U256::zero(); 256];
-        block.context.history_hashes[255] =
-            U256::from_big_endian(block.eth_block.parent_hash.as_fixed_bytes());
 
         let public_data = PublicData::new(&block, prover, Default::default());
-
-        let k = 17;
 
         assert_eq!(
             run::<Fr, MAX_TXS, MAX_CALLDATA>(k, public_data, None, None),
@@ -3203,36 +3166,16 @@ mod pi_circuit_test {
     fn test_blockhash_calc_one_byte_non_short_values_2() {
         const MAX_TXS: usize = 8;
         const MAX_CALLDATA: usize = 200;
-        let prover =
-            Address::from_slice(&hex::decode("df08f82de32b8d460adbe8d72043e3a7e25a3b39").unwrap());
+        let k = 17;
 
-        let mut block = witness::Block::<Fr>::default();
-        block.eth_block.parent_hash = *OMMERS_HASH;
-        block.eth_block.author = Some(prover);
-        block.eth_block.state_root = *OMMERS_HASH;
-        block.eth_block.transactions_root = *OMMERS_HASH;
-        block.eth_block.receipts_root = *OMMERS_HASH;
-        block.eth_block.logs_bloom = Some([0; LOGS_BLOOM_SIZE].into());
-        block.eth_block.extra_data = eth_types::Bytes::from([0; 0]);
-        block.eth_block.mix_hash = Some(*OMMERS_HASH);
-        block.eth_block.nonce = Some(H64::from([0, 0, 0, 0, 0, 0, 0, 0]));
+        let (mut block, prover) = default_test_block();
         block.context.number = U256::from(0xFF);
         block.context.gas_limit = 0xFF;
         block.eth_block.gas_used = U256::from(0xFF);
         block.context.timestamp = U256::from(0xFF);
         block.context.base_fee = U256::from(0xFF);
-        block.context.difficulty = U256::from(0);
-        block.eth_block.withdrawals_root = Some(H256::from_slice(
-            &hex::decode("61223344dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49353")
-                .unwrap(),
-        ));
-        block.context.history_hashes = vec![U256::zero(); 256];
-        block.context.history_hashes[255] =
-            U256::from_big_endian(block.eth_block.parent_hash.as_fixed_bytes());
 
         let public_data = PublicData::new(&block, prover, Default::default());
-
-        let k = 17;
 
         assert_eq!(
             run::<Fr, MAX_TXS, MAX_CALLDATA>(k, public_data, None, None),
@@ -3244,36 +3187,16 @@ mod pi_circuit_test {
     fn test_blockhash_calc_leading_zeros() {
         const MAX_TXS: usize = 8;
         const MAX_CALLDATA: usize = 200;
-        let prover =
-            Address::from_slice(&hex::decode("df08f82de32b8d460adbe8d72043e3a7e25a3b39").unwrap());
+        let k = 17;
 
-        let mut block = witness::Block::<Fr>::default();
-        block.eth_block.parent_hash = *OMMERS_HASH;
-        block.eth_block.author = Some(prover);
-        block.eth_block.state_root = *OMMERS_HASH;
-        block.eth_block.transactions_root = *OMMERS_HASH;
-        block.eth_block.receipts_root = *OMMERS_HASH;
-        block.eth_block.logs_bloom = Some([0; LOGS_BLOOM_SIZE].into());
-        block.eth_block.extra_data = eth_types::Bytes::from([0; 0]);
-        block.eth_block.mix_hash = Some(*OMMERS_HASH);
-        block.eth_block.nonce = Some(H64::from([0, 0, 0, 0, 0, 0, 0, 0]));
+        let (mut block, prover) = default_test_block();
         block.context.number = U256::from(0x0090909090909090_u128);
         block.context.gas_limit = 0x0000919191919191;
         block.eth_block.gas_used = U256::from(0x92) << (28 * 8);
         block.context.timestamp = U256::from(0x93) << (27 * 8);
         block.context.base_fee = U256::from(0x94) << (26 * 8);
-        block.context.difficulty = U256::from(0);
-        block.eth_block.withdrawals_root = Some(H256::from_slice(
-            &hex::decode("61223344dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49353")
-                .unwrap(),
-        ));
-        block.context.history_hashes = vec![U256::zero(); 256];
-        block.context.history_hashes[255] =
-            U256::from_big_endian(block.eth_block.parent_hash.as_fixed_bytes());
 
         let public_data = PublicData::new(&block, prover, Default::default());
-
-        let k = 17;
 
         assert_eq!(
             run::<Fr, MAX_TXS, MAX_CALLDATA>(k, public_data, None, None),
@@ -3285,48 +3208,17 @@ mod pi_circuit_test {
     fn test_blockhash_calc_max_lengths() {
         const MAX_TXS: usize = 8;
         const MAX_CALLDATA: usize = 200;
-        let prover =
-            Address::from_slice(&hex::decode("df08f82de32b8d460adbe8d72043e3a7e25a3b39").unwrap());
+        let k = 17;
 
-        let mut block = witness::Block::<Fr>::default();
-        block.eth_block.parent_hash = *OMMERS_HASH;
-        block.eth_block.author = Some(prover);
-        block.eth_block.state_root = H256::from_slice(
-            &hex::decode("21223344dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49349")
-                .unwrap(),
-        );
-        block.eth_block.transactions_root = H256::from_slice(
-            &hex::decode("31223344dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49350")
-                .unwrap(),
-        );
-        block.eth_block.receipts_root = H256::from_slice(
-            &hex::decode("41223344dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49351")
-                .unwrap(),
-        );
-        block.eth_block.logs_bloom = Some([0; LOGS_BLOOM_SIZE].into());
-        block.eth_block.extra_data = eth_types::Bytes::from([0; 0]);
-        block.eth_block.mix_hash = Some(H256::from_slice(
-            &hex::decode("51223344dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49352")
-                .unwrap(),
-        ));
-        block.eth_block.nonce = Some(H64::from([0, 0, 0, 0, 0, 0, 0, 0]));
+        let (mut block, prover) = default_test_block();
+
         block.context.number = U256::from(0x9090909090909090_u128);
         block.context.gas_limit = 0x9191919191919191;
         block.eth_block.gas_used = U256::from(0x92) << (31 * 8);
         block.context.timestamp = U256::from(0x93) << (31 * 8);
         block.context.base_fee = U256::from(0x94) << (31 * 8);
-        block.context.difficulty = U256::from(0);
-        block.eth_block.withdrawals_root = Some(H256::from_slice(
-            &hex::decode("61223344dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49353")
-                .unwrap(),
-        ));
-        block.context.history_hashes = vec![U256::zero(); 256];
-        block.context.history_hashes[255] =
-            U256::from_big_endian(block.eth_block.parent_hash.as_fixed_bytes());
 
         let public_data = PublicData::new(&block, prover, Default::default());
-
-        let k = 17;
 
         assert_eq!(
             run::<Fr, MAX_TXS, MAX_CALLDATA>(k, public_data, None, None),
@@ -3338,12 +3230,10 @@ mod pi_circuit_test {
     fn test_blockhash_calc_fail_lookups() {
         const MAX_TXS: usize = 8;
         const MAX_CALLDATA: usize = 200;
-        let prover =
-            Address::from_slice(&hex::decode("df08f82de32b8d460adbe8d72043e3a7e25a3b39").unwrap());
+        let k = 17;
 
-        let mut block = witness::Block::<Fr>::default();
-        block.eth_block.parent_hash = *OMMERS_HASH;
-        block.eth_block.author = Some(prover);
+        let (mut block, prover) = default_test_block();
+
         block.eth_block.state_root = H256::from_slice(
             &hex::decode("21223344dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49349")
                 .unwrap(),
@@ -3362,26 +3252,20 @@ mod pi_circuit_test {
             &hex::decode("51223344dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49352")
                 .unwrap(),
         ));
-        block.eth_block.nonce = Some(H64::from([0, 0, 0, 0, 0, 0, 0, 0]));
         block.context.number = U256::from(0x9090909090909090_u128);
         block.context.gas_limit = 0x9191919191919191;
         block.eth_block.gas_used = U256::from(0x92) << (31 * 8);
         block.context.timestamp = U256::from(0x93) << (31 * 8);
         block.context.base_fee = U256::from(0x94) << (31 * 8);
-        block.context.difficulty = U256::from(0);
         block.eth_block.withdrawals_root = Some(H256::from_slice(
             &hex::decode("61223344dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49353")
                 .unwrap(),
         ));
-        block.context.history_hashes = vec![U256::zero(); 256];
-        block.context.history_hashes[255] =
-            U256::from_big_endian(block.eth_block.parent_hash.as_fixed_bytes());
 
         let public_data = PublicData::new(&block, prover, Default::default());
         let test_block = witness::Block::<Fr>::default();
         let test_public_data = PublicData::new(&test_block, H160::default(), Default::default());
 
-        let k = 17;
         match run::<Fr, MAX_TXS, MAX_CALLDATA>(k, public_data, Some(test_public_data), None) {
             Ok(_) => unreachable!("this case must fail"),
             Err(errs) => {
