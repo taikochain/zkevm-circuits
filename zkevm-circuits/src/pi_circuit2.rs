@@ -28,7 +28,7 @@ use itertools::Itertools;
 use rlp::{Rlp, RlpStream};
 use std::marker::PhantomData;
 
-use crate::table::TxFieldTag;
+use crate::table::{TxFieldTag, BlockContextFieldTag};
 use crate::table::TxTable;
 use crate::table::{BlockTable, KeccakTable2};
 use crate::util::{random_linear_combine_word as rlc, Challenges, SubCircuit, SubCircuitConfig};
@@ -163,6 +163,8 @@ struct BlockhashColumns {
     blk_hdr_rlp_len_calc_inv: Column<Advice>,
     q_blk_hdr_total_len: Selector,
     blk_hdr_reconstruct_value: Column<Advice>,
+    block_table_tag: Column<Fixed>,
+    block_table_index: Column<Fixed>,
     q_reconstruct: Column<Fixed>,
     q_number: Column<Fixed>,
     q_var_field_256: Column<Fixed>,
@@ -579,6 +581,8 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
         let blk_hdr_rlp_len_calc_inv = meta.advice_column();
         let q_blk_hdr_total_len = meta.complex_selector();
         let blk_hdr_reconstruct_value = meta.advice_column();
+        let block_table_tag = meta.fixed_column();
+        let block_table_index = meta.fixed_column();
         let q_reconstruct = meta.fixed_column();
         let blk_hdr_is_leading_zero = meta.advice_column();
 
@@ -601,6 +605,8 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
             q_blk_hdr_total_len,
             blk_hdr_reconstruct_value,
             q_reconstruct,
+            block_table_tag,
+            block_table_index,
             q_number,
             q_var_field_256,
             q_blk_hdr_rlc_start,
@@ -1165,7 +1171,14 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
                 meta.query_fixed(q_reconstruct, Rotation::cur()),
                 not::expr(meta.query_fixed(q_reconstruct, Rotation::next())),
             ]);
-            vec![(
+            vec![
+                (q_sel.expr() * meta.query_fixed(block_table_tag, Rotation::cur()),
+                meta.query_advice(block_table.tag, Rotation::cur())
+                ),
+                (q_sel.expr() * meta.query_fixed(block_table_index, Rotation::cur()),
+                meta.query_advice(block_table.index, Rotation::cur())
+                ),
+                (
                 q_sel.expr() * meta.query_advice(blk_hdr_reconstruct_value, Rotation::cur()),
                 meta.query_advice(block_table.value, Rotation::cur()),
             )]
@@ -1533,20 +1546,26 @@ impl<F: Field> PiCircuitConfig<F> {
         let mut rlc_acc = Value::known(F::zero());
         let mut cells = vec![];
 
-        for (offset, (name, val, not_in_table)) in [
-            ("zero", Value::known(F::zero()), false),
+        for (offset, (name, tag, idx, val, not_in_table)) in [
+            ("zero", BlockContextFieldTag::None, 0, Value::known(F::zero()), false),
             (
                 "coinbase",
+                BlockContextFieldTag::Coinbase,
+                0,
                 Value::known(block_values.coinbase.to_scalar().unwrap()),
                 false,
             ),
             (
-                "gas_limit",
-                Value::known(F::from(block_values.gas_limit)),
+                "timestamp",
+                BlockContextFieldTag::Timestamp,
+                0,
+                randomness.map(|randomness| rlc(block_values.timestamp.to_le_bytes(), randomness)),
                 false,
             ),
             (
                 "number",
+                BlockContextFieldTag::Number,
+                0,
                 randomness.map(|randomness| {
                     rlc(
                         [0; 32 - NUMBER_SIZE]
@@ -1562,48 +1581,55 @@ impl<F: Field> PiCircuitConfig<F> {
                 false,
             ),
             (
-                "timestamp",
-                randomness.map(|randomness| rlc(block_values.timestamp.to_le_bytes(), randomness)),
-                false,
-            ),
-            (
                 "difficulty",
+                BlockContextFieldTag::Difficulty,
+                0,
                 randomness.map(|randomness| rlc(block_values.difficulty.to_le_bytes(), randomness)),
                 false,
             ),
             (
-                "chain_id",
-                Value::known(F::from(block_values.chain_id)),
+                "gas_limit",
+                BlockContextFieldTag::GasLimit,
+                0,
+                Value::known(F::from(block_values.gas_limit)),
                 false,
             ),
-        ]
-        .into_iter()
-        .chain(block_values.history_hashes.iter().map(|h| {
             (
-                "prev_hash",
-                randomness.map(|randomness| rlc(h.to_be_bytes(), randomness)),
+                "base_fee",
+                BlockContextFieldTag::BaseFee,
+                0,
+                randomness.map(|randomness| rlc(block_values.base_fee.to_be_bytes(), randomness)),
                 false,
-            )
-        }))
-        .chain([
+            ),
             (
-                "parent_hash",
+                "blockhash",
+                BlockContextFieldTag::BlockHash,
+                0,
                 randomness.map(|randomness| {
-                    rlc(
-                        pb.parent_hash
-                            .to_fixed_bytes()
-                            .into_iter()
-                            .rev()
-                            .collect::<Vec<u8>>()
-                            .try_into()
-                            .unwrap(),
-                        randomness,
-                    )
-                }),
+                            rlc(
+                                pb.block_hash
+                                    .to_fixed_bytes()
+                                    .into_iter()
+                                    .rev()
+                                    .collect::<Vec<u8>>()
+                                    .try_into()
+                                    .unwrap(),
+                                randomness,
+                            )
+                        }),
+                false,
+            ),
+            (
+                "chain_id",
+                BlockContextFieldTag::ChainId,
+                0,
+                Value::known(F::from(block_values.chain_id)),
                 false,
             ),
             (
                 "beneficiary",
+                BlockContextFieldTag::Beneficiary,
+                0,
                 randomness.map(|randomness| {
                     rlc(
                         ([0u8; 32 - BENEFICIARY_SIZE]
@@ -1620,6 +1646,8 @@ impl<F: Field> PiCircuitConfig<F> {
             ),
             (
                 "state_root",
+                BlockContextFieldTag::StateRoot,
+                0,
                 randomness.map(|randomness| {
                     rlc(
                         pb.state_root
@@ -1636,6 +1664,8 @@ impl<F: Field> PiCircuitConfig<F> {
             ),
             (
                 "transactions_root",
+                BlockContextFieldTag::TransactionsRoot,
+                0,
                 randomness.map(|randomness| {
                     rlc(
                         pb.transactions_root
@@ -1652,6 +1682,8 @@ impl<F: Field> PiCircuitConfig<F> {
             ),
             (
                 "receipts_root",
+                BlockContextFieldTag::ReceiptsRoot,
+                0,
                 randomness.map(|randomness| {
                     rlc(
                         pb.receipts_root
@@ -1668,11 +1700,15 @@ impl<F: Field> PiCircuitConfig<F> {
             ),
             (
                 "gas_used",
+                BlockContextFieldTag::GasUsed,
+                0,
                 randomness.map(|randomness| rlc(pb.gas_used.to_be_bytes(), randomness)),
                 false,
             ),
             (
                 "mix_hash",
+                BlockContextFieldTag::MixHash,
+                0,
                 randomness.map(|randomness| {
                     rlc(
                         pb.mix_hash
@@ -1688,12 +1724,9 @@ impl<F: Field> PiCircuitConfig<F> {
                 false,
             ),
             (
-                "base_fee",
-                randomness.map(|randomness| rlc(block_values.base_fee.to_be_bytes(), randomness)),
-                false,
-            ),
-            (
                 "withdrawals_root",
+                BlockContextFieldTag::WithdrawalsRoot,
+                0,
                 randomness.map(|randomness| {
                     rlc(
                         pb.withdrawals_root
@@ -1708,11 +1741,20 @@ impl<F: Field> PiCircuitConfig<F> {
                 }),
                 false,
             ),
-        ])
+        ].into_iter()
+        .chain(block_values.history_hashes.iter().enumerate().map(|(i, h)| {
+            (
+                "prev_hash",
+                BlockContextFieldTag::PreviousHash,
+                i,
+                randomness.map(|randomness| rlc(h.to_be_bytes(), randomness)),
+                false,
+            )
+        }))
         .chain([
-            ("prover", Value::known(pb.prover.to_scalar().unwrap()), true),
-            ("txs_hash_hi", Value::known(pb.txs_hash_hi), true),
-            ("txs_hash_lo", Value::known(pb.txs_hash_lo), true),
+            ("prover", BlockContextFieldTag::None, 0, Value::known(pb.prover.to_scalar().unwrap()), true),
+            ("txs_hash_hi", BlockContextFieldTag::None, 0, Value::known(pb.txs_hash_hi), true),
+            ("txs_hash_lo", BlockContextFieldTag::None, 0, Value::known(pb.txs_hash_lo), true),
         ])
         .enumerate()
         {
@@ -1726,6 +1768,8 @@ impl<F: Field> PiCircuitConfig<F> {
                 cells.push(val_cell);
             } else {
                 self.q_block_table.enable(region, offset)?;
+                region.assign_advice(|| name, self.block_table.tag, offset, || Value::known(F::from(tag as u64)))?;
+                region.assign_advice(|| name, self.block_table.index, offset, || Value::known(F::from(idx as u64)))?;
                 region.assign_advice(|| name, self.block_table.value, offset, || val)?;
             }
         }
@@ -2094,9 +2138,11 @@ impl<F: Field> PiCircuitConfig<F> {
                 self.blockhash_cols.q_number,
                 self.blockhash_cols.q_var_field_256,
                 self.blockhash_cols.q_reconstruct,
+                self.blockhash_cols.block_table_tag,
+                self.blockhash_cols.block_table_index,
             ] {
                 region
-                    .assign_fixed(|| "initializing column", col, i, || Value::known(F::zero()))
+                    .assign_fixed(|| "initializing fixed column", col, i, || Value::known(F::zero()))
                     .unwrap();
             }
             for col in [
@@ -2105,7 +2151,7 @@ impl<F: Field> PiCircuitConfig<F> {
                 self.blockhash_cols.blk_hdr_reconstruct_value,
             ] {
                 region
-                    .assign_advice(|| "initializing column", col, i, || Value::known(F::zero()))
+                    .assign_advice(|| "initializing advice column", col, i, || Value::known(F::zero()))
                     .unwrap();
             }
         }
@@ -2530,6 +2576,28 @@ impl<F: Field> PiCircuitConfig<F> {
                     .unwrap();
             }
         }
+
+        // Block table tags for fields with only one index
+        for (offset, tag) in [
+            (BENEFICIARY_RLP_OFFSET + BENEFICIARY_SIZE, BlockContextFieldTag::Beneficiary),
+            (STATE_ROOT_RLP_OFFSET + STATE_ROOT_SIZE, BlockContextFieldTag::StateRoot),
+            (TX_ROOT_RLP_OFFSET + TX_ROOT_SIZE, BlockContextFieldTag::TransactionsRoot),
+            (RECEIPTS_ROOT_RLP_OFFSET + RECEIPTS_ROOT_SIZE, BlockContextFieldTag::ReceiptsRoot),
+            (NUMBER_RLP_OFFSET + NUMBER_SIZE, BlockContextFieldTag::Number),
+            (GAS_LIMIT_RLP_OFFSET + GAS_LIMIT_SIZE, BlockContextFieldTag::GasLimit),
+            (GAS_USED_RLP_OFFSET + GAS_USED_SIZE, BlockContextFieldTag::GasUsed),
+            (TIMESTAMP_RLP_OFFSET + TIMESTAMP_SIZE, BlockContextFieldTag::Timestamp),
+            (MIX_HASH_RLP_OFFSET + MIX_HASH_SIZE, BlockContextFieldTag::MixHash),
+            (BASE_FEE_RLP_OFFSET + BASE_FEE_SIZE, BlockContextFieldTag::BaseFee),
+            (WITHDRAWALS_ROOT_RLP_OFFSET + WITHDRAWALS_ROOT_SIZE, BlockContextFieldTag::WithdrawalsRoot),
+        ].iter() {
+            region.assign_fixed(|| "block_table_tag", self.blockhash_cols.block_table_tag, offset-1, || Value::known(F::from(*tag as u64))).unwrap();
+            region.assign_fixed(|| "block_table_index", self.blockhash_cols.block_table_index, offset-1, || Value::known(F::zero())).unwrap();
+        }
+
+        // TODO(George): extend for all parent hashes
+        region.assign_fixed(|| "block_table_tag", self.blockhash_cols.block_table_tag, PARENT_HASH_RLP_OFFSET + PARENT_HASH_SIZE -1, || Value::known(F::from(BlockContextFieldTag::PreviousHash as u64))).unwrap();
+        region.assign_fixed(|| "block_table_index", self.blockhash_cols.block_table_index, PARENT_HASH_RLP_OFFSET + PARENT_HASH_SIZE -1, || Value::known(F::from(255u64))).unwrap();
 
         // Determines if it is a short RLP value
         let lt_chip = LtChip::construct(self.blk_hdr_rlp_is_short);
