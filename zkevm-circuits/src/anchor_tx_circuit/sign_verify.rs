@@ -51,7 +51,7 @@ use ethers_signers::LocalWallet;
 use gadgets::{
     is_equal::{IsEqualChip, IsEqualConfig, IsEqualInstruction},
     mul_add::{MulAddChip, MulAddConfig},
-    util::{or, split_u256, Expr},
+    util::{split_u256, Expr},
 };
 use halo2_proofs::{
     circuit::{Layouter, Region, Value},
@@ -310,16 +310,13 @@ impl<F: Field> SignVerifyConfig<F> {
             },
         );
 
-        // is byte
-        meta.lookup_any("sig is byte", |meta| {
-            let q_sig_step = meta.query_selector(q_sig_start);
-            let q_sig_end = meta.query_selector(q_sig_end);
-            let is_field = or::expr([q_sig_step, q_sig_end]);
+        // Range constraint all bytes
+        meta.lookup_any("ensure all bytes are actually byte values", |meta| {
             let rpi_field_bytes = meta.query_advice(sig, Rotation::cur());
             [rpi_field_bytes]
                 .into_iter()
                 .zip(byte_table.table_exprs(meta).into_iter())
-                .map(|(arg, table)| (is_field.expr() * arg, table))
+                .map(|(arg, table)| (arg, table))
                 .collect::<Vec<_>>()
         });
 
