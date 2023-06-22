@@ -14,53 +14,60 @@ use halo2_proofs:: {
 };
 use blake2b_circuit::{ CompressionCircuit, CompressionInput };
 
+// Binary logarithm of the height of a circuit instance
+const K: u32 = 18;
+// Number of rows per round 
+const R: usize = 8;
+// BLAKE2b compression function inputs. Their total round number is the maximum one for  
+// the chosen k, number of rows per round and amount of the compression function inputs
+const INPUTS:[CompressionInput; 5] = [
+   CompressionInput {
+        r: 32600,
+        h: [534542, 235, 325, 235, 53252, 532452, 235324, 25423],
+        m: [5542, 23, 35, 35, 5252, 52452, 2324, 2523, 254, 35, 354, 235, 5532, 5235, 35, 525],
+        t: 1234,
+        f: true,
+    }, 
+    CompressionInput {
+        r: 13,
+        h: [532, 235, 325, 235, 53252, 5324654452, 235324, 25423],
+        m: [55142, 23, 35, 31115, 5252, 52452, 2324, 2523, 254, 35, 354, 235, 5532, 5235, 35, 525],
+        t: 123784,
+        f: false,
+    },
+    CompressionInput {
+        r: 90,
+        h: [532, 235, 325, 235, 53252, 0, 235324, 25423],
+        m: [55142, 0, 35, 31115, 5252, 52452, 2324, 2523, 254, 35, 354, 235, 5532, 0, 35, 525],
+        t: 0,
+        f: true,
+    },
+    CompressionInput {
+        r: 0,
+        h: [53200, 235, 325, 235, 53252, 0, 235324, 25423],
+        m: [55142, 0, 35, 31115, 5252, 52452, 232400, 2523, 254, 35, 354, 235, 5532, 0, 350, 52500],
+        t: 5345435,
+        f: true
+    },
+    CompressionInput {
+        r: 51,
+        h: [53200, 235, 325, 235, 53252, 0, 235324, 25423],
+        m: [55142, 0, 35, 31115, 5252, 52452, 232400, 2523, 254, 35, 354, 235, 5532, 0, 350, 52500],
+        t: 5345435,
+        f: true,
+    }
+];
+
+// Runs the test bench for the BLAKE2b compression function circuit 
 #[test]
 #[ignore]
-fn bench_circuit() {
-    const K: u32 = 18;
-    const R: usize = 8;
-
-    const INPUTS:[CompressionInput; 5] = [
-       CompressionInput {
-            r: 32600,
-            h: [534542, 235, 325, 235, 53252, 532452, 235324, 25423],
-            m: [5542, 23, 35, 35, 5252, 52452, 2324, 2523, 254, 35, 354, 235, 5532, 5235, 35, 525],
-            t: 1234,
-            f: true,
-        }, 
-        CompressionInput {
-            r: 13,
-            h: [532, 235, 325, 235, 53252, 5324654452, 235324, 25423],
-            m: [55142, 23, 35, 31115, 5252, 52452, 2324, 2523, 254, 35, 354, 235, 5532, 5235, 35, 525],
-            t: 123784,
-            f: false,
-        },
-        CompressionInput {
-            r: 90,
-            h: [532, 235, 325, 235, 53252, 0, 235324, 25423],
-            m: [55142, 0, 35, 31115, 5252, 52452, 2324, 2523, 254, 35, 354, 235, 5532, 0, 35, 525],
-            t: 0,
-            f: true,
-        },
-        CompressionInput {
-            r: 0,
-            h: [53200, 235, 325, 235, 53252, 0, 235324, 25423],
-            m: [55142, 0, 35, 31115, 5252, 52452, 232400, 2523, 254, 35, 354, 235, 5532, 0, 350, 52500],
-            t: 5345435,
-            f: true
-        },
-        CompressionInput {
-            r: 51,
-            h: [53200, 235, 325, 235, 53252, 0, 235324, 25423],
-            m: [55142, 0, 35, 31115, 5252, 52452, 232400, 2523, 254, 35, 354, 235, 5532, 0, 350, 52500],
-            t: 5345435,
-            f: true,
-        }
-    ];
-    
+fn bench_circuit() {    
     println!("The test bench for the BLAKE2b compression function circuit:");
-    let rows = CompressionCircuit::<Fr,R>::rows(&INPUTS);
-    assert!((rows + R) > (1 << K), "The number of rounds must be the maximum for the chosen k, rows per round and compression input number!"); 
+
+    let mut more = INPUTS;
+    more[0].r += 1;
+    assert!(CompressionCircuit::<Fr,R>::k(&more) > K, 
+        "The total round number must be the maximum one for the chosen k, number of rows per round and amount of the compression function inputs!"); 
     
     let circuit = CompressionCircuit::<Fr,R>::new(K, &INPUTS);    
 
