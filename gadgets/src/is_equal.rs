@@ -3,7 +3,7 @@
 use eth_types::Field;
 use halo2_proofs::{
     circuit::{Chip, Region, Value},
-    plonk::{Advice, Column, ConstraintSystem, Error, Expression, SecondPhase, VirtualCells},
+    plonk::{Advice, Column, ConstraintSystem, Error, Expression, VirtualCells},
 };
 
 use super::is_zero::{IsZeroChip, IsZeroInstruction};
