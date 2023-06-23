@@ -5,7 +5,7 @@ pub(crate) mod test;
 
 use crate::{
     pi_circuit2::{PiCircuit, PiCircuitConfig, PiCircuitConfigArgs},
-    table::{BlockTable, KeccakTable},
+    table::{byte_table::ByteTable, BlockTable, KeccakTable},
     util::{log2_ceil, Challenges, SubCircuit, SubCircuitConfig},
     witness::{block_convert, Block},
 };
@@ -27,6 +27,7 @@ use snark_verifier_sdk::CircuitExt;
 pub struct SuperCircuitConfig<F: Field> {
     keccak_table: KeccakTable,
     block_table: BlockTable,
+    byte_table: ByteTable,
     pi_circuit: PiCircuitConfig<F>,
 }
 
@@ -46,12 +47,14 @@ impl<F: Field> SubCircuitConfig<F> for SuperCircuitConfig<F> {
     ) -> Self {
         let block_table = BlockTable::construct(meta);
         let keccak_table = KeccakTable::construct(meta);
+        let byte_table = ByteTable::construct(meta);
 
         let pi_circuit = PiCircuitConfig::new(
             meta,
             PiCircuitConfigArgs {
                 block_table: block_table.clone(),
                 keccak_table: keccak_table.clone(),
+                byte_table: byte_table.clone(),
                 challenges,
             },
         );
@@ -60,6 +63,7 @@ impl<F: Field> SubCircuitConfig<F> for SuperCircuitConfig<F> {
             pi_circuit,
             block_table,
             keccak_table,
+            byte_table,
         }
     }
 }
@@ -173,6 +177,7 @@ impl<F: Field> Circuit<F> for SuperCircuit<F> {
             vec![&self.pi_circuit.public_data.rpi_bytes()],
             &challenges,
         )?;
+        config.byte_table.load(&mut layouter)?;
         self.synthesize_sub(&config, &challenges, &mut layouter)
     }
 }
