@@ -52,7 +52,7 @@ pub struct Block<F> {
     /// Original Block from geth
     pub eth_block: eth_types::Block<eth_types::Transaction>,
     /// Taiko witness
-    pub protocal_instance: ProtocolInstance,
+    pub protocol_instance: ProtocolInstance,
 }
 
 impl<F: Field> Block<F> {
