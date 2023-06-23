@@ -14,7 +14,6 @@
 //! ```
 
 use crate::evm_circuit::util::constraint_builder::BaseConstraintBuilder;
-use eth_types::U64;
 use eth_types::{geth_types::BlockConstants, H160, H256};
 use eth_types::{
     geth_types::Transaction, Address, BigEndianHash, Field, ToBigEndian, ToLittleEndian, ToScalar,
@@ -55,24 +54,28 @@ const NONZERO_BYTE_GAS_COST: u64 = 16;
 const MAX_DEGREE: usize = 8;
 const BYTE_POW_BASE: u64 = 1 << 8;
 
+const WORD_SIZE: usize = 32;
+const U64_SIZE: usize = 8;
+const ADDRESS_SIZE: usize = 20;
+
 // Maximum size of block header fields in bytes
-const PARENT_HASH_SIZE: usize = 32;
-const OMMERS_HASH_SIZE: usize = 32;
-const BENEFICIARY_SIZE: usize = 20;
-const STATE_ROOT_SIZE: usize = 32;
-const TX_ROOT_SIZE: usize = 32;
-const RECEIPTS_ROOT_SIZE: usize = 32;
+const PARENT_HASH_SIZE: usize = WORD_SIZE;
+const OMMERS_HASH_SIZE: usize = WORD_SIZE;
+const BENEFICIARY_SIZE: usize = ADDRESS_SIZE;
+const STATE_ROOT_SIZE: usize = WORD_SIZE;
+const TX_ROOT_SIZE: usize = WORD_SIZE;
+const RECEIPTS_ROOT_SIZE: usize = WORD_SIZE;
 const LOGS_BLOOM_SIZE: usize = 256;
 const DIFFICULTY_SIZE: usize = 1;
-const NUMBER_SIZE: usize = 8;
-const GAS_LIMIT_SIZE: usize = 32;
-const GAS_USED_SIZE: usize = 32;
-const TIMESTAMP_SIZE: usize = 32;
+const NUMBER_SIZE: usize = U64_SIZE;
+const GAS_LIMIT_SIZE: usize = WORD_SIZE;
+const GAS_USED_SIZE: usize = WORD_SIZE;
+const TIMESTAMP_SIZE: usize = WORD_SIZE;
 const EXTRA_DATA_SIZE: usize = 1;
-const MIX_HASH_SIZE: usize = 32;
-const NONCE_SIZE: usize = 8;
-const BASE_FEE_SIZE: usize = 32;
-const WITHDRAWALS_ROOT_SIZE: usize = 32;
+const MIX_HASH_SIZE: usize = WORD_SIZE;
+const NONCE_SIZE: usize = U64_SIZE;
+const BASE_FEE_SIZE: usize = WORD_SIZE;
+const WITHDRAWALS_ROOT_SIZE: usize = WORD_SIZE;
 
 // Helper contants for the offset calculations below
 const PARENT_HASH_RLP_LEN: usize = PARENT_HASH_SIZE + 1;
@@ -171,7 +174,7 @@ struct BlockhashColumns {
     q_blk_hdr_rlc_start: Selector,
     q_blk_hdr_rlp_end: Selector,
     blk_hdr_rlc_acc: Column<Advice>,
-    q_blk_hdr_rlc_acc: Column<Advice>,
+    blk_hdr_do_rlc_acc: Column<Advice>,
     blk_hdr_is_leading_zero: Column<Advice>,
 }
 
@@ -591,7 +594,7 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
         let q_var_field_256 = meta.fixed_column();
 
         let q_blk_hdr_rlc_start = meta.complex_selector();
-        let q_blk_hdr_rlc_acc = meta.advice_column();
+        let blk_hdr_do_rlc_acc = meta.advice_column();
         let blk_hdr_rlc_acc = meta.advice_column();
 
         let blockhash_cols = BlockhashColumns {
@@ -612,7 +615,7 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
             q_blk_hdr_rlc_start,
             q_blk_hdr_rlp_end,
             blk_hdr_rlc_acc,
-            q_blk_hdr_rlc_acc,
+            blk_hdr_do_rlc_acc,
             blk_hdr_is_leading_zero,
         };
 
@@ -928,6 +931,7 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
         // 2. RLC calculation
         // 3. Keccak lookup
 
+        // Check if the RLP byte is 0
         let rlp_is_zero = IsZeroChip::configure(
             meta,
             |meta| meta.query_selector(q_blk_hdr_rlp),
@@ -935,6 +939,7 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
             blk_hdr_rlp_inv,
         );
 
+        // Check if the length is 0
         let length_is_zero = IsZeroChip::configure(
             meta,
             |meta| meta.query_selector(q_blk_hdr_rlp),
@@ -942,18 +947,10 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
             blk_hdr_rlp_len_calc_inv,
         );
 
+        // Check if the RLP byte is short (byte < 81)
         let rlp_is_short = LtChip::configure(
             meta,
-            |meta| {
-                let q_number_cur = meta.query_fixed(q_number, Rotation::cur());
-                let q_number_next = meta.query_fixed(q_number, Rotation::next());
-                let q_var_field_256_cur = meta.query_fixed(q_var_field_256, Rotation::cur());
-                let q_var_field_256_next = meta.query_fixed(q_var_field_256, Rotation::next());
-                or::expr([
-                    and::expr([q_number_cur, not::expr(q_number_next)]),
-                    and::expr([q_var_field_256_cur, not::expr(q_var_field_256_next)]),
-                ])
-            },
+            |meta| meta.query_selector(q_blk_hdr_rlp),
             |meta| meta.query_advice(blk_hdr_rlp, Rotation::cur()),
             |_| 0x81.expr(),
         );
@@ -978,14 +975,10 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
             let const_byte = meta.query_fixed(blk_hdr_rlp_const, Rotation::cur());
             let length = meta.query_advice(blk_hdr_rlp_len_calc, Rotation::cur());
             let is_leading_zero = meta.query_advice(blk_hdr_is_leading_zero, Rotation::cur());
-            let q_num = meta.query_fixed(q_number, Rotation::cur());
-            let q_num_next = meta.query_fixed(q_number, Rotation::next());
-            let q_var_field = meta.query_fixed(q_var_field_256, Rotation::cur());
-            let q_var_field_next = meta.query_fixed(q_var_field_256, Rotation::next());
             let q_total_length = meta.query_selector(q_blk_hdr_total_len);
             let q_reconstruct_cur = meta.query_fixed(q_reconstruct, Rotation::cur());
             let q_reconstruct_next = meta.query_fixed(q_reconstruct, Rotation::next());
-            let q_rlc_acc = meta.query_advice(q_blk_hdr_rlc_acc, Rotation::cur());
+            let do_rlc_acc = meta.query_advice(blk_hdr_do_rlc_acc, Rotation::cur());
             let rlc_acc = meta.query_advice(blk_hdr_rlc_acc, Rotation::cur());
             let rlc_acc_next = meta.query_advice(blk_hdr_rlc_acc, Rotation::next());
 
@@ -1013,7 +1006,7 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
                 // `is_leading_zero` needs to be boolean
                 cb.require_boolean("is_leading_zero boolean", is_leading_zero.expr());
                 // `q_rlc_acc` needs to be boolean
-                cb.require_boolean("q_rlc_acc boolean", q_rlc_acc.expr());
+                cb.require_boolean("q_rlc_acc boolean", do_rlc_acc.expr());
 
                 // Covers a corner case where MSB bytes can be skipped by annotating them as leading zeroes.
                 // This can occur when `blk_hdr_is_leading_zero` is set to 0 wrongly (the actual
@@ -1046,7 +1039,7 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
             // 1. len = 0 for leading zeros
             // 2. len = len_prev + 1 otherwise
             // 3. total_len = 0 if value <= 0x80
-            for q_value in [q_number, q_var_field_256] {
+            for (q_value, var_size) in [(q_number, NUMBER_SIZE), (q_var_field_256, WORD_SIZE)] {
                 let q_field = meta.query_fixed(q_value, Rotation::cur());
                 let q_field_next = meta.query_fixed(q_value, Rotation::next());
                 // Only check while we're processing the field
@@ -1062,7 +1055,7 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
                     // We know the total length is 0 when the length is currently 0 and the field
                     // ends on the next row
                     let is_total_len_zero =
-                        and::expr([not::expr(q_field_next), length_is_zero.expr()]);
+                        and::expr([not::expr(q_field_next.expr()), length_is_zero.expr()]);
                     let do_increment_length = and::expr([
                         not::expr(is_leading_zero.expr()),
                         not::expr(is_total_len_zero.expr()),
@@ -1083,30 +1076,23 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
                         cb.require_zero("Length is set to zero for short values", length.clone());
                     });
                 });
+
+                // Check RLP encoding
+                cb.condition(and::expr([not::expr(q_field), q_field_next.expr()]), |cb| {
+                    let length = meta.query_advice(blk_hdr_rlp_len_calc, Rotation(var_size as i32));
+                    cb.require_equal("RLP length", byte.expr(), 0x80.expr() + length.expr());
+                });
             }
 
-            // Check RLP encoding for numbers
-            cb.condition(and::expr([not::expr(q_num), q_num_next.expr()]), |cb| {
-                let length = meta.query_advice(blk_hdr_rlp_len_calc, Rotation(8));
-                cb.require_equal("RLP byte number", byte.expr(), 0x80.expr() + length);
-            });
-            // Check RLP encoding for `gas_limit`, `gas_used`, `timestamp`, `base_fee`
-            cb.condition(
-                and::expr([not::expr(q_var_field), q_var_field_next.expr()]),
-                |cb| {
-                    let length = meta.query_advice(blk_hdr_rlp_len_calc, Rotation(32));
-                    cb.require_equal("RLP var field", byte.expr(), 0x80.expr() + length.expr());
-                },
-            );
-
-            // Check total length of RLP stream
+            // Check total length of RLP stream.
             // For the block header, the total RLP length is always two bytes long and only
-            // the LSB fluctuates: Minimum total length: lengths of all the
-            // fixed size fields + all the RLP headers = 527 bytes (0x020F)
-            // Maximum total length: minimum total length + (maximum length of variable zize
-            // field) = 527 + 4*32+1*8 = 663 (0x0297) Actual total length:
-            // minimum total length + length of all variable size fields (number, gas_limit,
-            // gas_used, timestamp, base fee)
+            // the LSB fluctuates:
+            // - Minimum total length: lengths of all the fixed size fields + all the RLP
+            //   headers = 527 bytes (0x020F)
+            // - Maximum total length: minimum total length + (maximum length of variable
+            //   size field) = 527 + 4*32+1*8 = 663 (0x0297)
+            // - Actual total length: minimum total length + length of all variable size
+            //   fields (number, gas_limit, gas_used, timestamp, base fee).
             cb.condition(q_total_length, |cb| {
                 let mut get_len = |offset: usize| {
                     meta.query_advice(
@@ -1119,10 +1105,11 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
                 let gas_used_len = get_len(GAS_USED_RLP_OFFSET + GAS_USED_SIZE);
                 let timestamp_len = get_len(TIMESTAMP_RLP_OFFSET + TIMESTAMP_SIZE);
                 let base_fee_len = get_len(BASE_FEE_RLP_OFFSET + BASE_FEE_SIZE);
+                // Only check the LSB of the length (the MSB is always 0x02!).
                 cb.require_equal(
                     "total_len",
                     byte.expr(),
-                    0x0F.expr() // TODO(Brecht): With the explanation above I would expect this to be 0x020F
+                    0x0F.expr()
                         + number_len
                         + gas_limit_len
                         + gas_used_len
@@ -1153,8 +1140,8 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
                 and::expr([q_enabled.expr(), not::expr(q_rlc_end.expr())]),
                 |cb| {
                     // RLC encode the bytes, but skip over leading zeros
-                    let r = select::expr(q_rlc_acc.expr(), challenges.evm_word(), 1.expr());
-                    let byte_value = select::expr(q_rlc_acc.expr(), byte_next.expr(), 0.expr());
+                    let r = select::expr(do_rlc_acc.expr(), challenges.keccak_input(), 1.expr());
+                    let byte_value = select::expr(do_rlc_acc.expr(), byte_next.expr(), 0.expr());
                     cb.require_equal(
                         "rlc_acc_next = rlc_acc * r + next_byte",
                         rlc_acc_next.expr(),
@@ -1189,9 +1176,9 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
             let q_blk_hdr_rlp_end = meta.query_selector(q_blk_hdr_rlp_end);
 
             let blk_hdr_rlc = meta.query_advice(blk_hdr_rlc_acc, Rotation::cur());
-            // The total RLP lenght is the RLP list length (0x200 + blk_hdr_rlp[2]) + 3
+            // The total RLP length is the RLP list length (0x200 + blk_hdr_rlp[2]) + 3
             // bytes for the RLP list header
-            let blk_hdr_rlp_len = 0x200.expr()
+            let blk_hdr_rlp_num_bytes = 0x200.expr()
                 + meta.query_advice(
                     blk_hdr_rlp,
                     Rotation(-(BLOCKHASH_TOTAL_ROWS as i32) + 1 + 2),
@@ -1210,7 +1197,7 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
                     meta.query_advice(keccak_table.input_rlc, Rotation::cur()),
                 ),
                 (
-                    q_blk_hdr_rlp_end.expr() * blk_hdr_rlp_len,
+                    q_blk_hdr_rlp_end.expr() * blk_hdr_rlp_num_bytes,
                     meta.query_advice(keccak_table.input_len, Rotation::cur()),
                 ),
                 (
@@ -1954,12 +1941,12 @@ impl<F: Field> PiCircuitConfig<F> {
         )
     }
 
-    // TODO(Brecht)
     #[allow(clippy::type_complexity)]
     fn get_block_header_rlp_from_public_data(
         public_data: &PublicData<F>,
         challenges: &Challenges<Value<F>>,
     ) -> (Vec<u8>, Vec<u8>, Vec<u8>, Vec<Value<F>>, Value<F>, Value<F>) {
+        // RLP encode the block header data
         let mut stream = RlpStream::new();
         stream.begin_unbounded_list();
         stream
@@ -1981,13 +1968,11 @@ impl<F: Field> PiCircuitConfig<F> {
             .append(&vec![0u8; 8]) // nonce = 0
             .append(&public_data.block_constants.base_fee)
             .append(&public_data.withdrawals_root);
-
         stream.finalize_unbounded_list();
-        let out: bytes::Bytes = stream.out().into();
+        let mut bytes: Vec<u8> = stream.out().into();
 
-        // Calculate hash
-        let rlp: Bytes = out.clone().into();
-        let hash = keccak256(&rlp);
+        // Calculate the block hash
+        let hash = keccak256(&bytes);
         let hash_hi = hash.iter().take(16).fold(F::zero(), |acc, byte| {
             acc * F::from(BYTE_POW_BASE) + F::from(*byte as u64)
         });
@@ -1995,112 +1980,70 @@ impl<F: Field> PiCircuitConfig<F> {
             acc * F::from(BYTE_POW_BASE) + F::from(*byte as u64)
         });
 
-        let mut out_vec: Vec<u8> = out.into();
-        let mut leading_zeros: Vec<u8> = vec![0; out_vec.len()];
-        let mut q_blk_hdr_rlc_acc: Vec<u8> = vec![1; out_vec.len()];
+        let mut leading_zeros: Vec<u8> = vec![0; bytes.len()];
+        let mut blk_hdr_do_rlc_acc: Vec<u8> = vec![1; bytes.len()];
         let mut blk_hdr_rlc_acc: Vec<Value<F>> = vec![];
 
-        let randomness = challenges.evm_word();
-        out_vec
+        // Calculate the RLC of the bytes
+        bytes
             .iter()
             .map(|b| Value::known(F::from(*b as u64)))
             .fold(Value::known(F::zero()), |mut rlc_acc, byte| {
-                rlc_acc = rlc_acc * randomness + byte;
+                rlc_acc = rlc_acc * challenges.keccak_input() + byte;
                 blk_hdr_rlc_acc.push(rlc_acc);
                 rlc_acc
             });
 
-        // We handle `number` outside of the for due to the type difference
-        // For explanation of the below refer to the following for loop documentation
-        if public_data.block_constants.number <= U64::from(0x80) {
-            if public_data.block_constants.number != U64::zero() {
-                out_vec.splice(NUMBER_RLP_OFFSET - 1..NUMBER_RLP_OFFSET - 1, [0x80]);
-                q_blk_hdr_rlc_acc.splice(NUMBER_RLP_OFFSET - 2..NUMBER_RLP_OFFSET - 2, [0]);
-                blk_hdr_rlc_acc.splice(
-                    NUMBER_RLP_OFFSET - 1..NUMBER_RLP_OFFSET - 1,
-                    [blk_hdr_rlc_acc[NUMBER_RLP_OFFSET - 2]],
-                );
-            }
-            leading_zeros.splice(NUMBER_RLP_OFFSET - 1..NUMBER_RLP_OFFSET - 1, [0]);
-        }
-        out_vec.splice(
-            NUMBER_RLP_OFFSET..NUMBER_RLP_OFFSET,
-            vec![0; (public_data.block_constants.number.leading_zeros() / 8) as usize],
-        );
-        leading_zeros.splice(
-            NUMBER_RLP_OFFSET..NUMBER_RLP_OFFSET,
-            vec![1; (public_data.block_constants.number.leading_zeros() / 8) as usize],
-        );
-        q_blk_hdr_rlc_acc.splice(
-            NUMBER_RLP_OFFSET - 1..NUMBER_RLP_OFFSET - 1,
-            vec![0; (public_data.block_constants.number.leading_zeros() / 8) as usize],
-        );
-        blk_hdr_rlc_acc.splice(
-            NUMBER_RLP_OFFSET..NUMBER_RLP_OFFSET,
-            vec![
-                blk_hdr_rlc_acc[NUMBER_RLP_OFFSET - 1];
-                (public_data.block_constants.number.leading_zeros() / 8) as usize
-            ],
-        );
-
         // Handles leading zeros, short values and calculates the values for
         // `blk_hdr_is_leading_zero` and `blk_hdr_rlc_acc`
-        for (field, offset) in [
-            (public_data.block_constants.gas_limit, GAS_LIMIT_RLP_OFFSET),
-            (public_data.gas_used, GAS_USED_RLP_OFFSET),
-            (public_data.block_constants.timestamp, TIMESTAMP_RLP_OFFSET),
-            (public_data.block_constants.base_fee, BASE_FEE_RLP_OFFSET),
+        let block = &public_data.block_constants;
+        for (field, offset, zeros_bias) in [
+            (U256::from(block.number.as_u64()), NUMBER_RLP_OFFSET, 32 - 8),
+            (block.gas_limit, GAS_LIMIT_RLP_OFFSET, 0),
+            (public_data.gas_used, GAS_USED_RLP_OFFSET, 0),
+            (block.timestamp, TIMESTAMP_RLP_OFFSET, 0),
+            (block.base_fee, BASE_FEE_RLP_OFFSET, 0),
         ]
         .iter()
         {
             // If the field has a short value then there is no RLP header.
             // We need add an artificial RLP header with field length of one (0x80) to align
-            // the field
-            //
+            // the field.
             // When the field is zero, it is represented by 0x80,
             // which just so happens to be the value of the artificial header we need,
             // thus we skip adding it.
             // The field's value for the circuit will still be zero due to
-            // the leading zeros padding filling up the whole field
-            //
+            // the leading zeros padding filling up the whole field.
             if *field <= U256::from(0x80) {
                 if *field != U256::zero() {
-                    out_vec.splice(offset - 1..offset - 1, [0x80]);
+                    bytes.insert(offset - 1, 0x80);
                     // Skipping artificial header for RLC. Since we accumulate the next byte in
                     // gates, we denote the skip one row earlier
-                    q_blk_hdr_rlc_acc.splice(offset - 2..offset - 2, [0]);
+                    blk_hdr_do_rlc_acc.insert(offset - 2, 0);
                     // Copy the current RLC when skipping
-                    blk_hdr_rlc_acc.splice(offset - 1..offset - 1, [blk_hdr_rlc_acc[offset - 2]]);
+                    blk_hdr_rlc_acc.insert(offset - 1, blk_hdr_rlc_acc[offset - 2]);
                 }
-                leading_zeros.splice(offset - 1..offset - 1, [0]);
+                leading_zeros.insert(offset - 1, 0);
             }
 
-            // Pad the field at the start with the needed amount leading zeros
-            out_vec.splice(
-                offset..offset,
-                vec![0; (field.leading_zeros() / 8) as usize],
-            );
-            leading_zeros.splice(
-                offset..offset,
-                vec![1; (field.leading_zeros() / 8) as usize],
-            );
+            // Pad the field with the required amount of leading zeros
+            let num_leading_zeros = ((field.leading_zeros() / 8) - zeros_bias) as usize;
+            bytes.splice(offset..offset, vec![0; num_leading_zeros]);
+            leading_zeros.splice(offset..offset, vec![1; num_leading_zeros]);
             // Skipping leading zeros for RLC. Since we accumulate the next byte in gates,
             // we denote the skip one row earlier
-            q_blk_hdr_rlc_acc.splice(
-                offset - 1..offset - 1,
-                vec![0; (field.leading_zeros() / 8) as usize],
-            );
+            blk_hdr_do_rlc_acc.splice(offset - 1..offset - 1, vec![0; num_leading_zeros]);
             // Copy the current RLC when skipping
             blk_hdr_rlc_acc.splice(
                 offset..offset,
-                vec![blk_hdr_rlc_acc[*offset - 1]; (field.leading_zeros() / 8) as usize],
+                vec![blk_hdr_rlc_acc[*offset - 1]; num_leading_zeros],
             );
         }
 
         (
-            out_vec,
+            bytes,
             leading_zeros,
-            q_blk_hdr_rlc_acc,
+            blk_hdr_do_rlc_acc,
             blk_hdr_rlc_acc,
             Value::known(hash_hi),
             Value::known(hash_lo),
@@ -2125,112 +2068,50 @@ impl<F: Field> PiCircuitConfig<F> {
         let (
             block_header_rlp_byte,
             leading_zeros,
-            q_blk_hdr_rlc_acc,
+            blk_hdr_do_rlc_acc,
             blk_hdr_rlc_acc,
             blk_hdr_hash_hi,
             blk_hdr_hash_lo,
         ) = Self::get_block_header_rlp_from_public_data(public_data, challenges);
         assert_eq!(block_header_rlp_byte.len(), BLOCKHASH_TOTAL_ROWS);
 
-        // Initialize columns to zero
-        for i in 0..BLOCKHASH_TOTAL_ROWS {
-            for col in [
-                self.blockhash_cols.q_number,
-                self.blockhash_cols.q_var_field_256,
-                self.blockhash_cols.q_reconstruct,
-                self.blockhash_cols.block_table_tag,
-                self.blockhash_cols.block_table_index,
-            ] {
-                region
-                    .assign_fixed(|| "initializing fixed column", col, i, || Value::known(F::zero()))
-                    .unwrap();
-            }
-            for col in [
-                self.blockhash_cols.blk_hdr_rlp_len_calc,
-                self.blockhash_cols.blk_hdr_rlp_len_calc_inv,
-                self.blockhash_cols.blk_hdr_reconstruct_value,
-            ] {
-                region
-                    .assign_advice(|| "initializing advice column", col, i, || Value::known(F::zero()))
-                    .unwrap();
-            }
-        }
-
-        let rlp_const: Vec<u64> = [
-            vec![0xF9, 0x02, 0x00], // RLP list header
-            vec![0xA0],
-            vec![0; PARENT_HASH_SIZE], // Parent hash
-            vec![0xA0],
+        // Construct all the constant values of the block header.
+        // `c()` is for constant values, `v()` is for variable values.
+        let c = |value| { (true, value)};
+        let v = || { (false, 123456)};
+        let rlp_const: Vec<(bool, u64)> = [
+            vec![c(0xF9), c(0x02), v()], // RLP list header
+            vec![c(0xA0)],
+            vec![v(); PARENT_HASH_SIZE], // Parent hash
+            vec![c(0xA0)],
             (*OMMERS_HASH)
                 .as_bytes()
                 .iter()
-                .map(|b| *b as u64)
+                .map(|b| c(*b as u64))
                 .collect(), // Ommers hash
-            vec![0x94],
-            vec![0; BENEFICIARY_SIZE], // Beneficiary
-            vec![0xA0],
-            vec![0; STATE_ROOT_SIZE], // State root
-            vec![0xA0],
-            vec![0; TX_ROOT_SIZE], // Tx root
-            vec![0xA0],
-            vec![0; RECEIPTS_ROOT_SIZE], // Receipt root
-            vec![0xB9, 0x01, 0x00],
-            vec![0; LOGS_BLOOM_SIZE], // Bloom filter
-            vec![0x80],               // Difficulty
-            vec![0x00],
-            vec![0; NUMBER_SIZE], // number
-            vec![0x00],
-            vec![0; GAS_LIMIT_SIZE], // Gas limit
-            vec![0x00],
-            vec![0; GAS_USED_SIZE], // Gas used
-            vec![0x00],
-            vec![0; TIMESTAMP_SIZE], // Timestamp
-            vec![0x80],              // Extra data
-            vec![0xA0],
-            vec![0; MIX_HASH_SIZE], // Mix hash
-            vec![0x88],
-            vec![0; NONCE_SIZE], // Nonce
-            vec![0x00],
-            vec![0; BASE_FEE_SIZE], // Base fee
-            vec![0xA0],
-            vec![0; WITHDRAWALS_ROOT_SIZE], // Withdrawals Root
-        ]
-        .concat();
-
-        let q_rlp_const: Vec<u64> = [
-            vec![1, 1, 0], // RLP list header
-            vec![1],
-            vec![0; PARENT_HASH_SIZE], // Parent hash
-            vec![1],
-            vec![1; OMMERS_HASH_SIZE], // Ommers hash header and value
-            vec![1],
-            vec![0; BENEFICIARY_SIZE], // Beneficiary
-            vec![1],
-            vec![0; STATE_ROOT_SIZE], // State root
-            vec![1],
-            vec![0; TX_ROOT_SIZE], // Tx root
-            vec![1],
-            vec![0; RECEIPTS_ROOT_SIZE], // Receipt root
-            vec![1, 1, 1],
-            vec![1; LOGS_BLOOM_SIZE], // Bloom filter
-            vec![1],                  // Difficulty
-            vec![0],
-            vec![0; NUMBER_SIZE], // number
-            vec![0],
-            vec![0; GAS_LIMIT_SIZE], // Gas limit
-            vec![0],
-            vec![0; GAS_USED_SIZE], // Gas used
-            vec![0],
-            vec![0; TIMESTAMP_SIZE], // Timestamp
-            vec![1],                 // Extra data
-            vec![1],
-            vec![0; MIX_HASH_SIZE], // Mix hash
-            vec![1],
-            vec![0; NONCE_SIZE], // Nonce
-            vec![0],
-            vec![0; BASE_FEE_SIZE], // Base fee
-            vec![1],
-            vec![0; WITHDRAWALS_ROOT_SIZE], // Withdrawals Root
+            vec![c(0x94)],
+            vec![v(); BENEFICIARY_SIZE], // Beneficiary
+            vec![c(0xA0)],
+            vec![v(); STATE_ROOT_SIZE], // State root
+            vec![c(0xA0)],
+            vec![v(); TX_ROOT_SIZE], // Tx root
+            vec![c(0xA0)],
+            vec![v(); RECEIPTS_ROOT_SIZE], // Receipt root
+            vec![c(0xB9), c(0x01), c(0x00)],
+            vec![v(); LOGS_BLOOM_SIZE], // Bloom filter
+            vec![c(0x80)],               // Difficulty
+            vec![v(); 1 + NUMBER_SIZE], // number
+            vec![v(); 1 + GAS_LIMIT_SIZE], // Gas limit
+            vec![v(); 1 + GAS_USED_SIZE], // Gas used
+            vec![v(); 1 + TIMESTAMP_SIZE], // Timestamp
+            vec![c(0x80)],              // Extra data
+            vec![c(0xA0)],
+            vec![v(); MIX_HASH_SIZE], // Mix hash
+            vec![c(0x88)],
+            vec![v(); NONCE_SIZE], // Nonce
+            vec![v(); 1 + BASE_FEE_SIZE], // Base fee
+            vec![c(0xA0)],
+            vec![v(); WITHDRAWALS_ROOT_SIZE], // Withdrawals Root
         ]
         .concat();
 
@@ -2253,10 +2134,10 @@ impl<F: Field> PiCircuitConfig<F> {
                 .unwrap();
             region
                 .assign_advice(
-                    || "q_blk_hdr_rlc_acc",
-                    self.blockhash_cols.q_blk_hdr_rlc_acc,
+                    || "blk_hdr_do_rlc_acc",
+                    self.blockhash_cols.blk_hdr_do_rlc_acc,
                     offset,
-                    || Value::known(F::from(q_blk_hdr_rlc_acc[offset] as u64)),
+                    || Value::known(F::from(blk_hdr_do_rlc_acc[offset] as u64)),
                 )
                 .unwrap();
             region
@@ -2279,37 +2160,6 @@ impl<F: Field> PiCircuitConfig<F> {
             self.blockhash_cols
                 .q_blk_hdr_rlp
                 .enable(region, offset)
-                .unwrap();
-        }
-
-        // Gets rid of CellNotAssigned occuring in the last row
-        for fixed_col in [
-            self.blockhash_cols.q_number,
-            self.blockhash_cols.q_var_field_256,
-            self.blockhash_cols.q_reconstruct,
-        ] {
-            region
-                .assign_fixed(
-                    || "fixed column last row",
-                    fixed_col,
-                    BLOCKHASH_TOTAL_ROWS,
-                    || Value::known(F::zero()),
-                )
-                .unwrap();
-        }
-
-        for advice_col in [
-            self.blockhash_cols.blk_hdr_rlc_acc,
-            self.blockhash_cols.blk_hdr_rlp,
-            self.blockhash_cols.blk_hdr_reconstruct_value,
-        ] {
-            region
-                .assign_advice(
-                    || "advice column last row",
-                    advice_col,
-                    BLOCKHASH_TOTAL_ROWS,
-                    || Value::known(F::zero()),
-                )
                 .unwrap();
         }
 
@@ -2346,7 +2196,7 @@ impl<F: Field> PiCircuitConfig<F> {
             );
         }
 
-        for (offset, (v, q)) in rlp_const.iter().zip(q_rlp_const.iter()).enumerate() {
+        for (offset, (v, q)) in rlp_const.iter().enumerate() {
             region
                 .assign_fixed(
                     || "blk_hdr_rlp_const",
@@ -2427,6 +2277,7 @@ impl<F: Field> PiCircuitConfig<F> {
                         || Value::known(F::one()),
                     )
                     .unwrap();
+
                 if i < number_lead_zeros_num {
                     length_calc = F::zero();
                     length_calc_inv = F::zero();
@@ -2577,7 +2428,7 @@ impl<F: Field> PiCircuitConfig<F> {
             }
         }
 
-        // Block table tags for fields with only one index
+        // Set the block table tags for fields with only one index
         for (offset, tag) in [
             (BENEFICIARY_RLP_OFFSET + BENEFICIARY_SIZE, BlockContextFieldTag::Beneficiary),
             (STATE_ROOT_RLP_OFFSET + STATE_ROOT_SIZE, BlockContextFieldTag::StateRoot),
@@ -2601,22 +2452,13 @@ impl<F: Field> PiCircuitConfig<F> {
 
         // Determines if it is a short RLP value
         let lt_chip = LtChip::construct(self.blk_hdr_rlp_is_short);
-        for (base_offset, field_len) in [
-            (NUMBER_RLP_OFFSET, NUMBER_RLP_LEN),
-            (GAS_LIMIT_RLP_OFFSET, GAS_LIMIT_RLP_LEN),
-            (GAS_USED_RLP_OFFSET, GAS_USED_RLP_LEN),
-            (TIMESTAMP_RLP_OFFSET, TIMESTAMP_RLP_LEN),
-            (BASE_FEE_RLP_OFFSET, BASE_FEE_RLP_LEN),
-        ] {
+        for (offset, &byte) in block_header_rlp_byte.iter().enumerate() {
             lt_chip
-                .assign(
-                    region,
-                    base_offset + field_len - 2,
-                    F::from(block_header_rlp_byte[base_offset + field_len - 2] as u64),
-                    F::from(0x81),
-                )
+                .assign(region, offset, F::from(byte as u64), F::from(0x81))
                 .unwrap();
         }
+
+        // Set the block header hash parts
         region
             .assign_advice(
                 || "blk_hdr_hash_hi",
@@ -2942,7 +2784,7 @@ impl<F: Field, const MAX_TXS: usize, const MAX_CALLDATA: usize> Circuit<F>
         let tx_table = TxTable::construct(meta);
         let rlp_table = array_init::array_init(|_| meta.advice_column());
         let keccak_table = KeccakTable2::construct(meta);
-        let challenges = Challenges::mock(100.expr(), 100.expr());
+        let challenges = Challenges::mock(100.expr(), 110.expr());
         PiCircuitConfig::new(
             meta,
             PiCircuitConfigArgs {
@@ -2963,7 +2805,7 @@ impl<F: Field, const MAX_TXS: usize, const MAX_CALLDATA: usize> Circuit<F>
         mut layouter: impl Layouter<F>,
     ) -> Result<(), Error> {
         // let challenges = challenges.values(&mut layouter);
-        let challenges = Challenges::mock(Value::known(F::from(100)), Value::known(F::from(100)));
+        let challenges = Challenges::mock(Value::known(F::from(100)), Value::known(F::from(110)));
         let public_data = &self.0.public_data;
         // assign keccak table
         config.keccak_table.dev_load(
