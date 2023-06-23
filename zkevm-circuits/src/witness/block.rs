@@ -266,6 +266,6 @@ pub fn block_convert<F: Field>(
         prev_state_root: block.prev_state_root,
         keccak_inputs: circuit_input_builder::keccak_inputs(block, code_db)?,
         eth_block: block.eth_block.clone(),
-        protocal_instance: ProtocolInstance::default(),
+        protocol_instance: ProtocolInstance::default(),
     })
 }

@@ -208,8 +208,8 @@ impl<F: Field> SuperCircuit<F> {
         builder: &CircuitInputBuilder,
     ) -> Result<(u32, Self, Vec<Vec<F>>), bus_mapping::Error> {
         let mut block = block_convert(&builder.block, &builder.code_db).unwrap();
-        block.protocal_instance.block_hash = block.eth_block.hash.unwrap();
-        block.protocal_instance.parent_hash = block.eth_block.parent_hash;
+        block.protocol_instance.block_hash = block.eth_block.hash.unwrap();
+        block.protocol_instance.parent_hash = block.eth_block.parent_hash;
         let (_, rows_needed) = Self::min_num_rows_block(&block);
         let k = log2_ceil(Self::unusable_rows() + rows_needed);
         log::debug!("super circuit uses k = {}", k);
