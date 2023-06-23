@@ -4,8 +4,9 @@
 pub(crate) mod test;
 
 use crate::{
+    anchor_tx_circuit::{AnchorTxCircuit, AnchorTxCircuitConfig, AnchorTxCircuitConfigArgs},
     pi_circuit2::{PiCircuit, PiCircuitConfig, PiCircuitConfigArgs},
-    table::{byte_table::ByteTable, BlockTable, KeccakTable},
+    table::{byte_table::ByteTable, BlockTable, KeccakTable, PiTable, TxTable},
     util::{log2_ceil, Challenges, SubCircuit, SubCircuitConfig},
     witness::{block_convert, Block},
 };
@@ -25,10 +26,13 @@ use snark_verifier_sdk::CircuitExt;
 /// Configuration of the Super Circuit
 #[derive(Clone)]
 pub struct SuperCircuitConfig<F: Field> {
+    tx_table: TxTable,
+    pi_table: PiTable,
     keccak_table: KeccakTable,
     block_table: BlockTable,
     byte_table: ByteTable,
     pi_circuit: PiCircuitConfig<F>,
+    anchor_tx_circuit: AnchorTxCircuitConfig<F>,
 }
 
 /// Circuit configuration arguments
@@ -45,6 +49,8 @@ impl<F: Field> SubCircuitConfig<F> for SuperCircuitConfig<F> {
         meta: &mut ConstraintSystem<F>,
         Self::ConfigArgs { challenges }: Self::ConfigArgs,
     ) -> Self {
+        let tx_table = TxTable::construct(meta);
+        let pi_table = PiTable::construct(meta);
         let block_table = BlockTable::construct(meta);
         let keccak_table = KeccakTable::construct(meta);
         let byte_table = ByteTable::construct(meta);
@@ -55,15 +61,28 @@ impl<F: Field> SubCircuitConfig<F> for SuperCircuitConfig<F> {
                 block_table: block_table.clone(),
                 keccak_table: keccak_table.clone(),
                 byte_table: byte_table.clone(),
+                challenges: challenges.clone(),
+            },
+        );
+
+        let anchor_tx_circuit = AnchorTxCircuitConfig::new(
+            meta,
+            AnchorTxCircuitConfigArgs {
+                tx_table: tx_table.clone(),
+                pi_table: pi_table.clone(),
+                byte_table: byte_table.clone(),
                 challenges,
             },
         );
 
         Self {
+            tx_table,
+            pi_table,
             pi_circuit,
             block_table,
             keccak_table,
             byte_table,
+            anchor_tx_circuit,
         }
     }
 }
@@ -73,6 +92,8 @@ impl<F: Field> SubCircuitConfig<F> for SuperCircuitConfig<F> {
 pub struct SuperCircuit<F: Field> {
     /// Public Input Circuit
     pub pi_circuit: PiCircuit<F>,
+    /// Anchor Transaction Circuit
+    pub anchor_tx_circuit: AnchorTxCircuit<F>,
     /// Block witness
     pub block: Block<F>,
 }
@@ -99,10 +120,11 @@ impl<F: Field> SubCircuit<F> for SuperCircuit<F> {
 
     fn new_from_block(block: &Block<F>) -> Self {
         let pi_circuit = PiCircuit::new_from_block(block);
+        let anchor_tx_circuit = AnchorTxCircuit::new_from_block(block);
 
         SuperCircuit::<_> {
             pi_circuit,
-
+            anchor_tx_circuit,
             block: block.clone(),
         }
     }
@@ -128,6 +150,8 @@ impl<F: Field> SubCircuit<F> for SuperCircuit<F> {
     ) -> Result<(), Error> {
         self.pi_circuit
             .synthesize_sub(&config.pi_circuit, challenges, layouter)?;
+        self.anchor_tx_circuit
+            .synthesize_sub(&config.anchor_tx_circuit, challenges, layouter)?;
         Ok(())
     }
 }

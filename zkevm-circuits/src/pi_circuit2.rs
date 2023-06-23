@@ -552,10 +552,7 @@ impl<F: Field> SubCircuit<F> for PiCircuit<F> {
     }
 
     fn new_from_block(block: &witness::Block<F>) -> Self {
-        PiCircuit::new(PublicData::new(
-            block,
-            &witness::ProtocolInstance::default(),
-        ))
+        PiCircuit::new(PublicData::new(block, &block.protocol_instance))
     }
 
     /// Compute the public inputs for this circuit.
