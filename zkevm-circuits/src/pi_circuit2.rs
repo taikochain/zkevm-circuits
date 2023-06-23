@@ -20,7 +20,6 @@ use halo2_proofs::{
 use std::marker::PhantomData;
 
 const MAX_DEGREE: usize = 9;
-const MIN_DEGREE: usize = 8;
 const RPI_CELL_IDX: usize = 0;
 const RPI_RLC_ACC_CELL_IDX: usize = 1;
 const BYTE_POW_BASE: u64 = 1 << 8;
@@ -176,9 +175,6 @@ pub struct PiCircuitConfig<F: Field> {
     q_field_end: Selector,
     is_field_rlc: Column<Fixed>,
 
-    q_start: Selector,
-    q_not_end: Selector,
-
     byte_table: ByteTable,
 
     pi: Column<Instance>, // keccak_hi, keccak_lo
@@ -225,8 +221,6 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
         let q_field_start = meta.complex_selector();
         let q_field_step = meta.complex_selector();
         let q_field_end = meta.complex_selector();
-        let q_start = meta.complex_selector();
-        let q_not_end = meta.complex_selector();
         let is_field_rlc = meta.fixed_column();
 
         let pi = meta.instance_column();
@@ -326,8 +320,6 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
             q_field_step,
             q_field_end,
 
-            q_start,
-            q_not_end,
             byte_table,
             is_field_rlc,
 
