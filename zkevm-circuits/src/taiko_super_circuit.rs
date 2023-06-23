@@ -202,6 +202,9 @@ impl<F: Field> Circuit<F> for SuperCircuit<F> {
             &challenges,
         )?;
         config.byte_table.load(&mut layouter)?;
+        config
+            .pi_table
+            .load(&mut layouter, &self.block.protocol_instance, &challenges)?;
         self.synthesize_sub(&config, &challenges, &mut layouter)
     }
 }
