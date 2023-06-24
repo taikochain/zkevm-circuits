@@ -47,7 +47,7 @@ impl From<u64> for AccumulationSchemeType {
 
 /// PCDAggregationCircuit for aggregating various sub circuits into a smaller proof.
 #[derive(Clone)]
-pub struct PCDAggregationCircuit<AS>
+pub struct TaikoAggregationCircuit<AS>
 where
     AS: AccumulationSchemeSDK,
 {
@@ -55,7 +55,7 @@ where
     input_snarks: Vec<Snark>,
 }
 
-impl<AS> PCDAggregationCircuit<AS>
+impl<AS> TaikoAggregationCircuit<AS>
 where
     AS: AccumulationSchemeSDK,
 {
@@ -118,7 +118,7 @@ where
     }
 }
 
-impl<AS> fmt::Display for PCDAggregationCircuit<AS>
+impl<AS> fmt::Display for TaikoAggregationCircuit<AS>
 where
     AS: AccumulationSchemeSDK,
 {
@@ -132,7 +132,7 @@ where
     }
 }
 
-impl<AS> CircuitExt<Fr> for PCDAggregationCircuit<AS>
+impl<AS> CircuitExt<Fr> for TaikoAggregationCircuit<AS>
 where
     AS: AccumulationSchemeSDK,
 {
@@ -145,7 +145,7 @@ where
     }
 }
 
-impl<AS> Circuit<Fr> for PCDAggregationCircuit<AS>
+impl<AS> Circuit<Fr> for TaikoAggregationCircuit<AS>
 where
     AS: AccumulationSchemeSDK,
 {
@@ -199,7 +199,7 @@ mod pcd_test {
     use halo2_proofs::{
         circuit::{Layouter, SimpleFloorPlanner, Value},
         dev::MockProver,
-        halo2curves::bn256::{Bn256, Fq, Fr, G1Affine},
+        halo2curves::bn256::{Bn256, Fr},
         plonk::{
             keygen_pk, keygen_vk, Advice, Circuit, Column, ConstraintSystem, Error, Fixed, Instance,
         },
@@ -364,7 +364,7 @@ mod pcd_test {
         app_params.downsize(k - 3);
         let snarks = (0..2).map(|_| gen_app_snark(&app_params)).collect_vec();
 
-        let root_circuit = PCDAggregationCircuit::<GWC>::new(&params, snarks).unwrap();
+        let root_circuit = TaikoAggregationCircuit::<GWC>::new(&params, snarks).unwrap();
         assert_eq!(
             MockProver::run(k, &root_circuit, root_circuit.instance())
                 .unwrap()

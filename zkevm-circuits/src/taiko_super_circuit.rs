@@ -138,7 +138,14 @@ impl<F: Field> SubCircuit<F> for SuperCircuit<F> {
 
     /// Return the minimum number of rows required to prove the block
     fn min_num_rows_block(block: &Block<F>) -> (usize, usize) {
-        PiCircuit::min_num_rows_block(block)
+        [
+            PiCircuit::min_num_rows_block(block),
+            AnchorTxCircuit::min_num_rows_block(block),
+        ]
+        .iter()
+        .fold((0, 0), |(x1, y1), (x2, y2)| {
+            (std::cmp::max(x1, *x2), std::cmp::max(y1, *y2))
+        })
     }
 
     /// Make the assignments to the SuperCircuit

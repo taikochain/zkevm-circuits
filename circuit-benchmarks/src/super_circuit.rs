@@ -6,8 +6,8 @@ use halo2_proofs::{plonk::Circuit, poly::commitment::Params};
 use std::{fs, io::Write, rc::Rc};
 use zkevm_circuits::{
     root_circuit::{
-        pcd_aggregation::AccumulationSchemeType, KzgDk, KzgSvk, PCDAggregationCircuit,
-        PoseidonTranscript, RootCircuit,
+        taiko_aggregation::AccumulationSchemeType, KzgDk, KzgSvk, PoseidonTranscript, RootCircuit,
+        TaikoAggregationCircuit,
     },
     taiko_super_circuit::SuperCircuit,
 };
@@ -381,7 +381,7 @@ fn create_root_super_circuit_prover_sdk<const T: u64, AS: AccumulationSchemeSDK>
     let params = gen_srs(22);
     let mut snark_roots = Vec::new();
     for snark in snarks {
-        let pcd_circuit = PCDAggregationCircuit::<AS>::new(&params, [snark]).unwrap();
+        let pcd_circuit = TaikoAggregationCircuit::<AS>::new(&params, [snark]).unwrap();
 
         let start0 = start_timer!(|| "gen vk & pk");
         // let pk = gen_pk(
@@ -420,7 +420,7 @@ fn create_root_super_circuit_prover_sdk<const T: u64, AS: AccumulationSchemeSDK>
 
     println!("gen blocks agg snark");
     let params = gen_srs(22);
-    let agg_circuit = PCDAggregationCircuit::<AS>::new(&params, snark_roots).unwrap();
+    let agg_circuit = TaikoAggregationCircuit::<AS>::new(&params, snark_roots).unwrap();
     println!("new root agg circuit {}", agg_circuit);
 
     let start0 = start_timer!(|| "gen vk & pk");
@@ -481,7 +481,7 @@ fn create_1_level_root_super_circuit_prover_sdk<const T: u64, AS: AccumulationSc
 
     println!("gen blocks agg snark");
     let params = gen_srs(min_k_aggretation);
-    let agg_circuit = PCDAggregationCircuit::<AS>::new(&params, snarks).unwrap();
+    let agg_circuit = TaikoAggregationCircuit::<AS>::new(&params, snarks).unwrap();
     let start0 = start_timer!(|| "gen vk & pk");
     // let pk = gen_pk(
     // &params,
@@ -561,7 +561,7 @@ mod tests {
     use snark_verifier_sdk::{halo2::read_or_create_srs, GWC, SHPLONK};
     use std::{collections::HashMap, env::var};
     use zkevm_circuits::{
-        root_circuit::{pcd_aggregation::AccumulationSchemeType, PCDAggregationCircuit},
+        root_circuit::{taiko_aggregation::AccumulationSchemeType, TaikoAggregationCircuit},
         super_circuit::SuperCircuit,
     };
 
