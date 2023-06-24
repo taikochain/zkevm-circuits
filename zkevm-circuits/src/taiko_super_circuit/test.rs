@@ -1,3 +1,5 @@
+use crate::anchor_tx_circuit::{add_anchor_accounts, add_anchor_tx, sign_tx};
+
 pub use super::*;
 use ethers_signers::{LocalWallet, Signer};
 use halo2_proofs::{dev::MockProver, halo2curves::bn256::Fr};
@@ -5,7 +7,6 @@ use log::error;
 use mock::{TestContext, MOCK_CHAIN_ID};
 use rand::SeedableRng;
 use rand_chacha::ChaCha20Rng;
-use std::collections::HashMap;
 
 use eth_types::{address, bytecode, geth_types::GethData, Word};
 
@@ -18,8 +19,13 @@ fn super_circuit_degree() {
     assert!(cs.degree() <= 9);
 }
 
-fn test_super_circuit(block: GethData, circuits_params: CircuitsParams) {
-    let (k, circuit, instance, _) = SuperCircuit::<Fr>::build(block, circuits_params).unwrap();
+fn test_super_circuit(
+    block: GethData,
+    protocol_instance: ProtocolInstance,
+    circuits_params: CircuitsParams,
+) {
+    let (k, circuit, instance, _) =
+        SuperCircuit::<Fr>::build(block, circuits_params, protocol_instance).unwrap();
     let prover = MockProver::run(k, &circuit, instance).unwrap();
     let res = prover.verify_par();
     if let Err(err) = res {
@@ -28,7 +34,7 @@ fn test_super_circuit(block: GethData, circuits_params: CircuitsParams) {
     }
 }
 
-pub(crate) fn block_1tx() -> GethData {
+pub(crate) fn block_1tx(protocol_instance: &ProtocolInstance) -> GethData {
     let mut rng = ChaCha20Rng::seed_from_u64(2);
 
     let chain_id = (*MOCK_CHAIN_ID).as_u64();
@@ -43,33 +49,48 @@ pub(crate) fn block_1tx() -> GethData {
     let addr_a = wallet_a.address();
     let addr_b = address!("0x000000000000000000000000000000000000BBBB");
 
-    let mut wallets = HashMap::new();
-    wallets.insert(wallet_a.address(), wallet_a);
-
-    let mut block: GethData = TestContext::<2, 1>::new(
+    let block: GethData = TestContext::<4, 2>::new(
         None,
         |accs| {
-            accs[0]
-                .address(addr_b)
-                .balance(Word::from(1u64 << 20))
-                .code(bytecode);
-            accs[1].address(addr_a).balance(Word::from(1u64 << 20));
+            add_anchor_accounts(
+                accs,
+                |accs| {
+                    accs[2]
+                        .address(addr_b)
+                        .balance(Word::from(1u64 << 20))
+                        .code(bytecode);
+                    accs[3].address(addr_a).balance(Word::from(1u64 << 20));
+                },
+                &protocol_instance,
+            );
         },
-        |mut txs, accs| {
-            txs[0]
-                .from(accs[1].address)
-                .to(accs[0].address)
-                .gas(Word::from(1_000_000u64));
+        |txs, accs| {
+            add_anchor_tx(
+                txs,
+                accs,
+                |mut txs, accs| {
+                    txs[1]
+                        .from(accs[3].address)
+                        .to(accs[2].address)
+                        .nonce(0)
+                        .gas(Word::from(1_000_000u64));
+                    let geth_tx: eth_types::Transaction = txs[1].clone().into();
+                    let req: ethers_core::types::TransactionRequest = (&geth_tx).into();
+                    let sig = wallet_a.sign_transaction_sync(&req.chain_id(chain_id).into());
+                    txs[1].sig_data((sig.v, sig.r, sig.s));
+                },
+                sign_tx,
+                &protocol_instance,
+            );
         },
         |block, _tx| block.number(0xcafeu64),
     )
     .unwrap()
     .into();
-    block.sign(&wallets);
     block
 }
 
-fn block_2tx() -> GethData {
+fn block_2tx(protocol_instance: &ProtocolInstance) -> GethData {
     let mut rng = ChaCha20Rng::seed_from_u64(2);
 
     let chain_id = (*MOCK_CHAIN_ID).as_u64();
@@ -84,33 +105,53 @@ fn block_2tx() -> GethData {
     let addr_a = wallet_a.address();
     let addr_b = address!("0x000000000000000000000000000000000000BBBB");
 
-    let mut wallets = HashMap::new();
-    wallets.insert(wallet_a.address(), wallet_a);
-
-    let mut block: GethData = TestContext::<2, 2>::new(
+    let block: GethData = TestContext::<4, 3>::new(
         None,
         |accs| {
-            accs[0]
-                .address(addr_b)
-                .balance(Word::from(1u64 << 20))
-                .code(bytecode);
-            accs[1].address(addr_a).balance(Word::from(1u64 << 20));
+            add_anchor_accounts(
+                accs,
+                |accs| {
+                    accs[2]
+                        .address(addr_b)
+                        .balance(Word::from(1u64 << 20))
+                        .code(bytecode);
+                    accs[3].address(addr_a).balance(Word::from(1u64 << 20));
+                },
+                &protocol_instance,
+            );
         },
-        |mut txs, accs| {
-            txs[0]
-                .from(accs[1].address)
-                .to(accs[0].address)
-                .gas(Word::from(1_000_000u64));
-            txs[1]
-                .from(accs[1].address)
-                .to(accs[0].address)
-                .gas(Word::from(1_000_000u64));
+        |txs, accs| {
+            add_anchor_tx(
+                txs,
+                accs,
+                |mut txs, accs| {
+                    txs[1]
+                        .from(accs[3].address)
+                        .to(accs[2].address)
+                        .nonce(0)
+                        .gas(Word::from(1_000_000u64));
+                    let geth_tx: eth_types::Transaction = txs[1].clone().into();
+                    let req: ethers_core::types::TransactionRequest = (&geth_tx).into();
+                    let sig = wallet_a.sign_transaction_sync(&req.chain_id(chain_id).into());
+                    txs[1].sig_data((sig.v, sig.r, sig.s));
+                    txs[2]
+                        .from(accs[3].address)
+                        .to(accs[2].address)
+                        .nonce(1)
+                        .gas(Word::from(1_000_000u64));
+                    let geth_tx: eth_types::Transaction = txs[2].clone().into();
+                    let req: ethers_core::types::TransactionRequest = (&geth_tx).into();
+                    let sig = wallet_a.sign_transaction_sync(&req.chain_id(chain_id).into());
+                    txs[2].sig_data((sig.v, sig.r, sig.s));
+                },
+                sign_tx,
+                &protocol_instance,
+            );
         },
         |block, _tx| block.number(0xcafeu64),
     )
     .unwrap()
     .into();
-    block.sign(&wallets);
     block
 }
 
@@ -119,10 +160,14 @@ fn block_2tx() -> GethData {
 #[ignore]
 #[test]
 fn serial_test_super_circuit_1tx_1max_tx() {
-    let block = block_1tx();
+    let protocol_instance = ProtocolInstance {
+        anchor_gas_cost: 150000,
+        ..Default::default()
+    };
+    let block = block_1tx(&protocol_instance);
     let circuits_params = CircuitsParams {
-        max_txs: 1,
-        max_calldata: 32,
+        max_txs: 2,
+        max_calldata: 200,
         max_rws: 256,
         max_copy_rows: 256,
         max_exp_steps: 256,
@@ -130,15 +175,19 @@ fn serial_test_super_circuit_1tx_1max_tx() {
         max_evm_rows: 0,
         max_keccak_rows: 0,
     };
-    test_super_circuit(block, circuits_params);
+    test_super_circuit(block, protocol_instance, circuits_params);
 }
 #[ignore]
 #[test]
 fn serial_test_super_circuit_1tx_2max_tx() {
-    let block = block_1tx();
+    let protocol_instance = ProtocolInstance {
+        anchor_gas_cost: 150000,
+        ..Default::default()
+    };
+    let block = block_1tx(&protocol_instance);
     let circuits_params = CircuitsParams {
         max_txs: 2,
-        max_calldata: 32,
+        max_calldata: 200,
         max_rws: 256,
         max_copy_rows: 256,
         max_exp_steps: 256,
@@ -146,15 +195,19 @@ fn serial_test_super_circuit_1tx_2max_tx() {
         max_evm_rows: 0,
         max_keccak_rows: 0,
     };
-    test_super_circuit(block, circuits_params);
+    test_super_circuit(block, protocol_instance, circuits_params);
 }
 #[ignore]
 #[test]
 fn serial_test_super_circuit_2tx_2max_tx() {
-    let block = block_2tx();
+    let protocol_instance = ProtocolInstance {
+        anchor_gas_cost: 150000,
+        ..Default::default()
+    };
+    let block = block_2tx(&protocol_instance);
     let circuits_params = CircuitsParams {
         max_txs: 2,
-        max_calldata: 32,
+        max_calldata: 200,
         max_rws: 256,
         max_copy_rows: 256,
         max_exp_steps: 256,
@@ -162,5 +215,5 @@ fn serial_test_super_circuit_2tx_2max_tx() {
         max_evm_rows: 0,
         max_keccak_rows: 0,
     };
-    test_super_circuit(block, circuits_params);
+    test_super_circuit(block, protocol_instance, circuits_params);
 }

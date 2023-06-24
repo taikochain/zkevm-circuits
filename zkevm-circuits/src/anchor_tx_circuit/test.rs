@@ -44,7 +44,7 @@ use halo2_proofs::{
 };
 use itertools::Itertools;
 use log::error;
-use mock::{AddrOrWallet, MockTransaction, TestContext, MOCK_CHAIN_ID};
+use mock::{AddrOrWallet, MockAccount, MockTransaction, TestContext, MOCK_CHAIN_ID};
 use num::Integer;
 use num_bigint::BigUint;
 use once_cell::sync::Lazy;
@@ -116,6 +116,48 @@ fn run<F: Field>(block: &Block<F>, sign_hash: Option<H256>) -> Result<(), Vec<Ve
     prover.verify()
 }
 
+pub(crate) fn add_anchor_accounts<const NACC: usize, FAcc>(
+    accs: [&mut MockAccount; NACC],
+    acc_fns: FAcc,
+    protocol_instance: &ProtocolInstance,
+) where
+    FAcc: FnOnce([&mut MockAccount; NACC]),
+{
+    let code = bytecode! {
+        PUSH1(0x01) // value
+        PUSH1(0x02) // key
+        SSTORE
+
+        PUSH3(0xbb)
+    };
+    accs[0]
+        .address(*GOLDEN_TOUCH_ADDRESS)
+        .balance(Word::from(1u64 << 20));
+    accs[1].address(protocol_instance.l2_contract).code(code);
+    acc_fns(accs);
+}
+
+pub(crate) fn add_anchor_tx<const NACC: usize, FTx>(
+    mut txs: Vec<&mut MockTransaction>,
+    accs: [MockAccount; NACC],
+    func_tx: FTx,
+    extra_func_tx: fn(&mut MockTransaction),
+    protocol_instance: &ProtocolInstance,
+) where
+    FTx: FnOnce(Vec<&mut MockTransaction>, [MockAccount; NACC]),
+{
+    txs[0]
+        .gas(protocol_instance.anchor_gas_cost.to_word())
+        .gas_price(ANCHOR_TX_GAS_PRICE.to_word())
+        .from(*GOLDEN_TOUCH_ADDRESS)
+        .to(protocol_instance.l2_contract)
+        .input(protocol_instance.anchor_call())
+        .nonce(0)
+        .value(ANCHOR_TX_VALUE.to_word());
+    extra_func_tx(&mut txs[0]);
+    func_tx(txs, accs);
+}
+
 fn gen_block<const NUM_TXS: usize>(
     max_txs: usize,
     max_calldata: usize,
@@ -129,32 +171,13 @@ fn gen_block<const NUM_TXS: usize>(
         GOLDEN_TOUCH_WALLET.clone().with_chain_id(chain_id),
     );
 
-    let code = bytecode! {
-        PUSH1(0x01) // value
-        PUSH1(0x02) // key
-        SSTORE
-
-        PUSH3(0xbb)
-    };
-
     let block: GethData = TestContext::<2, NUM_TXS>::new(
         None,
         |accs| {
-            accs[0]
-                .address(*GOLDEN_TOUCH_ADDRESS)
-                .balance(Word::from(1u64 << 20));
-            accs[1].address(protocol_instance.l2_contract).code(code);
+            add_anchor_accounts(accs, |_| {}, &protocol_instance);
         },
-        |mut txs, _accs| {
-            txs[0]
-                .gas(protocol_instance.anchor_gas_cost.to_word())
-                .gas_price(ANCHOR_TX_GAS_PRICE.to_word())
-                .from(*GOLDEN_TOUCH_ADDRESS)
-                .to(protocol_instance.l2_contract)
-                .input(protocol_instance.anchor_call())
-                .nonce(0)
-                .value(ANCHOR_TX_VALUE.to_word());
-            extra_func_tx(txs[0]);
+        |txs, accs| {
+            add_anchor_tx(txs, accs, |_, _| {}, extra_func_tx, &protocol_instance);
         },
         |block, _tx| block,
     )
@@ -175,7 +198,7 @@ fn gen_block<const NUM_TXS: usize>(
     block
 }
 
-fn sign_tx(tx: &mut MockTransaction) {
+pub(crate) fn sign_tx(tx: &mut MockTransaction) {
     let chain_id = (*MOCK_CHAIN_ID).as_u64();
     let _tx: Transaction = tx.to_owned().into();
     let sig_data = anchor_sign(&_tx, chain_id).unwrap();

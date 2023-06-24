@@ -14,9 +14,7 @@ use halo2_proofs::{
 /// Test circuit for the anchor tx circuit.
 #[derive(Clone, Debug, Default)]
 pub struct TestAnchorTxCircuit<F: Field> {
-    txs: Vec<witness::Transaction>,
     protocol_instance: ProtocolInstance,
-    max_calldata: usize,
     circuit: AnchorTxCircuit<F>,
 }
 
@@ -24,9 +22,7 @@ impl<F: Field> TestAnchorTxCircuit<F> {
     /// Create a new test circuit from a block.
     pub fn new_from_block(block: &witness::Block<F>) -> Self {
         TestAnchorTxCircuit {
-            txs: block.txs.clone(),
             protocol_instance: block.protocol_instance.clone(),
-            max_calldata: block.circuits_params.max_calldata,
             circuit: AnchorTxCircuit::new_from_block(block),
         }
     }

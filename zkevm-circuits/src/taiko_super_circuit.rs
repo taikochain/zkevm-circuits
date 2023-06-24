@@ -8,7 +8,7 @@ use crate::{
     pi_circuit2::{PiCircuit, PiCircuitConfig, PiCircuitConfigArgs},
     table::{byte_table::ByteTable, BlockTable, KeccakTable, PiTable, TxTable},
     util::{log2_ceil, Challenges, SubCircuit, SubCircuitConfig},
-    witness::{block_convert, Block},
+    witness::{block_convert, Block, ProtocolInstance},
 };
 use bus_mapping::{
     circuit_input_builder::{CircuitInputBuilder, CircuitsParams},
@@ -219,6 +219,7 @@ impl<F: Field> SuperCircuit<F> {
     pub fn build(
         geth_data: GethData,
         circuits_params: CircuitsParams,
+        protocol_instance: ProtocolInstance,
     ) -> Result<(u32, Self, Vec<Vec<F>>, CircuitInputBuilder), bus_mapping::Error> {
         let block_data =
             BlockData::new_from_geth_data_with_params(geth_data.clone(), circuits_params);
@@ -227,7 +228,7 @@ impl<F: Field> SuperCircuit<F> {
             .handle_block(&geth_data.eth_block, &geth_data.geth_traces)
             .expect("could not handle block tx");
 
-        let ret = Self::build_from_circuit_input_builder(&builder)?;
+        let ret = Self::build_from_circuit_input_builder(&builder, protocol_instance)?;
         Ok((ret.0, ret.1, ret.2, builder))
     }
 
@@ -238,8 +239,10 @@ impl<F: Field> SuperCircuit<F> {
     /// the Public Inputs needed.
     pub fn build_from_circuit_input_builder(
         builder: &CircuitInputBuilder,
+        protocol_instance: ProtocolInstance,
     ) -> Result<(u32, Self, Vec<Vec<F>>), bus_mapping::Error> {
         let mut block = block_convert(&builder.block, &builder.code_db).unwrap();
+        block.protocol_instance = protocol_instance;
         block.protocol_instance.block_hash = block.eth_block.hash.unwrap();
         block.protocol_instance.parent_hash = block.eth_block.parent_hash;
         let (_, rows_needed) = Self::min_num_rows_block(&block);
@@ -255,11 +258,14 @@ impl<F: Field> SuperCircuit<F> {
 
 #[cfg(test)]
 mod super_circuit_test {
-    use std::collections::HashMap;
-
-    use crate::root_circuit::PoseidonTranscript;
+    use crate::{
+        anchor_tx_circuit::{add_anchor_tx, sign_tx},
+        root_circuit::PoseidonTranscript,
+        witness::ProtocolInstance,
+    };
 
     use super::*;
+    use crate::anchor_tx_circuit::add_anchor_accounts;
     use eth_types::{address, bytecode, geth_types::GethData, ToWord, Word};
     use ethers_signers::{LocalWallet, Signer};
     use halo2_proofs::{
@@ -283,8 +289,8 @@ mod super_circuit_test {
     #[test]
     fn test_super_circuit() {
         let circuits_params = CircuitsParams {
-            max_txs: 1,
-            max_calldata: 32,
+            max_txs: 2,
+            max_calldata: 200,
             max_rws: 256,
             max_copy_rows: 256,
             max_exp_steps: 256,
@@ -293,9 +299,17 @@ mod super_circuit_test {
             max_keccak_rows: 0,
         };
 
+        let protocol_instance = ProtocolInstance {
+            anchor_gas_cost: 150000,
+            ..Default::default()
+        };
         let k = 18;
-        let (_, circuit, instance, _) =
-            SuperCircuit::<_>::build(block_1tx(), circuits_params).unwrap();
+        let (_, circuit, instance, _) = SuperCircuit::<_>::build(
+            block_1tx(&protocol_instance),
+            circuits_params,
+            protocol_instance,
+        )
+        .unwrap();
 
         let prover = match MockProver::<Fr>::run(k, &circuit, instance.clone()) {
             Ok(prover) => prover,
@@ -344,7 +358,7 @@ mod super_circuit_test {
         .expect("failed to verify bench circuit");
     }
 
-    pub(crate) fn block_1tx() -> GethData {
+    pub(crate) fn block_1tx(protocol_instance: &ProtocolInstance) -> GethData {
         let mut rng = ChaCha20Rng::seed_from_u64(2);
 
         let chain_id = (*MOCK_CHAIN_ID).as_u64();
@@ -359,30 +373,45 @@ mod super_circuit_test {
         let addr_a = wallet_a.address();
         let addr_b = address!("0x000000000000000000000000000000000000BBBB");
 
-        let mut wallets = HashMap::new();
-        wallets.insert(wallet_a.address(), wallet_a);
-
-        let mut block: GethData = TestContext::<2, 1>::new(
+        let mut block: GethData = TestContext::<4, 2>::new(
             None,
             |accs| {
-                accs[0]
-                    .address(addr_b)
-                    .balance(Word::from(1u64 << 20))
-                    .code(bytecode);
-                accs[1].address(addr_a).balance(Word::from(1u64 << 20));
+                add_anchor_accounts(
+                    accs,
+                    |accs| {
+                        accs[2]
+                            .address(addr_b)
+                            .balance(Word::from(1u64 << 20))
+                            .code(bytecode);
+                        accs[3].address(addr_a).balance(Word::from(1u64 << 20));
+                    },
+                    &protocol_instance,
+                );
             },
-            |mut txs, accs| {
-                txs[0]
-                    .from(accs[1].address)
-                    .to(accs[0].address)
-                    .gas(Word::from(1_000_000u64));
+            |txs, accs| {
+                add_anchor_tx(
+                    txs,
+                    accs,
+                    |mut txs, accs| {
+                        txs[1]
+                            .from(accs[3].address)
+                            .to(accs[2].address)
+                            .nonce(0)
+                            .gas(Word::from(1_000_000u64));
+                        let geth_tx: eth_types::Transaction = txs[1].clone().into();
+                        let req: ethers_core::types::TransactionRequest = (&geth_tx).into();
+                        let sig = wallet_a.sign_transaction_sync(&req.chain_id(chain_id).into());
+                        txs[1].sig_data((sig.v, sig.r, sig.s));
+                    },
+                    sign_tx,
+                    &protocol_instance,
+                );
             },
             |block, _tx| block.number(0xcafeu64),
         )
         .unwrap()
         .into();
         block.history_hashes = vec![block.eth_block.parent_hash.to_word()];
-        block.sign(&wallets);
         block
     }
 }
