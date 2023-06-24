@@ -113,6 +113,9 @@ const BASE_FEE_RLP_OFFSET: usize = MIX_HASH_RLP_OFFSET + MIX_HASH_RLP_LEN + NONC
 const WITHDRAWALS_ROOT_RLP_OFFSET: usize = BASE_FEE_RLP_OFFSET + BASE_FEE_RLP_LEN;
 const BLOCKHASH_TOTAL_ROWS: usize = WITHDRAWALS_ROOT_RLP_OFFSET + WITHDRAWALS_ROOT_RLP_LEN;
 
+// Absolute row number of the row where the LSB of the total RLP length is located
+const TOTAL_LENGTH_OFFSET: usize = 2;
+
 lazy_static! {
     static ref OMMERS_HASH: H256 = H256::from_slice(
         &hex::decode("1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347").unwrap()
@@ -1097,7 +1100,11 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
                 let mut get_len = |offset: usize| {
                     meta.query_advice(
                         blk_hdr_rlp_len_calc,
-                        Rotation((offset - 3).try_into().unwrap()),
+                        // The length of a field is located at the its last row
+                        // We need to adjust the offset by the current row number (TOTAL_LENGTH_OFFSET)
+                        // Since the `offset` given is the first byte of the next field,
+                        // we need to remove 1 row to target the last byte of the actual field
+                        Rotation((offset - TOTAL_LENGTH_OFFSET - 1).try_into().unwrap()),
                     )
                 };
                 let number_len = get_len(NUMBER_RLP_OFFSET + NUMBER_SIZE);
@@ -2215,7 +2222,7 @@ impl<F: Field> PiCircuitConfig<F> {
 
         self.blockhash_cols
             .q_blk_hdr_total_len
-            .enable(region, 2)
+            .enable(region, TOTAL_LENGTH_OFFSET)
             .unwrap();
 
         let number_lead_zeros_num: usize =
