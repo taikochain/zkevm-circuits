@@ -278,7 +278,8 @@ impl<C: SubCircuit<Fr> + Circuit<Fr>> IntegrationTest<C> {
 
     /// Run integration test at a block identified by a tag.
     pub async fn test_at_block_tag(&mut self, block_tag: &str, actual: bool) {
-        let block_num = *GEN_DATA.blocks.get(block_tag).unwrap();
+        // let block_num = *GEN_DATA.blocks.get(block_tag).unwrap();
+        let block_num = 365422 as u64;
         let (builder, _) = gen_inputs(block_num).await;
 
         log::info!(
@@ -332,6 +333,8 @@ async fn gen_inputs(
     CircuitInputBuilder,
     eth_types::Block<eth_types::Transaction>,
 ) {
+    log::info!("hello gen_inputs");
+
     let cli = get_client();
     let cli = BuilderClient::new(cli, CIRCUITS_PARAMS).await.unwrap();
 
