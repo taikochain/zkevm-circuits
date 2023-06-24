@@ -1,7 +1,7 @@
 //! The super circuit for taiko
 
 #[cfg(any(feature = "test", test))]
-pub(crate) mod test;
+pub mod test;
 
 use crate::{
     anchor_tx_circuit::{AnchorTxCircuit, AnchorTxCircuitConfig, AnchorTxCircuitConfigArgs},
@@ -266,15 +266,11 @@ impl<F: Field> SuperCircuit<F> {
 #[cfg(test)]
 mod super_circuit_test {
     use crate::{
-        anchor_tx_circuit::{add_anchor_tx, sign_tx},
-        root_circuit::PoseidonTranscript,
+        root_circuit::PoseidonTranscript, taiko_super_circuit::test::block_1tx,
         witness::ProtocolInstance,
     };
 
     use super::*;
-    use crate::anchor_tx_circuit::add_anchor_accounts;
-    use eth_types::{address, bytecode, geth_types::GethData, ToWord, Word};
-    use ethers_signers::{LocalWallet, Signer};
     use halo2_proofs::{
         dev::MockProver,
         halo2curves::bn256::{Bn256, Fr},
@@ -288,9 +284,7 @@ mod super_circuit_test {
             },
         },
     };
-    use mock::{TestContext, MOCK_CHAIN_ID};
-    use rand::SeedableRng;
-    use rand_chacha::{rand_core::OsRng, ChaCha20Rng};
+    use rand_chacha::rand_core::OsRng;
     use snark_verifier_sdk::halo2::gen_srs;
 
     #[test]
@@ -363,62 +357,5 @@ mod super_circuit_test {
             &mut verifier_transcript,
         )
         .expect("failed to verify bench circuit");
-    }
-
-    pub(crate) fn block_1tx(protocol_instance: &ProtocolInstance) -> GethData {
-        let mut rng = ChaCha20Rng::seed_from_u64(2);
-
-        let chain_id = (*MOCK_CHAIN_ID).as_u64();
-
-        let bytecode = bytecode! {
-            GAS
-            STOP
-        };
-
-        let wallet_a = LocalWallet::new(&mut rng).with_chain_id(chain_id);
-
-        let addr_a = wallet_a.address();
-        let addr_b = address!("0x000000000000000000000000000000000000BBBB");
-
-        let mut block: GethData = TestContext::<4, 2>::new(
-            None,
-            |accs| {
-                add_anchor_accounts(
-                    accs,
-                    |accs| {
-                        accs[2]
-                            .address(addr_b)
-                            .balance(Word::from(1u64 << 20))
-                            .code(bytecode);
-                        accs[3].address(addr_a).balance(Word::from(1u64 << 20));
-                    },
-                    &protocol_instance,
-                );
-            },
-            |txs, accs| {
-                add_anchor_tx(
-                    txs,
-                    accs,
-                    |mut txs, accs| {
-                        txs[1]
-                            .from(accs[3].address)
-                            .to(accs[2].address)
-                            .nonce(0)
-                            .gas(Word::from(1_000_000u64));
-                        let geth_tx: eth_types::Transaction = txs[1].clone().into();
-                        let req: ethers_core::types::TransactionRequest = (&geth_tx).into();
-                        let sig = wallet_a.sign_transaction_sync(&req.chain_id(chain_id).into());
-                        txs[1].sig_data((sig.v, sig.r, sig.s));
-                    },
-                    sign_tx,
-                    &protocol_instance,
-                );
-            },
-            |block, _tx| block.number(0xcafeu64),
-        )
-        .unwrap()
-        .into();
-        block.history_hashes = vec![block.eth_block.parent_hash.to_word()];
-        block
     }
 }

@@ -9,7 +9,8 @@ use zkevm_circuits::{
         taiko_aggregation::AccumulationSchemeType, KzgDk, KzgSvk, PoseidonTranscript, RootCircuit,
         TaikoAggregationCircuit,
     },
-    taiko_super_circuit::SuperCircuit,
+    taiko_super_circuit::{test::block_1tx, SuperCircuit},
+    witness::ProtocolInstance,
 };
 
 use bus_mapping::circuit_input_builder::CircuitsParams;
@@ -196,48 +197,6 @@ fn evm_verify(deployment_code: Vec<u8>, instances: Vec<Vec<Fr>>, proof: Vec<u8>)
     assert!(success);
 }
 
-pub(crate) fn block_1tx() -> GethData {
-    let mut rng = ChaCha20Rng::seed_from_u64(2);
-
-    let chain_id = (*MOCK_CHAIN_ID).as_u64();
-
-    let bytecode = bytecode! {
-        GAS
-        STOP
-    };
-
-    let wallet_a = LocalWallet::new(&mut rng).with_chain_id(chain_id);
-
-    let addr_a = wallet_a.address();
-    let addr_b = address!("0x000000000000000000000000000000000000BBBB");
-
-    let mut wallets = HashMap::new();
-    wallets.insert(wallet_a.address(), wallet_a);
-
-    let mut block: GethData = TestContext::<2, 1>::new(
-        None,
-        |accs| {
-            accs[0]
-                .address(addr_b)
-                .balance(Word::from(1u64 << 20))
-                .code(bytecode);
-            accs[1].address(addr_a).balance(Word::from(1u64 << 20));
-        },
-        |mut txs, accs| {
-            txs[0]
-                .from(accs[1].address)
-                .to(accs[0].address)
-                .gas(Word::from(1_000_000u64));
-        },
-        |block, _tx| block.number(0xcafeu64),
-    )
-    .unwrap()
-    .into();
-    block.history_hashes = vec![block.eth_block.parent_hash.to_word()];
-    block.sign(&wallets);
-    block
-}
-
 pub fn create_root_super_circuit_prover() {
     let min_k_aggregation = 18;
     let proof_gen_prfx = crate::constants::PROOFGEN_PREFIX;
@@ -245,8 +204,8 @@ pub fn create_root_super_circuit_prover() {
     // SuperCircuit
     // Create super circuit
     let circuits_params = CircuitsParams {
-        max_txs: 1,
-        max_calldata: 32,
+        max_txs: 2,
+        max_calldata: 200,
         max_rws: 256,
         max_copy_rows: 256,
         max_exp_steps: 256,
@@ -254,8 +213,16 @@ pub fn create_root_super_circuit_prover() {
         max_evm_rows: 0,
         max_keccak_rows: 0,
     };
-    let (k, super_circuit, super_instance, _) =
-        SuperCircuit::<_>::build(block_1tx(), circuits_params).unwrap();
+    let protocol_instance = ProtocolInstance {
+        anchor_gas_cost: 150000,
+        ..Default::default()
+    };
+    let (k, super_circuit, super_instance, _) = SuperCircuit::<_>::build(
+        block_1tx(&protocol_instance),
+        circuits_params,
+        protocol_instance,
+    )
+    .unwrap();
     let k = k.max(min_k_aggregation);
     // let params = ParamsKZG::<Bn256>::setup(k, OsRng);
     let params = gen_srs(22);
@@ -350,8 +317,8 @@ fn gen_application_snark(
 ) -> Snark {
     println!("gen app snark");
     let circuits_params = CircuitsParams {
-        max_txs: 1,
-        max_calldata: 32,
+        max_txs: 2,
+        max_calldata: 200,
         max_rws: 256,
         max_copy_rows: 256,
         max_exp_steps: 256,
@@ -359,7 +326,16 @@ fn gen_application_snark(
         max_evm_rows: 0,
         max_keccak_rows: 0,
     };
-    let (_, super_circuit, _, _) = SuperCircuit::<_>::build(block_1tx(), circuits_params).unwrap();
+    let protocol_instance = ProtocolInstance {
+        anchor_gas_cost: 150000,
+        ..Default::default()
+    };
+    let (_, super_circuit, _, _) = SuperCircuit::<_>::build(
+        block_1tx(&protocol_instance),
+        circuits_params,
+        protocol_instance,
+    )
+    .unwrap();
 
     // let pk = gen_pk(params, &super_circuit, Some(Path::new("./examples/app.pk")),
     // super_circuit.params());

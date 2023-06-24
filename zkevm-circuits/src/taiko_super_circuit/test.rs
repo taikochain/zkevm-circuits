@@ -8,7 +8,7 @@ use mock::{TestContext, MOCK_CHAIN_ID};
 use rand::SeedableRng;
 use rand_chacha::ChaCha20Rng;
 
-use eth_types::{address, bytecode, geth_types::GethData, Word};
+use eth_types::{address, bytecode, geth_types::GethData, ToWord, Word};
 
 #[test]
 fn super_circuit_degree() {
@@ -34,7 +34,7 @@ fn test_super_circuit(
     }
 }
 
-pub(crate) fn block_1tx(protocol_instance: &ProtocolInstance) -> GethData {
+pub fn block_1tx(protocol_instance: &ProtocolInstance) -> GethData {
     let mut rng = ChaCha20Rng::seed_from_u64(2);
 
     let chain_id = (*MOCK_CHAIN_ID).as_u64();
@@ -49,7 +49,7 @@ pub(crate) fn block_1tx(protocol_instance: &ProtocolInstance) -> GethData {
     let addr_a = wallet_a.address();
     let addr_b = address!("0x000000000000000000000000000000000000BBBB");
 
-    let block: GethData = TestContext::<4, 2>::new(
+    let mut block: GethData = TestContext::<4, 2>::new(
         None,
         |accs| {
             add_anchor_accounts(
@@ -87,10 +87,11 @@ pub(crate) fn block_1tx(protocol_instance: &ProtocolInstance) -> GethData {
     )
     .unwrap()
     .into();
+    block.history_hashes = vec![block.eth_block.parent_hash.to_word()];
     block
 }
 
-fn block_2tx(protocol_instance: &ProtocolInstance) -> GethData {
+pub fn block_2tx(protocol_instance: &ProtocolInstance) -> GethData {
     let mut rng = ChaCha20Rng::seed_from_u64(2);
 
     let chain_id = (*MOCK_CHAIN_ID).as_u64();
@@ -105,7 +106,7 @@ fn block_2tx(protocol_instance: &ProtocolInstance) -> GethData {
     let addr_a = wallet_a.address();
     let addr_b = address!("0x000000000000000000000000000000000000BBBB");
 
-    let block: GethData = TestContext::<4, 3>::new(
+    let mut block: GethData = TestContext::<4, 3>::new(
         None,
         |accs| {
             add_anchor_accounts(
@@ -152,6 +153,7 @@ fn block_2tx(protocol_instance: &ProtocolInstance) -> GethData {
     )
     .unwrap()
     .into();
+    block.history_hashes = vec![block.eth_block.parent_hash.to_word()];
     block
 }
 
