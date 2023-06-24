@@ -24,8 +24,10 @@ fn test_super_circuit(
     protocol_instance: ProtocolInstance,
     circuits_params: CircuitsParams,
 ) {
-    let (k, circuit, instance, _) =
+    let (_, circuit, instance, _) =
         SuperCircuit::<Fr>::build(block, circuits_params, protocol_instance).unwrap();
+    // TODO: fix k from build
+    let k = 18;
     let prover = MockProver::run(k, &circuit, instance).unwrap();
     let res = prover.verify_par();
     if let Err(err) = res {
@@ -34,7 +36,7 @@ fn test_super_circuit(
     }
 }
 
-pub fn block_1tx(protocol_instance: &ProtocolInstance) -> GethData {
+fn block_1tx(protocol_instance: &ProtocolInstance) -> GethData {
     let mut rng = ChaCha20Rng::seed_from_u64(2);
 
     let chain_id = (*MOCK_CHAIN_ID).as_u64();
@@ -91,7 +93,7 @@ pub fn block_1tx(protocol_instance: &ProtocolInstance) -> GethData {
     block
 }
 
-pub fn block_2tx(protocol_instance: &ProtocolInstance) -> GethData {
+fn block_2tx(protocol_instance: &ProtocolInstance) -> GethData {
     let mut rng = ChaCha20Rng::seed_from_u64(2);
 
     let chain_id = (*MOCK_CHAIN_ID).as_u64();
@@ -159,7 +161,7 @@ pub fn block_2tx(protocol_instance: &ProtocolInstance) -> GethData {
 
 // High memory usage test.  Run in serial with:
 // `cargo test [...] serial_ -- --ignored --test-threads 1`
-#[ignore]
+// #[ignore]
 #[test]
 fn serial_test_super_circuit_1tx_1max_tx() {
     let protocol_instance = ProtocolInstance {

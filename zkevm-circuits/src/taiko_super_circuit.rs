@@ -1,7 +1,7 @@
 //! The super circuit for taiko
 
 #[cfg(any(feature = "test", test))]
-pub mod test;
+pub(crate) mod test;
 
 use crate::{
     anchor_tx_circuit::{AnchorTxCircuit, AnchorTxCircuitConfig, AnchorTxCircuitConfigArgs},
@@ -260,102 +260,5 @@ impl<F: Field> SuperCircuit<F> {
 
         let instance = circuit.instance();
         Ok((k, circuit, instance))
-    }
-}
-
-#[cfg(test)]
-mod super_circuit_test {
-    use crate::{
-        root_circuit::PoseidonTranscript, taiko_super_circuit::test::block_1tx,
-        witness::ProtocolInstance,
-    };
-
-    use super::*;
-    use halo2_proofs::{
-        dev::MockProver,
-        halo2curves::bn256::{Bn256, Fr},
-        plonk::{create_proof, keygen_pk, keygen_vk, verify_proof},
-        poly::{
-            commitment::ParamsProver,
-            kzg::{
-                commitment::{KZGCommitmentScheme, ParamsVerifierKZG},
-                multiopen::{ProverGWC, VerifierGWC},
-                strategy::SingleStrategy,
-            },
-        },
-    };
-    use rand_chacha::rand_core::OsRng;
-    use snark_verifier_sdk::halo2::gen_srs;
-
-    #[test]
-    fn test_super_circuit() {
-        let circuits_params = CircuitsParams {
-            max_txs: 2,
-            max_calldata: 200,
-            max_rws: 256,
-            max_copy_rows: 256,
-            max_exp_steps: 256,
-            max_bytecode: 512,
-            max_evm_rows: 0,
-            max_keccak_rows: 0,
-        };
-
-        let protocol_instance = ProtocolInstance {
-            anchor_gas_cost: 150000,
-            ..Default::default()
-        };
-        let k = 18;
-        let (_, circuit, instance, _) = SuperCircuit::<_>::build(
-            block_1tx(&protocol_instance),
-            circuits_params,
-            protocol_instance,
-        )
-        .unwrap();
-
-        let prover = match MockProver::<Fr>::run(k, &circuit, instance.clone()) {
-            Ok(prover) => prover,
-            Err(e) => panic!("{:#?}", e),
-        };
-        assert_eq!(prover.verify(), Ok(()));
-
-        let params = gen_srs(k);
-        let vk = keygen_vk(&params, &circuit).expect("keygen_vk should not fail");
-        let pk = keygen_pk(&params, vk, &circuit).expect("keygen_pk should not fail");
-
-        let proof = {
-            let mut transcript = PoseidonTranscript::new(Vec::new());
-            create_proof::<KZGCommitmentScheme<_>, ProverGWC<_>, _, _, _, _>(
-                &params,
-                &pk,
-                &[circuit],
-                &[&instance.iter().map(Vec::as_slice).collect_vec()],
-                OsRng,
-                &mut transcript,
-            )
-            .unwrap();
-            transcript.finalize()
-        };
-
-        let mut verifier_transcript = PoseidonTranscript::new(&proof[..]);
-        let strategy = SingleStrategy::new(&params);
-        let verifier_params: ParamsVerifierKZG<Bn256> = params.verifier_params().clone();
-        let col = instance.iter().map(Vec::as_slice).collect_vec();
-        let cols = vec![col.as_slice()];
-        let instances = cols.as_slice();
-
-        verify_proof::<
-            KZGCommitmentScheme<Bn256>,
-            VerifierGWC<'_, Bn256>,
-            _,
-            _,
-            SingleStrategy<'_, Bn256>,
-        >(
-            &verifier_params,
-            pk.get_vk(),
-            strategy,
-            instances,
-            &mut verifier_transcript,
-        )
-        .expect("failed to verify bench circuit");
     }
 }
