@@ -1,13 +1,10 @@
 //! SuperCircuit circuit benchmarks
 
-use eth_types::{address, bytecode, geth_types::GethData, Address, ToWord, Word};
-use ethers_signers::{LocalWallet, Signer};
-use halo2_proofs::{plonk::Circuit, poly::commitment::Params};
-use std::{fs, io::Write, rc::Rc};
+use halo2_proofs::poly::commitment::Params;
+use std::{fs, rc::Rc};
 use zkevm_circuits::{
     root_circuit::{
-        taiko_aggregation::AccumulationSchemeType, KzgDk, KzgSvk, PoseidonTranscript, RootCircuit,
-        TaikoAggregationCircuit,
+        taiko_aggregation::AccumulationSchemeType, KzgDk, KzgSvk, TaikoAggregationCircuit,
     },
     taiko_super_circuit::{test::block_anchor_1tx, SuperCircuit},
     witness::ProtocolInstance,
@@ -16,42 +13,28 @@ use zkevm_circuits::{
 use bus_mapping::circuit_input_builder::CircuitsParams;
 
 use rand::SeedableRng;
-use std::collections::HashMap;
 
 use halo2_proofs::{
-    circuit::Value,
     halo2curves::bn256::{Bn256, Fq, Fr, G1Affine},
-    plonk::{create_proof, keygen_pk, keygen_vk, ProvingKey, VerifyingKey},
+    plonk::{keygen_pk, keygen_vk, ProvingKey, VerifyingKey},
     poly::{
         commitment::ParamsProver,
-        kzg::{
-            commitment::{KZGCommitmentScheme, ParamsKZG},
-            multiopen::ProverGWC,
-        },
+        kzg::commitment::{KZGCommitmentScheme, ParamsKZG},
     },
-    transcript::TranscriptWriterBuffer,
 };
-
-use mock::{TestContext, MOCK_CHAIN_ID};
 
 use ark_std::{end_timer, start_timer};
 use std::path::Path;
 
 use snark_verifier_sdk::{
-    evm::{gen_evm_proof_gwc, gen_evm_proof_shplonk, gen_evm_verifier_shplonk},
-    gen_pk,
-    halo2::{
-        aggregation::{AccumulationSchemeSDK, AggregationCircuit},
-        gen_snark_gwc, gen_snark_shplonk, gen_srs,
-    },
-    CircuitExt, Snark, GWC, SHPLONK,
+    evm::{gen_evm_proof_gwc, gen_evm_proof_shplonk},
+    halo2::{aggregation::AccumulationSchemeSDK, gen_snark_gwc, gen_snark_shplonk, gen_srs},
+    Snark, GWC, SHPLONK,
 };
 
-use itertools::Itertools;
-use rand_chacha::ChaCha20Rng;
 use snark_verifier::{
     loader::evm::{self, encode_calldata, Address as VerifierAddress, EvmLoader, ExecutorBuilder},
-    pcs::kzg::{self, *},
+    pcs::kzg::*,
     system::halo2::{compile, transcript::evm::EvmTranscript, Config},
     verifier::SnarkVerifier,
 };
@@ -72,9 +55,7 @@ pub type PlonkVerifierGWC =
 pub type PlonkVerifierSHPLONK =
     snark_verifier::verifier::plonk::PlonkVerifier<SHPLONK, LimbsEncoding<LIMBS, BITS>>;
 
-use rand::rngs::{OsRng, StdRng};
-
-use eth_types::Field;
+use rand::rngs::StdRng;
 
 /// Fixed rng for testing purposes
 pub fn fixed_rng() -> StdRng {
@@ -84,50 +65,6 @@ pub fn fixed_rng() -> StdRng {
 /// Returns [<len>, ...] of `instance`
 pub fn gen_num_instance(instance: &[Vec<Fr>]) -> Vec<usize> {
     instance.iter().map(|v| v.len()).collect()
-}
-
-#[derive(Clone, Default, Debug, serde::Serialize, serde::Deserialize)]
-struct Verifier {
-    label: String,
-    code: String,
-    address: Address,
-}
-
-impl Verifier {
-    fn build(&mut self) -> &Self {
-        let mut tmp = [0; 20];
-        let bytes = self.label.as_bytes();
-        let x = 20 - bytes.len();
-        for (i, v) in bytes.iter().enumerate() {
-            tmp[i + x] = *v;
-        }
-        self.address = Address::from(tmp);
-
-        self
-    }
-
-    fn write_yul(&mut self) -> &Self {
-        self.build();
-        let file_name = format!("verifier-{}-{:?}.yul", self.label, self.address);
-        // only keep the runtime section
-        let yul_code = format!("object \"{}\" ", self.label)
-            + self.code.split("object \"Runtime\"").last().unwrap();
-        // strip of the dangling `}`
-        let yul_code = &yul_code[0..yul_code.len() - 1];
-        write_bytes(&file_name, yul_code.as_bytes());
-
-        self
-    }
-}
-
-fn write_bytes(name: &str, vec: &[u8]) {
-    let dir = "./../contracts/generated/";
-    fs::create_dir_all(dir).unwrap_or_else(|_| panic!("create {dir}"));
-    let path = format!("{dir}/{name}");
-    fs::File::create(&path)
-        .unwrap_or_else(|_| panic!("create {}", &path))
-        .write_all(vec)
-        .unwrap_or_else(|_| panic!("write {}", &path));
 }
 
 fn gen_verifier(
@@ -401,7 +338,6 @@ mod tests {
     use eth_types::{address, bytecode, geth_types::GethData, Word};
     use ethers_signers::{LocalWallet, Signer};
     use halo2_proofs::{
-        arithmetic::Field,
         halo2curves::bn256::{Bn256, Fr, G1Affine},
         plonk::{create_proof, keygen_pk, keygen_vk, verify_proof},
         poly::{
@@ -422,8 +358,7 @@ mod tests {
     use snark_verifier_sdk::{halo2::read_or_create_srs, GWC, SHPLONK};
     use std::{collections::HashMap, env::var};
     use zkevm_circuits::{
-        root_circuit::{taiko_aggregation::AccumulationSchemeType, TaikoAggregationCircuit},
-        super_circuit::SuperCircuit,
+        root_circuit::taiko_aggregation::AccumulationSchemeType, super_circuit::SuperCircuit,
     };
 
     #[test]
