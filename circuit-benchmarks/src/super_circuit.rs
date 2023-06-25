@@ -9,7 +9,7 @@ use zkevm_circuits::{
         taiko_aggregation::AccumulationSchemeType, KzgDk, KzgSvk, PoseidonTranscript, RootCircuit,
         TaikoAggregationCircuit,
     },
-    taiko_super_circuit::{test::block_1tx, SuperCircuit},
+    taiko_super_circuit::{test::block_anchor_1tx, SuperCircuit},
     witness::ProtocolInstance,
 };
 
@@ -197,120 +197,6 @@ fn evm_verify(deployment_code: Vec<u8>, instances: Vec<Vec<Fr>>, proof: Vec<u8>)
     assert!(success);
 }
 
-pub fn create_root_super_circuit_prover() {
-    let min_k_aggregation = 18;
-    let proof_gen_prfx = crate::constants::PROOFGEN_PREFIX;
-
-    // SuperCircuit
-    // Create super circuit
-    let circuits_params = CircuitsParams {
-        max_txs: 2,
-        max_calldata: 200,
-        max_rws: 256,
-        max_copy_rows: 256,
-        max_exp_steps: 256,
-        max_bytecode: 512,
-        max_evm_rows: 0,
-        max_keccak_rows: 0,
-    };
-    let protocol_instance = ProtocolInstance {
-        anchor_gas_cost: 150000,
-        ..Default::default()
-    };
-    let (k, super_circuit, super_instance, _) = SuperCircuit::<_>::build(
-        block_1tx(&protocol_instance),
-        circuits_params,
-        protocol_instance,
-    )
-    .unwrap();
-    let k = k.max(min_k_aggregation);
-    // let params = ParamsKZG::<Bn256>::setup(k, OsRng);
-    let params = gen_srs(22);
-    let pk = keygen_pk(
-        &params,
-        keygen_vk(&params, &super_circuit).unwrap(),
-        &super_circuit,
-    )
-    .unwrap();
-    let protocol = compile(
-        &params,
-        pk.get_vk(),
-        Config::kzg().with_num_instance(
-            super_instance
-                .iter()
-                .map(|instance| instance.len())
-                .collect(),
-        ),
-    );
-    // Create super circuit proof
-    let proof_message = format!("{} with degree = {}", proof_gen_prfx, k);
-    let start_proof_super = start_timer!(|| proof_message);
-    let super_proof = {
-        let mut transcript = PoseidonTranscript::new(Vec::new());
-        create_proof::<KZGCommitmentScheme<_>, ProverGWC<_>, _, _, _, _>(
-            &params,
-            &pk,
-            &[super_circuit],
-            &[&super_instance.iter().map(Vec::as_slice).collect_vec()],
-            OsRng,
-            &mut transcript,
-        )
-        .unwrap();
-        transcript.finalize()
-    };
-    end_timer!(start_proof_super);
-    println!("super proof size = {}", super_proof.len());
-
-    // RootCircuit
-    // Create root circuit
-    println!("root circuit");
-    let root_circuit = RootCircuit::new(
-        &params,
-        &protocol,
-        Value::known(&super_instance),
-        Value::known(&super_proof),
-    )
-    .unwrap();
-    let root_instance = root_circuit.instance();
-    println!("root circuit keygen");
-    let root_vk = keygen_vk(&params, &root_circuit).expect("vk");
-    println!("root circuit verifier");
-    let mut data = Verifier::default();
-    data.label = format!("root");
-    data.code = gen_verifier(
-        &params,
-        &root_vk,
-        Config::kzg()
-            .with_num_instance(root_circuit.num_instance())
-            .with_accumulator_indices(Some(root_circuit.accumulator_indices())),
-        root_circuit.num_instance(),
-        AccumulationSchemeType::GwcType,
-    )
-    .into();
-    data.write_yul();
-    // Create root circuit proof
-    let pk = keygen_pk(&params, root_vk, &root_circuit).expect("keygen_pk should not fail");
-    let mut transcript = TranscriptWriterBuffer::<_, G1Affine, _>::init(Vec::new());
-    let proof_message = format!("{} with degree = {}", proof_gen_prfx, k);
-    let start_proof_root = start_timer!(|| proof_message);
-    create_proof::<KZGCommitmentScheme<_>, ProverGWC<_>, _, _, EvmTranscript<_, _, _, _>, _>(
-        &params,
-        &pk,
-        &[root_circuit],
-        &[&root_instance.iter().map(|v| &v[..]).collect_vec()],
-        OsRng,
-        &mut transcript,
-    )
-    .expect("proof generation should not fail");
-    let proof = transcript.finalize();
-    end_timer!(start_proof_root);
-
-    // Verify proof in EVM
-    println!("EVM verify");
-    let evm_verifier_bytecode = evm::compile_yul(&data.code);
-    evm_verify(evm_verifier_bytecode, root_instance, proof.clone());
-}
-
 fn gen_application_snark(
     params: &ParamsKZG<Bn256>,
     aggregation_type: AccumulationSchemeType,
@@ -331,7 +217,7 @@ fn gen_application_snark(
         ..Default::default()
     };
     let (_, super_circuit, _, _) = SuperCircuit::<_>::build(
-        block_1tx(&protocol_instance),
+        block_anchor_1tx(&protocol_instance),
         circuits_params,
         protocol_instance,
     )
@@ -508,8 +394,7 @@ fn create_1_level_root_super_circuit_prover_sdk<const T: u64, AS: AccumulationSc
 #[cfg(test)]
 mod tests {
     use crate::super_circuit::{
-        create_1_level_root_super_circuit_prover_sdk, create_root_super_circuit_prover,
-        create_root_super_circuit_prover_sdk,
+        create_1_level_root_super_circuit_prover_sdk, create_root_super_circuit_prover_sdk,
     };
     use ark_std::{end_timer, start_timer};
     use bus_mapping::circuit_input_builder::CircuitsParams;
@@ -547,12 +432,6 @@ mod tests {
         read_or_create_srs::<G1Affine, _>(k, move |k| {
             ParamsKZG::<Bn256>::setup(k, ChaCha20Rng::from_entropy())
         });
-    }
-
-    #[test]
-    fn bench_root_super_circuit_prover() {
-        // Old version, only here for reference
-        create_root_super_circuit_prover();
     }
 
     #[test]

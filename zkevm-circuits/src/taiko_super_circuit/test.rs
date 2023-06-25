@@ -36,7 +36,8 @@ fn test_super_circuit(
     }
 }
 
-fn block_1tx(protocol_instance: &ProtocolInstance) -> GethData {
+/// build a block with anchor tx
+pub fn block_anchor_1tx(protocol_instance: &ProtocolInstance) -> GethData {
     let mut rng = ChaCha20Rng::seed_from_u64(2);
 
     let chain_id = (*MOCK_CHAIN_ID).as_u64();
@@ -168,7 +169,7 @@ fn serial_test_super_circuit_1tx_1max_tx() {
         anchor_gas_cost: 150000,
         ..Default::default()
     };
-    let block = block_1tx(&protocol_instance);
+    let block = block_anchor_1tx(&protocol_instance);
     let circuits_params = CircuitsParams {
         max_txs: 2,
         max_calldata: 200,
@@ -188,7 +189,7 @@ fn serial_test_super_circuit_1tx_2max_tx() {
         anchor_gas_cost: 150000,
         ..Default::default()
     };
-    let block = block_1tx(&protocol_instance);
+    let block = block_anchor_1tx(&protocol_instance);
     let circuits_params = CircuitsParams {
         max_txs: 2,
         max_calldata: 200,

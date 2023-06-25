@@ -1,7 +1,8 @@
 //! The super circuit for taiko
 
+/// for test purpose
 #[cfg(any(feature = "test", test))]
-pub(crate) mod test;
+pub mod test;
 
 use crate::{
     anchor_tx_circuit::{AnchorTxCircuit, AnchorTxCircuitConfig, AnchorTxCircuitConfigArgs},
