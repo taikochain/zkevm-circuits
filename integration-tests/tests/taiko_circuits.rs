@@ -85,7 +85,7 @@ macro_rules! unroll_tests {
 
 unroll_tests!(
     (circuit_block_anchor_only, 137947),
+    (circuit_block_propose_block, 137932)
     (circuit_block_prove_block, 138019),
     (circuit_block_transfer_succeed, 138018),
-    (circuit_block_propose_block, 137932)
 );
