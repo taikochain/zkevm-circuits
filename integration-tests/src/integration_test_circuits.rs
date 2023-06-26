@@ -279,6 +279,11 @@ impl<C: SubCircuit<Fr> + Circuit<Fr>> IntegrationTest<C> {
     /// Run integration test at a block identified by a tag.
     pub async fn test_at_block_tag(&mut self, block_tag: &str, actual: bool) {
         let block_num = *GEN_DATA.blocks.get(block_tag).unwrap();
+        log::info!(
+            "test {} circuit, block tag: {}",
+            self.name,
+            block_tag,
+        );
         self.test_block_by_number(block_num, actual).await;
     }
 
