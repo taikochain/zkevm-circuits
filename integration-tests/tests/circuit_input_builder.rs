@@ -12,9 +12,6 @@ lazy_static! {
 }
 
 async fn test_circuit_input_builder_block(block_num: u64) {
-
-    log::info!("hello test_circuit_input_builder_block");
-
     let cli = get_client();
     let cli = BuilderClient::new(
         cli,
@@ -31,8 +28,6 @@ async fn test_circuit_input_builder_block(block_num: u64) {
     )
     .await
     .unwrap();
-
-    log::info!("hello test_circuit_input_builder_block block_num {:?}", block_num);
 
     // 1. Query geth for Block, Txs and TxExecTraces
     let (eth_block, geth_trace, history_hashes, prev_state_root) =
@@ -80,7 +75,7 @@ macro_rules! declare_tests {
 // This test builds the complete circuit inputs for the block where 1 ETH is
 // transfered.
 declare_tests!(test_circuit_input_builder_block_transfer_0, "Transfer 0");
-/*
+
 // This test builds the complete circuit inputs for the block where the Greeter
 // contract is deployed.
 declare_tests!(test_circuit_input_builder_deploy_greeter, "Deploy Greeter");
@@ -108,4 +103,3 @@ declare_tests!(
     test_circuit_input_builder_multiple_erc20_openzeppelin_transfers,
     "Multiple ERC20 OpenZeppelin transfers"
 );
-*/

@@ -48,7 +48,7 @@ const MAX_TXS: usize = 4;
 /// MAX_CALLDATA
 const MAX_CALLDATA: usize = 512;
 /// MAX_RWS
-const MAX_RWS: usize = 5888 * 40;
+const MAX_RWS: usize = 5888;
 /// MAX_BYTECODE
 const MAX_BYTECODE: usize = 5000;
 /// MAX_COPY_ROWS
@@ -278,15 +278,18 @@ impl<C: SubCircuit<Fr> + Circuit<Fr>> IntegrationTest<C> {
 
     /// Run integration test at a block identified by a tag.
     pub async fn test_at_block_tag(&mut self, block_tag: &str, actual: bool) {
-        // let block_num = *GEN_DATA.blocks.get(block_tag).unwrap();
-        let block_num = 137947 as u64;
+        let block_num = *GEN_DATA.blocks.get(block_tag).unwrap();
+        self.test_block_by_number(block_num, actual).await;
+    }
+
+    /// Run integration test for a block number
+    pub async fn test_block_by_number(&mut self, block_num: u64, actual: bool) -> () {
         let (builder, _) = gen_inputs(block_num).await;
 
         log::info!(
-            "test {} circuit, block: #{} - {}",
+            "test {} circuit, block: #{}",
             self.name,
             block_num,
-            block_tag
         );
         let mut block = block_convert(&builder.block, &builder.code_db).unwrap();
         block.randomness = Fr::from(TEST_MOCK_RANDOMNESS);
@@ -333,8 +336,6 @@ async fn gen_inputs(
     CircuitInputBuilder,
     eth_types::Block<eth_types::Transaction>,
 ) {
-    log::info!("hello gen_inputs");
-
     let cli = get_client();
     let cli = BuilderClient::new(cli, CIRCUITS_PARAMS).await.unwrap();
 
