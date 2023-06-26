@@ -20,12 +20,10 @@ macro_rules! declare_tests {
                 run_test! (STATE_CIRCUIT_TEST, $block_tag, $real_prover);
             }
 
-            /*
             #[tokio::test]
             async fn [<serial_test_tx_ $name>]() {
                 run_test! (TX_CIRCUIT_TEST, $block_tag, $real_prover);
             }
-            */
 
             #[tokio::test]
             async fn [<serial_test_bytecode_ $name>]() {
@@ -36,7 +34,7 @@ macro_rules! declare_tests {
             async fn [<serial_test_copy_ $name>]() {
                 run_test! (COPY_CIRCUIT_TEST, $block_tag, $real_prover);
             }
-            /*
+
             #[tokio::test]
             async fn [<serial_test_keccak_ $name>]() {
                 run_test! (KECCAK_CIRCUIT_TEST, $block_tag, $real_prover);
@@ -51,7 +49,6 @@ macro_rules! declare_tests {
             async fn [<serial_test_exp_ $name>]() {
                 run_test! (EXP_CIRCUIT_TEST, $block_tag, $real_prover);
             }
-            */
         }
     };
 }

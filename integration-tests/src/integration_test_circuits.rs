@@ -48,7 +48,7 @@ const MAX_TXS: usize = 4;
 /// MAX_CALLDATA
 const MAX_CALLDATA: usize = 512;
 /// MAX_RWS
-const MAX_RWS: usize = 5888;
+const MAX_RWS: usize = 5888 * 40;
 /// MAX_BYTECODE
 const MAX_BYTECODE: usize = 5000;
 /// MAX_COPY_ROWS
@@ -279,7 +279,7 @@ impl<C: SubCircuit<Fr> + Circuit<Fr>> IntegrationTest<C> {
     /// Run integration test at a block identified by a tag.
     pub async fn test_at_block_tag(&mut self, block_tag: &str, actual: bool) {
         // let block_num = *GEN_DATA.blocks.get(block_tag).unwrap();
-        let block_num = 365422 as u64;
+        let block_num = 137947 as u64;
         let (builder, _) = gen_inputs(block_num).await;
 
         log::info!(

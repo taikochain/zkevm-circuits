@@ -71,7 +71,7 @@ macro_rules! declare_tests {
         async fn $test_name() {
             log_init();
             // let block_num = GEN_DATA.blocks.get($block_tag).unwrap();
-            let block_num = 365422 as u64;
+            let block_num = 137947 as u64;
             test_circuit_input_builder_block(block_num).await;
         }
     };

@@ -38,7 +38,7 @@ pub const CONTRACTS: &[(&str, &str)] = &[
 /// Path to gen_blockchain_data output file
 pub const GENDATA_OUTPUT_PATH: &str = "gendata_output.json";
 
-const GETH0_URL_DEFAULT: &str = "https://rpc.test.taiko.xyz";
+const GETH0_URL_DEFAULT: &str = "https://rpc.internal.taiko.xyz";
 
 lazy_static! {
     /// URL of the integration test geth0 instance, which contains blocks for which proofs will be
