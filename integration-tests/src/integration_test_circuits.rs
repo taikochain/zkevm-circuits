@@ -279,23 +279,15 @@ impl<C: SubCircuit<Fr> + Circuit<Fr>> IntegrationTest<C> {
     /// Run integration test at a block identified by a tag.
     pub async fn test_at_block_tag(&mut self, block_tag: &str, actual: bool) {
         let block_num = *GEN_DATA.blocks.get(block_tag).unwrap();
-        log::info!(
-            "test {} circuit, block tag: {}",
-            self.name,
-            block_tag,
-        );
+        log::info!("test {} circuit, block tag: {}", self.name, block_tag);
         self.test_block_by_number(block_num, actual).await;
     }
 
     /// Run integration test for a block number
-    pub async fn test_block_by_number(&mut self, block_num: u64, actual: bool) -> () {
+    pub async fn test_block_by_number(&mut self, block_num: u64, actual: bool) {
         let (builder, _) = gen_inputs(block_num).await;
 
-        log::info!(
-            "test {} circuit, block: #{}",
-            self.name,
-            block_num,
-        );
+        log::info!("test {} circuit, block: #{}", self.name, block_num);
         let mut block = block_convert(&builder.block, &builder.code_db).unwrap();
         block.randomness = Fr::from(TEST_MOCK_RANDOMNESS);
         let circuit = C::new_from_block(&block);
