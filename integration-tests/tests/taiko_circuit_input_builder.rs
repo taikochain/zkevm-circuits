@@ -16,11 +16,11 @@ async fn test_circuit_input_builder_block(block_num: u64) {
     let cli = BuilderClient::new(
         cli,
         CircuitsParams {
-            max_rws: 16384,
+            max_rws: 800000,
             max_txs: 10,
             max_calldata: 4000,
             max_bytecode: 4000,
-            max_copy_rows: 16384,
+            max_copy_rows: 800000,
             max_evm_rows: 0,
             max_exp_steps: 1000,
             max_keccak_rows: 0,
@@ -61,43 +61,25 @@ async fn test_circuit_input_builder_block(block_num: u64) {
 }
 
 macro_rules! declare_tests {
-    ($test_name:ident, $block_tag:expr) => {
+    ($test_name:ident, $block_num:expr) => {
         #[tokio::test]
         async fn $test_name() {
             log_init();
-            let block_num = GEN_DATA.blocks.get($block_tag).unwrap();
-            test_circuit_input_builder_block(*block_num).await;
+            test_circuit_input_builder_block($block_num).await;
         }
     };
 }
 
-// This test builds the complete circuit inputs for the block where 1 ETH is
-// transfered.
-declare_tests!(test_circuit_input_builder_block_transfer_0, "Transfer 0");
-// This test builds the complete circuit inputs for the block where the Greeter
-// contract is deployed.
-declare_tests!(test_circuit_input_builder_deploy_greeter, "Deploy Greeter");
-// This test builds the complete circuit inputs for the block with multiple
-// transfer txs.
-declare_tests!(
-    test_circuit_input_builder_multiple_transfers_0,
-    "Multiple transfers 0"
-);
-// This test builds the complete circuit inputs for the block with a failed
-// OpenZeppelin ERC20 transfer tx.
-declare_tests!(
-    test_circuit_input_builder_erc20_openzeppelin_transfer_fail,
-    "ERC20 OpenZeppelin transfer failed"
-);
-// This test builds the complete circuit inputs for the block with a successful
-// OpenZeppelin ERC20 transfer tx.
-declare_tests!(
-    test_circuit_input_builder_erc20_openzeppelin_transfer_succeed,
-    "ERC20 OpenZeppelin transfer successful"
-);
-// This test builds the complete circuit inputs for the block with multiple
-// successful and failed OpenZeppelin ERC20 transfer txs.
-declare_tests!(
-    test_circuit_input_builder_multiple_erc20_openzeppelin_transfers,
-    "Multiple ERC20 OpenZeppelin transfers"
-);
+// This test builds the complete circuit inputs for the block that has
+// only one anchor 
+declare_tests!(test_circuit_input_builder_block_anchor_only, 137947);
+// This test builds the complete circuit inputs for the block that has
+// prove block contract call
+declare_tests!(test_circuit_input_builder_block_prove_block, 138019);
+// This test builds the complete circuit inputs for the block that has
+// ERC20 transfer
+declare_tests!(test_circuit_input_builder_block_transfer_succeed, 138018);
+// This test builds the complete circuit inputs for the block that has
+// propose block contract call
+declare_tests!(test_circuit_input_builder_block_propose_block, 137932);
+

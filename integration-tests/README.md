@@ -52,6 +52,6 @@ The following software needs to be installed to run the integration tests script
 ## How to run circuits for Taiko
 ```
 export GETH0_URL="https://rpc.internal.taiko.xyz"
-./run.sh --steps setup --tests taiko_circuits::mock_prover
+./run.sh --steps setup --tests taiko_circuit_input_builder
 ./run.sh --steps tests --tests taiko_circuits::mock_prover
 ```
