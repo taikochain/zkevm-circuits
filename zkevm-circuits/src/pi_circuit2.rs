@@ -1014,8 +1014,7 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
                 // `q_rlc_acc` needs to be boolean
                 cb.require_boolean("q_rlc_acc boolean", do_rlc_acc.expr());
 
-                cb.condition(is_leading_zero_next.expr(),
-                |cb| {
+                cb.condition(is_leading_zero_next.expr(), |cb| {
                     cb.require_zero("no RLC for leading zeros", do_rlc_acc.expr())
                 });
 
