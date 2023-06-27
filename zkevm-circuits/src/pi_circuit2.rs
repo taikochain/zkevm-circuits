@@ -1014,7 +1014,7 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
                 cb.require_boolean("is_leading_zero boolean", is_leading_zero.expr());
                 // `q_rlc_acc` needs to be boolean
                 cb.require_boolean("q_rlc_acc boolean", do_rlc_acc.expr());
-
+                // leading zeros are not included in RLC
                 cb.condition(is_leading_zero_next.expr(), |cb| {
                     cb.require_zero("no RLC for leading zeros", do_rlc_acc.expr())
                 });
@@ -1050,6 +1050,7 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
             // 1. len = 0 for leading zeros
             // 2. len = len_prev + 1 otherwise
             // 3. total_len = 0 if value <= 0x80
+            let rlp_is_short_next = rlp_is_short.is_lt(meta, Some(Rotation::next()));
             for (q_value, var_size) in [(q_number, NUMBER_SIZE), (q_var_field_256, WORD_SIZE)] {
                 let q_field = meta.query_fixed(q_value, Rotation::cur());
                 let q_field_next = meta.query_fixed(q_value, Rotation::next());
@@ -1082,17 +1083,23 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
 
                     // The length is also set to 0 when the RLP encoding is short (single RLP byte
                     // encoding)
-                    let rlp_is_short = rlp_is_short.is_lt(meta, Some(Rotation::next()));
-                    cb.condition(and::expr([rlp_is_short, length_is_zero.expr()]), |cb| {
+                    cb.condition(and::expr([rlp_is_short_next.clone(), length_is_zero.expr()]), |cb| {
                         cb.require_zero("Length is set to zero for short values", length_next.expr());
                     });
                 });
 
                 // Check RLP encoding
-                cb.condition(and::expr([not::expr(q_field), q_field_next.expr()]), |cb| {
+                cb.condition(and::expr([not::expr(q_field.clone()), q_field_next.expr()]), |cb| {
                     let length = meta.query_advice(blk_hdr_rlp_len_calc, Rotation(var_size as i32));
                     cb.require_equal("RLP length", byte.expr(), 0x80.expr() + length.expr());
                 });
+
+                // Artiicial RLP headers are not included in RLC
+                let rlp_short_or_zero = rlp_is_short.is_lt(meta, Some(Rotation(-(var_size as i32))));
+                cb.condition(and::expr([not::expr(q_field_next), q_field.expr(), length_is_zero.expr(), rlp_short_or_zero]), |cb| {
+                    let do_rlc_acc_header = meta.query_advice(blk_hdr_do_rlc_acc, Rotation(-(var_size as i32)));
+                    cb.require_zero("no RLC for leading zeros", do_rlc_acc_header.expr())
+                }); 
             }
 
             // Check total length of RLP stream.
