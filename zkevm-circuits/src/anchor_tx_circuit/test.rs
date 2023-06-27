@@ -154,7 +154,7 @@ pub(crate) fn add_anchor_tx<const NACC: usize, FTx>(
         .input(protocol_instance.anchor_call())
         .nonce(0)
         .value(ANCHOR_TX_VALUE.to_word());
-    extra_func_tx(&mut txs[0]);
+    extra_func_tx(txs[0]);
     func_tx(txs, accs);
 }
 

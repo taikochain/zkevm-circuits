@@ -405,17 +405,14 @@ impl<F: Field> PiCircuitConfig<F> {
                 self.q_field_end.enable(region, row_offset)?;
                 cells[RPI_CELL_IDX] = Some(rpi_cell);
                 cells[RPI_RLC_ACC_CELL_IDX] = Some(rpi_rlc_acc_cell);
-                match block_number {
-                    Some(block_number) => {
-                        self.q_block_table.enable(region, row_offset)?;
-                        region.assign_advice(
-                            || "block_index",
-                            self.block_index,
-                            row_offset,
-                            || Value::known(F::from(block_number.as_u64())),
-                        )?;
-                    }
-                    None => (),
+                if let Some(block_number) = block_number {
+                    self.q_block_table.enable(region, row_offset)?;
+                    region.assign_advice(
+                        || "block_index",
+                        self.block_index,
+                        row_offset,
+                        || Value::known(F::from(block_number.as_u64())),
+                    )?;
                 }
             } else {
                 self.q_field_step.enable(region, row_offset)?;
@@ -692,7 +689,7 @@ mod pi_circuit_test {
         let mut public_data = PublicData::default::<Fr>();
         public_data.meta_hash = OMMERS_HASH.to_word();
         public_data.block_hash = OMMERS_HASH.to_word();
-        public_data.block_context.block_hash = Some(OMMERS_HASH.to_word());
+        public_data.block_context.block_hash = OMMERS_HASH.to_word();
         public_data.block_context.history_hashes = vec![Default::default(); 256];
         public_data.block_context.number = 300.into();
         public_data
@@ -792,7 +789,7 @@ mod pi_circuit_test {
         block.protocol_instance.block_hash = *OMMERS_HASH;
         block.protocol_instance.parent_hash = *OMMERS_HASH;
         block.context.history_hashes = vec![OMMERS_HASH.to_word()];
-        block.context.block_hash = Some(OMMERS_HASH.to_word());
+        block.context.block_hash = OMMERS_HASH.to_word();
         block.context.number = 300.into();
 
         let public_data = PublicData::new(&block, &witness::ProtocolInstance::default());

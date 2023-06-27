@@ -137,7 +137,7 @@ pub struct BlockContext {
     /// The chain id
     pub chain_id: Word,
     /// The block hash
-    pub block_hash: Option<Word>,
+    pub block_hash: Word,
 }
 
 impl BlockContext {
@@ -186,12 +186,8 @@ impl BlockContext {
                 [
                     Value::known(F::from(BlockContextFieldTag::BlockHash as u64)),
                     Value::known(self.number.to_scalar().unwrap()),
-                    randomness.map(|randomness| {
-                        rlc::value(
-                            &self.block_hash.expect("must have block hash").to_le_bytes(),
-                            randomness,
-                        )
-                    }),
+                    randomness
+                        .map(|randomness| rlc::value(&self.block_hash.to_le_bytes(), randomness)),
                 ],
             ],
             {
@@ -225,7 +221,11 @@ impl From<&circuit_input_builder::Block> for BlockContext {
             base_fee: block.base_fee,
             history_hashes: block.history_hashes.clone(),
             chain_id: block.chain_id,
-            block_hash: block.eth_block.hash.map(|hash| hash.to_word()),
+            block_hash: block
+                .eth_block
+                .hash
+                .map(|hash| hash.to_word())
+                .unwrap_or_default(),
         }
     }
 }

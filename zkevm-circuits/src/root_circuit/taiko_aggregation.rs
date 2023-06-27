@@ -106,8 +106,7 @@ where
         let prev_instance = self
             .input_snarks
             .iter()
-            .map(|s| s.instances.clone())
-            .flatten()
+            .flat_map(|s| s.instances.clone())
             .collect_vec();
 
         vec![prev_instance

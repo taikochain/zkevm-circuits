@@ -12,30 +12,22 @@
 //!
 //! ### The formula of signature with K = 1
 //!
-//! ```
 //! s = (GX1 * GOLDEN_TOUCH_PRIVATEKEY + msg_hash) (mod N) (K = 1)
-//! ```
 //!
 //! #### Formula deformation
 //!
-//! ```
 //! s = (GX1 * GOLDEN_TOUCH_PRIVATEKEY (mod N) + msg_hash (mod N)) (mod N)
-//! ```
 //!
 //! - Our `GX1_MUL_PRIVATEKEY` is equal to `GX1 * GOLDEN_TOUCH_PRIVATEKEY (mod N)`
 //! - Our `msg_hash` has already been (mod N) in [zkevm-circuit](https://github.com/taikoxyz/zkevm-circuits/blob/839152c04ab3ddd1b8ce32632a407e5e7ef823a8/eth-types/src/geth_types.rs#L236)
 //!
-//! ```rust
 //! let msg_hash = msg_hash.mod_floor(&*SECP256K1_Q);
-//! ```
 //!
 //! ### Summary
 //!
-//! ```
 //! because: 0 < GX1_MUL_PRIVATEKEY + msg_hash < 2N
 //! need prove: (GX1_MUL_PRIVATEKEY + msg_hash) (mod N) == 0
 //! so: GX1_MUL_PRIVATEKEY + msg_hash == N
-//! ```
 
 use crate::{
     evm_circuit::util::{

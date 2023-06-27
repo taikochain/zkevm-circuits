@@ -64,7 +64,7 @@ pub fn block_anchor_1tx(protocol_instance: &ProtocolInstance) -> GethData {
                         .code(bytecode);
                     accs[3].address(addr_a).balance(Word::from(1u64 << 20));
                 },
-                &protocol_instance,
+                protocol_instance,
             );
         },
         |txs, accs| {
@@ -83,7 +83,7 @@ pub fn block_anchor_1tx(protocol_instance: &ProtocolInstance) -> GethData {
                     txs[1].sig_data((sig.v, sig.r, sig.s));
                 },
                 sign_tx,
-                &protocol_instance,
+                protocol_instance,
             );
         },
         |block, _tx| block.number(0xcafeu64),
@@ -121,7 +121,7 @@ fn block_2tx(protocol_instance: &ProtocolInstance) -> GethData {
                         .code(bytecode);
                     accs[3].address(addr_a).balance(Word::from(1u64 << 20));
                 },
-                &protocol_instance,
+                protocol_instance,
             );
         },
         |txs, accs| {
@@ -149,7 +149,7 @@ fn block_2tx(protocol_instance: &ProtocolInstance) -> GethData {
                     txs[2].sig_data((sig.v, sig.r, sig.s));
                 },
                 sign_tx,
-                &protocol_instance,
+                protocol_instance,
             );
         },
         |block, _tx| block.number(0xcafeu64),
