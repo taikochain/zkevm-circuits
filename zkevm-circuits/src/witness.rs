@@ -15,4 +15,4 @@ mod tx;
 pub use bus_mapping::circuit_input_builder::Call;
 pub use tx::Transaction;
 mod protocol_instance;
-pub use protocol_instance::{left_shift, ProtocolInstance};
+pub use protocol_instance::{left_shift, MetaHash, ProtocolInstance};
