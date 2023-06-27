@@ -1,11 +1,8 @@
 #![allow(unused_imports)]
-use std::collections::HashMap;
+use std::{collections::HashMap, str::FromStr};
 
 use super::{
-    sign_verify::{
-        GOLDEN_TOUCH_ADDRESS, GOLDEN_TOUCH_PRIVATEKEY, GOLDEN_TOUCH_WALLET, GX1,
-        GX1_MUL_PRIVATEKEY, GX2, N,
-    },
+    sign_verify::{GOLDEN_TOUCH_ADDRESS, GOLDEN_TOUCH_PRIVATEKEY, GX1, GX1_MUL_PRIVATEKEY, GX2, N},
     *,
 };
 use crate::{
@@ -166,10 +163,13 @@ fn gen_block<const NUM_TXS: usize>(
 ) -> Block<Fr> {
     let chain_id = (*MOCK_CHAIN_ID).as_u64();
     let mut wallets = HashMap::new();
-    wallets.insert(
-        *GOLDEN_TOUCH_ADDRESS,
-        GOLDEN_TOUCH_WALLET.clone().with_chain_id(chain_id),
-    );
+
+    let wallet =
+        LocalWallet::from_str("0x92954368afd3caa1f3ce3ead0069c1af414054aefe1ef9aeacc1bf426222ce38")
+            .unwrap()
+            .with_chain_id(chain_id);
+
+    wallets.insert(*GOLDEN_TOUCH_ADDRESS, wallet);
 
     let block: GethData = TestContext::<2, NUM_TXS>::new(
         None,
