@@ -27,8 +27,8 @@ use itertools::Itertools;
 use rlp::{Rlp, RlpStream};
 use std::marker::PhantomData;
 
-use crate::table::{TxFieldTag, BlockContextFieldTag};
 use crate::table::TxTable;
+use crate::table::{BlockContextFieldTag, TxFieldTag};
 use crate::table::{BlockTable, KeccakTable2};
 use crate::util::{random_linear_combine_word as rlc, Challenges, SubCircuit, SubCircuitConfig};
 use crate::witness;
@@ -96,7 +96,8 @@ const NONCE_RLP_LEN: usize = NONCE_SIZE + 1;
 const BASE_FEE_RLP_LEN: usize = BASE_FEE_SIZE + 1;
 const WITHDRAWALS_ROOT_RLP_LEN: usize = WITHDRAWALS_ROOT_SIZE;
 
-// Row offsets where the value of block header fields start (after their RLP header)
+// Row offsets where the value of block header fields start (after their RLP
+// header)
 const PARENT_HASH_RLP_OFFSET: usize = 4;
 const BENEFICIARY_RLP_OFFSET: usize =
     PARENT_HASH_RLP_OFFSET + PARENT_HASH_RLP_LEN + OMMERS_HASH_RLP_LEN;
@@ -113,7 +114,8 @@ const BASE_FEE_RLP_OFFSET: usize = MIX_HASH_RLP_OFFSET + MIX_HASH_RLP_LEN + NONC
 const WITHDRAWALS_ROOT_RLP_OFFSET: usize = BASE_FEE_RLP_OFFSET + BASE_FEE_RLP_LEN;
 const BLOCKHASH_TOTAL_ROWS: usize = WITHDRAWALS_ROOT_RLP_OFFSET + WITHDRAWALS_ROOT_RLP_LEN;
 
-// Absolute row number of the row where the LSB of the total RLP length is located
+// Absolute row number of the row where the LSB of the total RLP length is
+// located
 const TOTAL_LENGTH_OFFSET: usize = 2;
 
 lazy_static! {
@@ -1011,9 +1013,9 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
                 // `q_rlc_acc` needs to be boolean
                 cb.require_boolean("q_rlc_acc boolean", do_rlc_acc.expr());
 
-                // Covers a corner case where MSB bytes can be skipped by annotating them as leading zeroes.
-                // This can occur when `blk_hdr_is_leading_zero` is set to 0 wrongly (the actual
-                // byte value is non-zero)
+                // Covers a corner case where MSB bytes can be skipped by annotating them as
+                // leading zeroes. This can occur when `blk_hdr_is_leading_zero`
+                // is set to 0 wrongly (the actual byte value is non-zero)
                 cb.condition(not::expr(rlp_is_zero.expr()), |cb| {
                     cb.require_zero("Leading zeros cannot be skipped", is_leading_zero.expr());
                 });
@@ -1101,9 +1103,10 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
                     meta.query_advice(
                         blk_hdr_rlp_len_calc,
                         // The length of a field is located at the its last row
-                        // We need to adjust the offset by the current row number (TOTAL_LENGTH_OFFSET)
-                        // Since the `offset` given is the first byte of the next field,
-                        // we need to remove 1 row to target the last byte of the actual field
+                        // We need to adjust the offset by the current row number
+                        // (TOTAL_LENGTH_OFFSET) Since the `offset` given
+                        // is the first byte of the next field, we need to
+                        // remove 1 row to target the last byte of the actual field
                         Rotation((offset - TOTAL_LENGTH_OFFSET - 1).try_into().unwrap()),
                     )
                 };
@@ -1166,16 +1169,19 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
                 not::expr(meta.query_fixed(q_reconstruct, Rotation::next())),
             ]);
             vec![
-                (q_sel.expr() * meta.query_fixed(block_table_tag, Rotation::cur()),
-                meta.query_advice(block_table.tag, Rotation::cur())
-                ),
-                (q_sel.expr() * meta.query_fixed(block_table_index, Rotation::cur()),
-                meta.query_advice(block_table.index, Rotation::cur())
+                (
+                    q_sel.expr() * meta.query_fixed(block_table_tag, Rotation::cur()),
+                    meta.query_advice(block_table.tag, Rotation::cur()),
                 ),
                 (
-                q_sel.expr() * meta.query_advice(blk_hdr_reconstruct_value, Rotation::cur()),
-                meta.query_advice(block_table.value, Rotation::cur()),
-            )]
+                    q_sel.expr() * meta.query_fixed(block_table_index, Rotation::cur()),
+                    meta.query_advice(block_table.index, Rotation::cur()),
+                ),
+                (
+                    q_sel.expr() * meta.query_advice(blk_hdr_reconstruct_value, Rotation::cur()),
+                    meta.query_advice(block_table.value, Rotation::cur()),
+                ),
+            ]
         });
 
         // 3. Check block header hash
@@ -1541,7 +1547,13 @@ impl<F: Field> PiCircuitConfig<F> {
         let mut cells = vec![];
 
         for (offset, (name, tag, idx, val, not_in_table)) in [
-            ("zero", BlockContextFieldTag::None, 0, Value::known(F::zero()), false),
+            (
+                "zero",
+                BlockContextFieldTag::None,
+                0,
+                Value::known(F::zero()),
+                false,
+            ),
             (
                 "coinbase",
                 BlockContextFieldTag::Coinbase,
@@ -1600,17 +1612,17 @@ impl<F: Field> PiCircuitConfig<F> {
                 BlockContextFieldTag::BlockHash,
                 0,
                 randomness.map(|randomness| {
-                            rlc(
-                                pb.block_hash
-                                    .to_fixed_bytes()
-                                    .into_iter()
-                                    .rev()
-                                    .collect::<Vec<u8>>()
-                                    .try_into()
-                                    .unwrap(),
-                                randomness,
-                            )
-                        }),
+                    rlc(
+                        pb.block_hash
+                            .to_fixed_bytes()
+                            .into_iter()
+                            .rev()
+                            .collect::<Vec<u8>>()
+                            .try_into()
+                            .unwrap(),
+                        randomness,
+                    )
+                }),
                 false,
             ),
             (
@@ -1735,20 +1747,45 @@ impl<F: Field> PiCircuitConfig<F> {
                 }),
                 false,
             ),
-        ].into_iter()
-        .chain(block_values.history_hashes.iter().enumerate().map(|(i, h)| {
-            (
-                "prev_hash",
-                BlockContextFieldTag::PreviousHash,
-                i,
-                randomness.map(|randomness| rlc(h.to_be_bytes(), randomness)),
-                false,
-            )
-        }))
+        ]
+        .into_iter()
+        .chain(
+            block_values
+                .history_hashes
+                .iter()
+                .enumerate()
+                .map(|(i, h)| {
+                    (
+                        "prev_hash",
+                        BlockContextFieldTag::PreviousHash,
+                        i,
+                        randomness.map(|randomness| rlc(h.to_be_bytes(), randomness)),
+                        false,
+                    )
+                }),
+        )
         .chain([
-            ("prover", BlockContextFieldTag::None, 0, Value::known(pb.prover.to_scalar().unwrap()), true),
-            ("txs_hash_hi", BlockContextFieldTag::None, 0, Value::known(pb.txs_hash_hi), true),
-            ("txs_hash_lo", BlockContextFieldTag::None, 0, Value::known(pb.txs_hash_lo), true),
+            (
+                "prover",
+                BlockContextFieldTag::None,
+                0,
+                Value::known(pb.prover.to_scalar().unwrap()),
+                true,
+            ),
+            (
+                "txs_hash_hi",
+                BlockContextFieldTag::None,
+                0,
+                Value::known(pb.txs_hash_hi),
+                true,
+            ),
+            (
+                "txs_hash_lo",
+                BlockContextFieldTag::None,
+                0,
+                Value::known(pb.txs_hash_lo),
+                true,
+            ),
         ])
         .enumerate()
         {
@@ -1762,8 +1799,18 @@ impl<F: Field> PiCircuitConfig<F> {
                 cells.push(val_cell);
             } else {
                 self.q_block_table.enable(region, offset)?;
-                region.assign_advice(|| name, self.block_table.tag, offset, || Value::known(F::from(tag as u64)))?;
-                region.assign_advice(|| name, self.block_table.index, offset, || Value::known(F::from(idx as u64)))?;
+                region.assign_advice(
+                    || name,
+                    self.block_table.tag,
+                    offset,
+                    || Value::known(F::from(tag as u64)),
+                )?;
+                region.assign_advice(
+                    || name,
+                    self.block_table.index,
+                    offset,
+                    || Value::known(F::from(idx as u64)),
+                )?;
                 region.assign_advice(|| name, self.block_table.value, offset, || val)?;
             }
         }
@@ -1992,14 +2039,14 @@ impl<F: Field> PiCircuitConfig<F> {
         let mut blk_hdr_rlc_acc: Vec<Value<F>> = vec![];
 
         // Calculate the RLC of the bytes
-        bytes
-            .iter()
-            .map(|b| Value::known(F::from(*b as u64)))
-            .fold(Value::known(F::zero()), |mut rlc_acc, byte| {
+        bytes.iter().map(|b| Value::known(F::from(*b as u64))).fold(
+            Value::known(F::zero()),
+            |mut rlc_acc, byte| {
                 rlc_acc = rlc_acc * challenges.keccak_input() + byte;
                 blk_hdr_rlc_acc.push(rlc_acc);
                 rlc_acc
-            });
+            },
+        );
 
         // Handles leading zeros, short values and calculates the values for
         // `blk_hdr_is_leading_zero` and `blk_hdr_rlc_acc`
@@ -2084,8 +2131,8 @@ impl<F: Field> PiCircuitConfig<F> {
 
         // Construct all the constant values of the block header.
         // `c()` is for constant values, `v()` is for variable values.
-        let c = |value| { (true, value)};
-        let v = || { (false, 123456)};
+        let c = |value| (true, value);
+        let v = || (false, 123456);
         let rlp_const: Vec<(bool, u64)> = [
             vec![c(0xF9), c(0x02), v()], // RLP list header
             vec![c(0xA0)],
@@ -2105,17 +2152,17 @@ impl<F: Field> PiCircuitConfig<F> {
             vec![c(0xA0)],
             vec![v(); RECEIPTS_ROOT_SIZE], // Receipt root
             vec![c(0xB9), c(0x01), c(0x00)],
-            vec![v(); LOGS_BLOOM_SIZE], // Bloom filter
-            vec![c(0x80)],               // Difficulty
-            vec![v(); 1 + NUMBER_SIZE], // number
+            vec![v(); LOGS_BLOOM_SIZE],    // Bloom filter
+            vec![c(0x80)],                 // Difficulty
+            vec![v(); 1 + NUMBER_SIZE],    // number
             vec![v(); 1 + GAS_LIMIT_SIZE], // Gas limit
-            vec![v(); 1 + GAS_USED_SIZE], // Gas used
+            vec![v(); 1 + GAS_USED_SIZE],  // Gas used
             vec![v(); 1 + TIMESTAMP_SIZE], // Timestamp
-            vec![c(0x80)],              // Extra data
+            vec![c(0x80)],                 // Extra data
             vec![c(0xA0)],
             vec![v(); MIX_HASH_SIZE], // Mix hash
             vec![c(0x88)],
-            vec![v(); NONCE_SIZE], // Nonce
+            vec![v(); NONCE_SIZE],        // Nonce
             vec![v(); 1 + BASE_FEE_SIZE], // Base fee
             vec![c(0xA0)],
             vec![v(); WITHDRAWALS_ROOT_SIZE], // Withdrawals Root
@@ -2227,66 +2274,31 @@ impl<F: Field> PiCircuitConfig<F> {
 
         let mut length_calc = F::zero();
         for (field_num, (name, base_offset, is_reconstruct)) in [
-            (
-                "parent_hash",
-                PARENT_HASH_RLP_OFFSET,
-                true,
-            ),
-            (
-                "beneficiary",
-                BENEFICIARY_RLP_OFFSET,
-                true,
-            ),
-            (
-                "state_root",
-                STATE_ROOT_RLP_OFFSET,
-                true,
-            ),
-            ("tx_root", TX_ROOT_RLP_OFFSET,
-            true,
-            ),
-            (
-                "receipts_root",
-                RECEIPTS_ROOT_RLP_OFFSET,
-                true,
-            ),
-            (
-                "number",
-                NUMBER_RLP_OFFSET,
-                true,
-            ),
-            ("gas_limit", GAS_LIMIT_RLP_OFFSET,
-            false,
-            ),
-            ("gas_used", GAS_USED_RLP_OFFSET,
-            false,
-            ),
-            ("timestamp", TIMESTAMP_RLP_OFFSET,
-            false,
-            ),
-            ("mix_hash", MIX_HASH_RLP_OFFSET,
-            true,
-            ),
-            (
-                "base_fee_per_gas",
-                BASE_FEE_RLP_OFFSET,
-                false,
-            ),
-            (
-                "withdrawals_root",
-                WITHDRAWALS_ROOT_RLP_OFFSET,
-                true,
-            ),
-        ].iter().enumerate() {
+            ("parent_hash", PARENT_HASH_RLP_OFFSET, true),
+            ("beneficiary", BENEFICIARY_RLP_OFFSET, true),
+            ("state_root", STATE_ROOT_RLP_OFFSET, true),
+            ("tx_root", TX_ROOT_RLP_OFFSET, true),
+            ("receipts_root", RECEIPTS_ROOT_RLP_OFFSET, true),
+            ("number", NUMBER_RLP_OFFSET, true),
+            ("gas_limit", GAS_LIMIT_RLP_OFFSET, false),
+            ("gas_used", GAS_USED_RLP_OFFSET, false),
+            ("timestamp", TIMESTAMP_RLP_OFFSET, false),
+            ("mix_hash", MIX_HASH_RLP_OFFSET, true),
+            ("base_fee_per_gas", BASE_FEE_RLP_OFFSET, false),
+            ("withdrawals_root", WITHDRAWALS_ROOT_RLP_OFFSET, true),
+        ]
+        .iter()
+        .enumerate()
+        {
             for (offset, val) in reconstructed_values[field_num].iter().enumerate() {
                 region
-                .assign_advice(
-                    || "reconstruct_value for ".to_string() + name,
-                    self.blockhash_cols.blk_hdr_reconstruct_value,
-                    base_offset + offset,
-                    || *val,
-                )
-                .unwrap();
+                    .assign_advice(
+                        || "reconstruct_value for ".to_string() + name,
+                        self.blockhash_cols.blk_hdr_reconstruct_value,
+                        base_offset + offset,
+                        || *val,
+                    )
+                    .unwrap();
 
                 if *is_reconstruct {
                     region
@@ -2299,15 +2311,41 @@ impl<F: Field> PiCircuitConfig<F> {
                         .unwrap();
                 }
 
-                if [GAS_LIMIT_RLP_OFFSET, GAS_USED_RLP_OFFSET, TIMESTAMP_RLP_OFFSET, BASE_FEE_RLP_OFFSET, NUMBER_RLP_OFFSET].contains(base_offset) {
+                if [
+                    GAS_LIMIT_RLP_OFFSET,
+                    GAS_USED_RLP_OFFSET,
+                    TIMESTAMP_RLP_OFFSET,
+                    BASE_FEE_RLP_OFFSET,
+                    NUMBER_RLP_OFFSET,
+                ]
+                .contains(base_offset)
+                {
                     let field_size: usize;
                     let field: &U256;
                     match *base_offset {
-                        GAS_LIMIT_RLP_OFFSET => (field_size, field) = (GAS_LIMIT_RLP_LEN-1, &public_data.block_constants.gas_limit),
-                        GAS_USED_RLP_OFFSET => (field_size, field) = (GAS_USED_RLP_LEN-1, &public_data.gas_used),
-                        TIMESTAMP_RLP_OFFSET => (field_size, field) = (TIMESTAMP_RLP_LEN-1, &public_data.block_constants.timestamp),
-                        BASE_FEE_RLP_OFFSET  => (field_size, field) = (BASE_FEE_RLP_LEN-1, &public_data.block_constants.base_fee),
-                        _ => (field_size, field) = (NUMBER_RLP_LEN-1, &public_data.block_constants.base_fee), // `field` doesn't matter in this case
+                        GAS_LIMIT_RLP_OFFSET => {
+                            (field_size, field) = (
+                                GAS_LIMIT_RLP_LEN - 1,
+                                &public_data.block_constants.gas_limit,
+                            )
+                        }
+                        GAS_USED_RLP_OFFSET => {
+                            (field_size, field) = (GAS_USED_RLP_LEN - 1, &public_data.gas_used)
+                        }
+                        TIMESTAMP_RLP_OFFSET => {
+                            (field_size, field) = (
+                                TIMESTAMP_RLP_LEN - 1,
+                                &public_data.block_constants.timestamp,
+                            )
+                        }
+                        BASE_FEE_RLP_OFFSET => {
+                            (field_size, field) =
+                                (BASE_FEE_RLP_LEN - 1, &public_data.block_constants.base_fee)
+                        }
+                        _ => {
+                            (field_size, field) =
+                                (NUMBER_RLP_LEN - 1, &public_data.block_constants.base_fee)
+                        } // `field` doesn't matter in this case
                     }
 
                     let field_lead_zeros_num = if *base_offset == NUMBER_RLP_OFFSET {
@@ -2318,31 +2356,32 @@ impl<F: Field> PiCircuitConfig<F> {
 
                     if offset < field_lead_zeros_num {
                         length_calc = F::zero();
+                    } else if offset == field_size - 1
+                        && length_calc == F::zero()
+                        && block_header_rlp_byte[base_offset + offset] <= 0x80
+                    {
+                        // short RLP values have 0 length
+                        length_calc = F::zero();
                     } else {
-                        if offset == field_size - 1 && length_calc == F::zero() && block_header_rlp_byte[base_offset + offset] <= 0x80 {
-                            // short RLP values have 0 length
-                            length_calc = F::zero();
-                        } else {
-                            length_calc = F::from((offset - field_lead_zeros_num + 1) as u64);
-                        }
+                        length_calc = F::from((offset - field_lead_zeros_num + 1) as u64);
                     }
 
                     region
-                    .assign_advice(
-                        || "length of ".to_string() + name,
-                        self.blockhash_cols.blk_hdr_rlp_len_calc,
-                        base_offset + offset,
-                        || Value::known(length_calc),
-                    )
-                    .unwrap();
+                        .assign_advice(
+                            || "length of ".to_string() + name,
+                            self.blockhash_cols.blk_hdr_rlp_len_calc,
+                            base_offset + offset,
+                            || Value::known(length_calc),
+                        )
+                        .unwrap();
                     region
-                    .assign_advice(
-                        || "inverse length of ".to_string() + name,
-                        self.blockhash_cols.blk_hdr_rlp_len_calc_inv,
-                        base_offset + offset,
-                        || Value::known(length_calc.invert().unwrap_or(F::zero())),
-                    )
-                    .unwrap();
+                        .assign_advice(
+                            || "inverse length of ".to_string() + name,
+                            self.blockhash_cols.blk_hdr_rlp_len_calc_inv,
+                            base_offset + offset,
+                            || Value::known(length_calc.invert().unwrap_or(F::zero())),
+                        )
+                        .unwrap();
 
                     let selector = if *base_offset == NUMBER_RLP_OFFSET {
                         self.blockhash_cols.q_number
@@ -2351,37 +2390,100 @@ impl<F: Field> PiCircuitConfig<F> {
                     };
                     region
                         .assign_fixed(
-                        || "q_number and q_var_field_256",
-                        selector,
-                        base_offset + offset,
-                        || Value::known(F::one()),
-                    )
-                    .unwrap();
+                            || "q_number and q_var_field_256",
+                            selector,
+                            base_offset + offset,
+                            || Value::known(F::one()),
+                        )
+                        .unwrap();
                 }
             }
         }
 
         // Set the block table tags for fields with only one index
         for (offset, tag) in [
-            (BENEFICIARY_RLP_OFFSET + BENEFICIARY_SIZE, BlockContextFieldTag::Beneficiary),
-            (STATE_ROOT_RLP_OFFSET + STATE_ROOT_SIZE, BlockContextFieldTag::StateRoot),
-            (TX_ROOT_RLP_OFFSET + TX_ROOT_SIZE, BlockContextFieldTag::TransactionsRoot),
-            (RECEIPTS_ROOT_RLP_OFFSET + RECEIPTS_ROOT_SIZE, BlockContextFieldTag::ReceiptsRoot),
-            (NUMBER_RLP_OFFSET + NUMBER_SIZE, BlockContextFieldTag::Number),
-            (GAS_LIMIT_RLP_OFFSET + GAS_LIMIT_SIZE, BlockContextFieldTag::GasLimit),
-            (GAS_USED_RLP_OFFSET + GAS_USED_SIZE, BlockContextFieldTag::GasUsed),
-            (TIMESTAMP_RLP_OFFSET + TIMESTAMP_SIZE, BlockContextFieldTag::Timestamp),
-            (MIX_HASH_RLP_OFFSET + MIX_HASH_SIZE, BlockContextFieldTag::MixHash),
-            (BASE_FEE_RLP_OFFSET + BASE_FEE_SIZE, BlockContextFieldTag::BaseFee),
-            (WITHDRAWALS_ROOT_RLP_OFFSET + WITHDRAWALS_ROOT_SIZE, BlockContextFieldTag::WithdrawalsRoot),
-        ].iter() {
-            region.assign_fixed(|| "block_table_tag", self.blockhash_cols.block_table_tag, offset-1, || Value::known(F::from(*tag as u64))).unwrap();
-            region.assign_fixed(|| "block_table_index", self.blockhash_cols.block_table_index, offset-1, || Value::known(F::zero())).unwrap();
+            (
+                BENEFICIARY_RLP_OFFSET + BENEFICIARY_SIZE,
+                BlockContextFieldTag::Beneficiary,
+            ),
+            (
+                STATE_ROOT_RLP_OFFSET + STATE_ROOT_SIZE,
+                BlockContextFieldTag::StateRoot,
+            ),
+            (
+                TX_ROOT_RLP_OFFSET + TX_ROOT_SIZE,
+                BlockContextFieldTag::TransactionsRoot,
+            ),
+            (
+                RECEIPTS_ROOT_RLP_OFFSET + RECEIPTS_ROOT_SIZE,
+                BlockContextFieldTag::ReceiptsRoot,
+            ),
+            (
+                NUMBER_RLP_OFFSET + NUMBER_SIZE,
+                BlockContextFieldTag::Number,
+            ),
+            (
+                GAS_LIMIT_RLP_OFFSET + GAS_LIMIT_SIZE,
+                BlockContextFieldTag::GasLimit,
+            ),
+            (
+                GAS_USED_RLP_OFFSET + GAS_USED_SIZE,
+                BlockContextFieldTag::GasUsed,
+            ),
+            (
+                TIMESTAMP_RLP_OFFSET + TIMESTAMP_SIZE,
+                BlockContextFieldTag::Timestamp,
+            ),
+            (
+                MIX_HASH_RLP_OFFSET + MIX_HASH_SIZE,
+                BlockContextFieldTag::MixHash,
+            ),
+            (
+                BASE_FEE_RLP_OFFSET + BASE_FEE_SIZE,
+                BlockContextFieldTag::BaseFee,
+            ),
+            (
+                WITHDRAWALS_ROOT_RLP_OFFSET + WITHDRAWALS_ROOT_SIZE,
+                BlockContextFieldTag::WithdrawalsRoot,
+            ),
+        ]
+        .iter()
+        {
+            region
+                .assign_fixed(
+                    || "block_table_tag",
+                    self.blockhash_cols.block_table_tag,
+                    offset - 1,
+                    || Value::known(F::from(*tag as u64)),
+                )
+                .unwrap();
+            region
+                .assign_fixed(
+                    || "block_table_index",
+                    self.blockhash_cols.block_table_index,
+                    offset - 1,
+                    || Value::known(F::zero()),
+                )
+                .unwrap();
         }
 
         // TODO(George): extend for all parent hashes
-        region.assign_fixed(|| "block_table_tag", self.blockhash_cols.block_table_tag, PARENT_HASH_RLP_OFFSET + PARENT_HASH_SIZE -1, || Value::known(F::from(BlockContextFieldTag::PreviousHash as u64))).unwrap();
-        region.assign_fixed(|| "block_table_index", self.blockhash_cols.block_table_index, PARENT_HASH_RLP_OFFSET + PARENT_HASH_SIZE -1, || Value::known(F::from(255u64))).unwrap();
+        region
+            .assign_fixed(
+                || "block_table_tag",
+                self.blockhash_cols.block_table_tag,
+                PARENT_HASH_RLP_OFFSET + PARENT_HASH_SIZE - 1,
+                || Value::known(F::from(BlockContextFieldTag::PreviousHash as u64)),
+            )
+            .unwrap();
+        region
+            .assign_fixed(
+                || "block_table_index",
+                self.blockhash_cols.block_table_index,
+                PARENT_HASH_RLP_OFFSET + PARENT_HASH_SIZE - 1,
+                || Value::known(F::from(255u64)),
+            )
+            .unwrap();
 
         // Determines if it is a short RLP value
         let lt_chip = LtChip::construct(self.blk_hdr_rlp_is_short);
@@ -2920,7 +3022,7 @@ mod pi_circuit_test {
         );
     }
 
-    fn default_test_block() -> (witness::Block::<Fr>, Address) {
+    fn default_test_block() -> (witness::Block<Fr>, Address) {
         let prover =
             Address::from_slice(&hex::decode("Df08F82De32B8d460adbE8D72043E3a7e25A3B39").unwrap());
 
