@@ -2354,13 +2354,12 @@ impl<F: Field> PiCircuitConfig<F> {
                         field.leading_zeros() / 8
                     } as usize;
 
-                    if offset < field_lead_zeros_num {
-                        length_calc = F::zero();
-                    } else if offset == field_size - 1
-                        && length_calc == F::zero()
-                        && block_header_rlp_byte[base_offset + offset] <= 0x80
+                    if (offset < field_lead_zeros_num)
+                        || // short RLP values have 0 length
+                            (offset == field_size - 1
+                            && length_calc == F::zero()
+                            && block_header_rlp_byte[base_offset + offset] <= 0x80)
                     {
-                        // short RLP values have 0 length
                         length_calc = F::zero();
                     } else {
                         length_calc = F::from((offset - field_lead_zeros_num + 1) as u64);
@@ -2897,10 +2896,10 @@ mod pi_circuit_test {
             for error in errors.iter() {
                 match error {
                     VerifyFailure::CellNotAssigned { .. } => (),
-                    _ => curated_res.push(error.clone()),
+                    _ => curated_res.push(<&halo2_proofs::dev::VerifyFailure>::clone(&error)),
                 };
             }
-            if curated_res.len() != 0 {
+            if !curated_res.is_empty() {
                 return res;
             }
         }
