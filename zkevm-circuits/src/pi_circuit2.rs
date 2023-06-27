@@ -980,6 +980,7 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
             let const_byte = meta.query_fixed(blk_hdr_rlp_const, Rotation::cur());
             let length = meta.query_advice(blk_hdr_rlp_len_calc, Rotation::cur());
             let is_leading_zero = meta.query_advice(blk_hdr_is_leading_zero, Rotation::cur());
+            let is_leading_zero_next = meta.query_advice(blk_hdr_is_leading_zero, Rotation::next());
             let q_total_length = meta.query_selector(q_blk_hdr_total_len);
             let q_reconstruct_cur = meta.query_fixed(q_reconstruct, Rotation::cur());
             let q_reconstruct_next = meta.query_fixed(q_reconstruct, Rotation::next());
@@ -1012,6 +1013,11 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
                 cb.require_boolean("is_leading_zero boolean", is_leading_zero.expr());
                 // `q_rlc_acc` needs to be boolean
                 cb.require_boolean("q_rlc_acc boolean", do_rlc_acc.expr());
+
+                cb.condition(is_leading_zero_next.expr(),
+                |cb| {
+                    cb.require_zero("no RLC for leading zeros", do_rlc_acc.expr())
+                });
 
                 // Covers a corner case where MSB bytes can be skipped by annotating them as
                 // leading zeroes. This can occur when `blk_hdr_is_leading_zero`
