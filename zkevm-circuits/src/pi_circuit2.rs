@@ -2225,213 +2225,139 @@ impl<F: Field> PiCircuitConfig<F> {
             .enable(region, TOTAL_LENGTH_OFFSET)
             .unwrap();
 
-        let number_lead_zeros_num: usize =
-            (public_data.block_constants.number.leading_zeros() / 8) as usize;
-        let mut length_calc;
-        let mut length_calc_inv;
-        for i in 0..32 {
-            for offset in [
+        let mut length_calc = F::zero();
+        for (field_num, (name, base_offset, is_reconstruct)) in [
+            (
+                "parent_hash",
                 PARENT_HASH_RLP_OFFSET,
+                true,
+            ),
+            (
+                "beneficiary",
+                BENEFICIARY_RLP_OFFSET,
+                true,
+            ),
+            (
+                "state_root",
                 STATE_ROOT_RLP_OFFSET,
-                TX_ROOT_RLP_OFFSET,
+                true,
+            ),
+            ("tx_root", TX_ROOT_RLP_OFFSET,
+            true,
+            ),
+            (
+                "receipts_root",
                 RECEIPTS_ROOT_RLP_OFFSET,
-                MIX_HASH_RLP_OFFSET,
+                true,
+            ),
+            (
+                "number",
+                NUMBER_RLP_OFFSET,
+                true,
+            ),
+            ("gas_limit", GAS_LIMIT_RLP_OFFSET,
+            false,
+            ),
+            ("gas_used", GAS_USED_RLP_OFFSET,
+            false,
+            ),
+            ("timestamp", TIMESTAMP_RLP_OFFSET,
+            false,
+            ),
+            ("mix_hash", MIX_HASH_RLP_OFFSET,
+            true,
+            ),
+            (
+                "base_fee_per_gas",
+                BASE_FEE_RLP_OFFSET,
+                false,
+            ),
+            (
+                "withdrawals_root",
                 WITHDRAWALS_ROOT_RLP_OFFSET,
-            ] {
+                true,
+            ),
+        ].iter().enumerate() {
+            for (offset, val) in reconstructed_values[field_num].iter().enumerate() {
                 region
-                    .assign_fixed(
-                        || "q_reconstruct",
-                        self.blockhash_cols.q_reconstruct,
-                        offset + i,
-                        || Value::known(F::one()),
-                    )
-                    .unwrap();
-            }
+                .assign_advice(
+                    || "reconstruct_value for ".to_string() + name,
+                    self.blockhash_cols.blk_hdr_reconstruct_value,
+                    base_offset + offset,
+                    || *val,
+                )
+                .unwrap();
 
-            if i < 20 {
-                region
-                    .assign_advice(
-                        || "reconstruct_value for beneficiary",
-                        self.blockhash_cols.blk_hdr_reconstruct_value,
-                        BENEFICIARY_RLP_OFFSET + i,
-                        || reconstructed_values[1][i],
-                    )
-                    .unwrap();
-                region
-                    .assign_fixed(
-                        || "q_reconstruct for beneficiary",
-                        self.blockhash_cols.q_reconstruct,
-                        BENEFICIARY_RLP_OFFSET + i,
-                        || Value::known(F::one()),
-                    )
-                    .unwrap();
-            }
-
-            if i < 8 {
-                region
-                    .assign_fixed(
-                        || "q_number",
-                        self.blockhash_cols.q_number,
-                        NUMBER_RLP_OFFSET + i,
-                        || Value::known(F::one()),
-                    )
-                    .unwrap();
-                region
-                    .assign_fixed(
-                        || "q_reconstruct for number",
-                        self.blockhash_cols.q_reconstruct,
-                        NUMBER_RLP_OFFSET + i,
-                        || Value::known(F::one()),
-                    )
-                    .unwrap();
-
-                if i < number_lead_zeros_num {
-                    length_calc = F::zero();
-                    length_calc_inv = F::zero();
-                } else {
-                    length_calc = F::from((i - number_lead_zeros_num + 1) as u64);
-                    length_calc_inv = F::from((i - number_lead_zeros_num + 1) as u64)
-                        .invert()
-                        .unwrap_or(F::zero());
+                if *is_reconstruct {
+                    region
+                        .assign_fixed(
+                            || "q_reconstruct for ".to_string() + name,
+                            self.blockhash_cols.q_reconstruct,
+                            base_offset + offset,
+                            || Value::known(F::one()),
+                        )
+                        .unwrap();
                 }
-                if i == 7
-                    && (length_calc == F::one() || length_calc == F::zero())
-                    && block_header_rlp_byte[NUMBER_RLP_OFFSET + i] <= 0x80
-                {
-                    length_calc = F::zero();
-                    length_calc_inv = F::zero();
-                }
-                region
+
+                if [GAS_LIMIT_RLP_OFFSET, GAS_USED_RLP_OFFSET, TIMESTAMP_RLP_OFFSET, BASE_FEE_RLP_OFFSET, NUMBER_RLP_OFFSET].contains(base_offset) {
+                    let field_size: usize;
+                    let field: &U256;
+                    match *base_offset {
+                        GAS_LIMIT_RLP_OFFSET => (field_size, field) = (GAS_LIMIT_RLP_LEN-1, &public_data.block_constants.gas_limit),
+                        GAS_USED_RLP_OFFSET => (field_size, field) = (GAS_USED_RLP_LEN-1, &public_data.gas_used),
+                        TIMESTAMP_RLP_OFFSET => (field_size, field) = (TIMESTAMP_RLP_LEN-1, &public_data.block_constants.timestamp),
+                        BASE_FEE_RLP_OFFSET  => (field_size, field) = (BASE_FEE_RLP_LEN-1, &public_data.block_constants.base_fee),
+                        _ => (field_size, field) = (NUMBER_RLP_LEN-1, &public_data.block_constants.base_fee), // `field` doesn't matter in this case
+                    }
+
+                    let field_lead_zeros_num = if *base_offset == NUMBER_RLP_OFFSET {
+                        public_data.block_constants.number.leading_zeros() / 8
+                    } else {
+                        field.leading_zeros() / 8
+                    } as usize;
+
+                    if offset < field_lead_zeros_num {
+                        length_calc = F::zero();
+                    } else {
+                        if offset == field_size - 1 && length_calc == F::zero() && block_header_rlp_byte[base_offset + offset] <= 0x80 {
+                            // short RLP values have 0 length
+                            length_calc = F::zero();
+                        } else {
+                            length_calc = F::from((offset - field_lead_zeros_num + 1) as u64);
+                        }
+                    }
+
+                    region
                     .assign_advice(
-                        || "number length",
+                        || "length of ".to_string() + name,
                         self.blockhash_cols.blk_hdr_rlp_len_calc,
-                        NUMBER_RLP_OFFSET + i,
+                        base_offset + offset,
                         || Value::known(length_calc),
                     )
                     .unwrap();
-                region
+                    region
                     .assign_advice(
-                        || "number length inverse",
+                        || "inverse length of ".to_string() + name,
                         self.blockhash_cols.blk_hdr_rlp_len_calc_inv,
-                        NUMBER_RLP_OFFSET + i,
-                        || Value::known(length_calc_inv),
+                        base_offset + offset,
+                        || Value::known(length_calc.invert().unwrap_or(F::zero())),
                     )
                     .unwrap();
-                region
-                    .assign_advice(
-                        || "reconstruct_value for number",
-                        self.blockhash_cols.blk_hdr_reconstruct_value,
-                        NUMBER_RLP_OFFSET + i,
-                        || reconstructed_values[5][i],
-                    )
-                    .unwrap();
-            }
 
-            for (str, field, offset) in [
-                (
-                    "gas_limit",
-                    public_data.block_constants.gas_limit,
-                    GAS_LIMIT_RLP_OFFSET,
-                ),
-                ("gas_used", public_data.gas_used, GAS_USED_RLP_OFFSET),
-                (
-                    "timestamp",
-                    public_data.block_constants.timestamp,
-                    TIMESTAMP_RLP_OFFSET,
-                ),
-                (
-                    "base_fee",
-                    public_data.block_constants.base_fee,
-                    BASE_FEE_RLP_OFFSET,
-                ),
-            ]
-            .iter()
-            {
-                let selector = &self.blockhash_cols.q_var_field_256;
-
-                let field_lead_zeros_num: usize = (field.leading_zeros() / 8) as usize;
-                region
-                    .assign_fixed(
-                        || "q_".to_string() + *str,
-                        *selector,
-                        offset + i,
+                    let selector = if *base_offset == NUMBER_RLP_OFFSET {
+                        self.blockhash_cols.q_number
+                    } else {
+                        self.blockhash_cols.q_var_field_256
+                    };
+                    region
+                        .assign_fixed(
+                        || "q_number and q_var_field_256",
+                        selector,
+                        base_offset + offset,
                         || Value::known(F::one()),
                     )
                     .unwrap();
-                if i < field_lead_zeros_num {
-                    length_calc = F::zero();
-                    length_calc_inv = F::zero();
-                } else {
-                    length_calc = F::from((i - field_lead_zeros_num + 1) as u64);
-                    length_calc_inv = F::from((i - field_lead_zeros_num + 1) as u64)
-                        .invert()
-                        .unwrap_or(F::zero());
                 }
-                if i == 31
-                    && (length_calc == F::one() || length_calc == F::zero())
-                    && block_header_rlp_byte[offset + i] <= 0x80
-                {
-                    length_calc = F::zero();
-                    length_calc_inv = F::zero();
-                }
-                region
-                    .assign_advice(
-                        || String::from(*str) + " length",
-                        self.blockhash_cols.blk_hdr_rlp_len_calc,
-                        offset + i,
-                        || Value::known(length_calc),
-                    )
-                    .unwrap();
-                region
-                    .assign_advice(
-                        || String::from(*str) + " length inverse",
-                        self.blockhash_cols.blk_hdr_rlp_len_calc_inv,
-                        offset + i,
-                        || Value::known(length_calc_inv),
-                    )
-                    .unwrap();
-            }
-
-            for (name, base_offset, reconstructed_val) in [
-                (
-                    "parent_hash",
-                    PARENT_HASH_RLP_OFFSET,
-                    &reconstructed_values[0],
-                ),
-                (
-                    "state_root",
-                    STATE_ROOT_RLP_OFFSET,
-                    &reconstructed_values[2],
-                ),
-                ("tx_root", TX_ROOT_RLP_OFFSET, &reconstructed_values[3]),
-                (
-                    "receipts_root",
-                    RECEIPTS_ROOT_RLP_OFFSET,
-                    &reconstructed_values[4],
-                ),
-                ("gas_limit", GAS_LIMIT_RLP_OFFSET, &reconstructed_values[6]),
-                ("gas_used", GAS_USED_RLP_OFFSET, &reconstructed_values[7]),
-                ("timestamp", TIMESTAMP_RLP_OFFSET, &reconstructed_values[8]),
-                ("mix_hash", MIX_HASH_RLP_OFFSET, &reconstructed_values[9]),
-                (
-                    "base_fee_per_gas",
-                    BASE_FEE_RLP_OFFSET,
-                    &reconstructed_values[10],
-                ),
-                (
-                    "withdrawals_root",
-                    WITHDRAWALS_ROOT_RLP_OFFSET,
-                    &reconstructed_values[11],
-                ),
-            ] {
-                region
-                    .assign_advice(
-                        || "reconstruct_value for ".to_string() + name,
-                        self.blockhash_cols.blk_hdr_reconstruct_value,
-                        base_offset + i,
-                        || reconstructed_val[i],
-                    )
-                    .unwrap();
             }
         }
 
