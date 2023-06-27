@@ -979,6 +979,7 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
             let byte_next = meta.query_advice(blk_hdr_rlp, Rotation::next());
             let const_byte = meta.query_fixed(blk_hdr_rlp_const, Rotation::cur());
             let length = meta.query_advice(blk_hdr_rlp_len_calc, Rotation::cur());
+            let length_next = meta.query_advice(blk_hdr_rlp_len_calc, Rotation::next());
             let is_leading_zero = meta.query_advice(blk_hdr_is_leading_zero, Rotation::cur());
             let is_leading_zero_next = meta.query_advice(blk_hdr_is_leading_zero, Rotation::next());
             let q_total_length = meta.query_selector(q_blk_hdr_total_len);
@@ -1083,7 +1084,7 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
                     // encoding)
                     let rlp_is_short = rlp_is_short.is_lt(meta, Some(Rotation::next()));
                     cb.condition(and::expr([rlp_is_short, length_is_zero.expr()]), |cb| {
-                        cb.require_zero("Length is set to zero for short values", length.clone());
+                        cb.require_zero("Length is set to zero for short values", length_next.expr());
                     });
                 });
 
