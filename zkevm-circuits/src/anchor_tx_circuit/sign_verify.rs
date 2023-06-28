@@ -421,7 +421,8 @@ impl<F: Field> SignVerifyConfig<F> {
             |ref mut region| {
                 self.q_check.enable(region, 0)?;
 
-                let msg_hash = U256::from_little_endian(&anchor_tx.tx_sign_hash.to_fixed_bytes());
+                let msg_hash =
+                    U256::from_little_endian(&anchor_tx.tx_sign_hash.unwrap().to_fixed_bytes());
                 self.load_mul_add(region, msg_hash)?;
                 let mut offset = 0;
                 for (annotation, tag, do_check_equal_to_gx2, value) in [
