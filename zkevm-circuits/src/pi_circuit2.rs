@@ -116,7 +116,7 @@ const BLOCKHASH_TOTAL_ROWS: usize = WITHDRAWALS_ROOT_RLP_OFFSET + WITHDRAWALS_RO
 
 // Absolute row number of the row where the LSB of the total RLP length is
 // located
-const TOTAL_LENGTH_OFFSET: usize = 2;
+const TOTAL_LENGTH_OFFSET: i32 = 2;
 
 lazy_static! {
     static ref OMMERS_HASH: H256 = H256::from_slice(
@@ -169,7 +169,6 @@ struct BlockhashColumns {
     q_blk_hdr_rlp_const: Selector,
     blk_hdr_rlp_len_calc: Column<Advice>,
     blk_hdr_rlp_len_calc_inv: Column<Advice>,
-    q_blk_hdr_total_len: Selector,
     blk_hdr_reconstruct_value: Column<Advice>,
     block_table_tag: Column<Fixed>,
     block_table_index: Column<Fixed>,
@@ -587,7 +586,6 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
 
         let blk_hdr_rlp_len_calc = meta.advice_column();
         let blk_hdr_rlp_len_calc_inv = meta.advice_column();
-        let q_blk_hdr_total_len = meta.complex_selector();
         let blk_hdr_reconstruct_value = meta.advice_column();
         let block_table_tag = meta.fixed_column();
         let block_table_index = meta.fixed_column();
@@ -610,7 +608,6 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
             q_blk_hdr_rlp_const,
             blk_hdr_rlp_len_calc,
             blk_hdr_rlp_len_calc_inv,
-            q_blk_hdr_total_len,
             blk_hdr_reconstruct_value,
             q_reconstruct,
             block_table_tag,
@@ -982,7 +979,6 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
             let length_next = meta.query_advice(blk_hdr_rlp_len_calc, Rotation::next());
             let is_leading_zero = meta.query_advice(blk_hdr_is_leading_zero, Rotation::cur());
             let is_leading_zero_next = meta.query_advice(blk_hdr_is_leading_zero, Rotation::next());
-            let q_total_length = meta.query_selector(q_blk_hdr_total_len);
             let q_reconstruct_cur = meta.query_fixed(q_reconstruct, Rotation::cur());
             let q_reconstruct_next = meta.query_fixed(q_reconstruct, Rotation::next());
             let do_rlc_acc = meta.query_advice(blk_hdr_do_rlc_acc, Rotation::cur());
@@ -1083,23 +1079,43 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
 
                     // The length is also set to 0 when the RLP encoding is short (single RLP byte
                     // encoding)
-                    cb.condition(and::expr([rlp_is_short_next.clone(), length_is_zero.expr()]), |cb| {
-                        cb.require_zero("Length is set to zero for short values", length_next.expr());
-                    });
+                    cb.condition(
+                        and::expr([rlp_is_short_next.clone(), length_is_zero.expr()]),
+                        |cb| {
+                            cb.require_zero(
+                                "Length is set to zero for short values",
+                                length_next.expr(),
+                            );
+                        },
+                    );
                 });
 
                 // Check RLP encoding
-                cb.condition(and::expr([not::expr(q_field.clone()), q_field_next.expr()]), |cb| {
-                    let length = meta.query_advice(blk_hdr_rlp_len_calc, Rotation(var_size as i32));
-                    cb.require_equal("RLP length", byte.expr(), 0x80.expr() + length.expr());
-                });
+                cb.condition(
+                    and::expr([not::expr(q_field.clone()), q_field_next.expr()]),
+                    |cb| {
+                        let length =
+                            meta.query_advice(blk_hdr_rlp_len_calc, Rotation(var_size as i32));
+                        cb.require_equal("RLP length", byte.expr(), 0x80.expr() + length.expr());
+                    },
+                );
 
                 // Artiicial RLP headers are not included in RLC
-                let rlp_short_or_zero = rlp_is_short.is_lt(meta, Some(Rotation(-(var_size as i32))));
-                cb.condition(and::expr([not::expr(q_field_next), q_field.expr(), length_is_zero.expr(), rlp_short_or_zero]), |cb| {
-                    let do_rlc_acc_header = meta.query_advice(blk_hdr_do_rlc_acc, Rotation(-(var_size as i32)));
-                    cb.require_zero("no RLC for leading zeros", do_rlc_acc_header.expr())
-                }); 
+                let rlp_short_or_zero =
+                    rlp_is_short.is_lt(meta, Some(Rotation(-(var_size as i32))));
+                cb.condition(
+                    and::expr([
+                        not::expr(q_field_next),
+                        q_field.expr(),
+                        length_is_zero.expr(),
+                        rlp_short_or_zero,
+                    ]),
+                    |cb| {
+                        let do_rlc_acc_header =
+                            meta.query_advice(blk_hdr_do_rlc_acc, Rotation(-(var_size as i32)));
+                        cb.require_zero("no RLC for leading zeros", do_rlc_acc_header.expr())
+                    },
+                );
             }
 
             // Check total length of RLP stream.
@@ -1111,16 +1127,14 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
             //   size field) = 527 + 4*32+1*8 = 663 (0x0297)
             // - Actual total length: minimum total length + length of all variable size
             //   fields (number, gas_limit, gas_used, timestamp, base fee).
-            cb.condition(q_total_length, |cb| {
+            cb.condition(q_rlc_start.expr(), |cb| {
                 let mut get_len = |offset: usize| {
                     meta.query_advice(
                         blk_hdr_rlp_len_calc,
-                        // The length of a field is located at the its last row
-                        // We need to adjust the offset by the current row number
-                        // (TOTAL_LENGTH_OFFSET) Since the `offset` given
-                        // is the first byte of the next field, we need to
+                        // The length of a field is located at its last row
+                        // Since the `offset` given is the first byte of the next field, we need to
                         // remove 1 row to target the last byte of the actual field
-                        Rotation((offset - TOTAL_LENGTH_OFFSET - 1).try_into().unwrap()),
+                        Rotation((offset - 1).try_into().unwrap()),
                     )
                 };
                 let number_len = get_len(NUMBER_RLP_OFFSET + NUMBER_SIZE);
@@ -1131,7 +1145,7 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
                 // Only check the LSB of the length (the MSB is always 0x02!).
                 cb.require_equal(
                     "total_len",
-                    byte.expr(),
+                    meta.query_advice(blk_hdr_rlp, Rotation(TOTAL_LENGTH_OFFSET)),
                     0x0F.expr()
                         + number_len
                         + gas_limit_len
@@ -2279,11 +2293,6 @@ impl<F: Field> PiCircuitConfig<F> {
                     .unwrap();
             }
         }
-
-        self.blockhash_cols
-            .q_blk_hdr_total_len
-            .enable(region, TOTAL_LENGTH_OFFSET)
-            .unwrap();
 
         let mut length_calc = F::zero();
         for (field_num, (name, base_offset, is_reconstruct)) in [
