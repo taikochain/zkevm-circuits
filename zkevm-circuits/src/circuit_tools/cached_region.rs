@@ -29,12 +29,12 @@ pub struct CachedRegion<'r, 'b, F: Field, S: ChallengeSet<F>> {
     challenges: &'r S,
     disable_description: bool,
     regions: Vec<(usize, usize)>,
-    pub r: F,
-    pub keccak_r: F,
+    pub le_r: F,
+    pub be_r: F,
 }
 
 impl<'r, 'b, F: Field, S: ChallengeSet<F>> CachedRegion<'r, 'b, F, S> {
-    pub(crate) fn new(region: &'r mut Region<'b, F>, challenges: &'r S, r: F, keccak_r: F) -> Self {
+    pub(crate) fn new(region: &'r mut Region<'b, F>, challenges: &'r S, le_r: F, be_r: F) -> Self {
         Self {
             region,
             advice: HashMap::new(),
@@ -42,8 +42,8 @@ impl<'r, 'b, F: Field, S: ChallengeSet<F>> CachedRegion<'r, 'b, F, S> {
             challenges,
             disable_description: false,
             regions: Vec::new(),
-            r,
-            keccak_r,
+            le_r,
+            be_r,
         }
     }
 
@@ -63,7 +63,6 @@ impl<'r, 'b, F: Field, S: ChallengeSet<F>> CachedRegion<'r, 'b, F, S> {
         &mut self,
         cb: &ConstraintBuilder<F, C>,
     ) -> Result<(), Error> {
-        // println!("assign stored expressions {:?}", self.regions);
         for (offset, region_id) in self.regions.clone() {
             for stored_expression in cb.get_stored_expressions(region_id).iter() {
                 // println!("stored expression: {}", stored_expression.name);

@@ -749,8 +749,8 @@ impl<F: Field> RLPItemGadget<F> {
     pub(crate) fn rlc_rlp(&self, cb: &mut MPTConstraintBuilder<F>) -> Expression<F> {
         circuit!([meta, cb], {
             matchx! {
-                self.value.is_string() => self.value.rlc_rlp(&cb.keccak_r),
-                self.list.is_list() => self.list.rlc_rlp(&cb.keccak_r),
+                self.value.is_string() => self.value.rlc_rlp(&cb.be_r),
+                self.list.is_list() => self.list.rlc_rlp(&cb.be_r),
             }
         })
     }
@@ -758,8 +758,8 @@ impl<F: Field> RLPItemGadget<F> {
     pub(crate) fn rlc_rlp2(&self, cb: &mut MPTConstraintBuilder<F>) -> Expression<F> {
         circuit!([meta, cb], {
             matchx! {
-                self.value.is_string() => self.value.rlc_rlp2(&cb.keccak_r),
-                self.list.is_list() => self.list.rlc_rlp2(&cb.keccak_r),
+                self.value.is_string() => self.value.rlc_rlp2(&cb.be_r),
+                self.list.is_list() => self.list.rlc_rlp2(&cb.be_r),
             }
         })
     }

@@ -536,7 +536,6 @@ impl<F: Field, C: CellType> ConstraintBuilder<F, C> {
         match stored_expression {
             Some(stored_expression) => stored_expression.cell.expr(),
             None => {
-                // println!("cell_type: {:?}", cell_type);
                 // Require the stored value to equal the value of the expression
                 let cell = self.query_one(cell_type);
                 let name = format!("{} (stored expression)", name);
