@@ -1150,7 +1150,8 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
             let q_var_field_256_after_next = meta.query_fixed(q_var_field_256, Rotation(2));
             let q_var_field_256_next = meta.query_fixed(q_var_field_256, Rotation::next());
             // RLC all bytes that are not leading zeros or headers of variable sized fields.
-            // Cases for the variable sized field headers are checked in "RLC all non-artificial headers"
+            // Cases for the variable sized field headers are checked in "RLC all
+            // non-artificial headers"
             cb.condition(
                 and::expr([
                     q_enabled.expr(),
