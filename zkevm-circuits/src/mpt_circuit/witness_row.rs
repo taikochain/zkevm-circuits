@@ -243,6 +243,7 @@ impl<F: Field> MptWitnessRow<F> {
 }
 
 // TODO(Brecht): Do all of this on the MPT proof generation side
+#[allow(clippy::collapsible_else_if)]
 pub(crate) fn prepare_witness<F: Field>(witness: &mut [MptWitnessRow<F>]) -> Vec<Node> {
     let mut key_rlp_bytes = Vec::new();
     for (_, row) in witness
@@ -274,7 +275,6 @@ pub(crate) fn prepare_witness<F: Field>(witness: &mut [MptWitnessRow<F>]) -> Vec
         }
 
         if row.get_type() == MptWitnessRowType::BranchChild {
-            // println!("- {:?}", row.bytes);
             let mut child_s_bytes = row.bytes[0..34].to_owned();
             if child_s_bytes[1] == 160 {
                 child_s_bytes[0] = 0;
@@ -301,13 +301,11 @@ pub(crate) fn prepare_witness<F: Field>(witness: &mut [MptWitnessRow<F>]) -> Vec
                 row.bytes[68..].to_owned(),
             ]
             .concat();
-            // println!("+ {:?}", row.bytes);
         }
 
         if row.get_type() == MptWitnessRowType::ExtensionNodeS
             || row.get_type() == MptWitnessRowType::ExtensionNodeC
         {
-            // println!("- {:?}", row.bytes);
             let mut value_bytes = row.bytes[34..68].to_owned();
             if value_bytes[1] == 160 {
                 value_bytes[0] = 0;
@@ -323,7 +321,6 @@ pub(crate) fn prepare_witness<F: Field>(witness: &mut [MptWitnessRow<F>]) -> Vec
                 row.bytes[68..].to_owned(),
             ]
             .concat();
-            // println!("+ {:?}", row.bytes);
         }
 
         // Separate the list rlp bytes from the key bytes
@@ -347,9 +344,7 @@ pub(crate) fn prepare_witness<F: Field>(witness: &mut [MptWitnessRow<F>]) -> Vec
             // Currently the list rlp bytes are dropped for non-key row, restore them here
             if key_bytes[0] < RLP_LIST_SHORT && row.get_type() != MptWitnessRowType::ExtensionNodeS
             {
-                for idx in 0..key_rlp_bytes.len() {
-                    key_bytes[idx] = key_rlp_bytes[idx];
-                }
+                key_bytes[..key_rlp_bytes.len()].copy_from_slice(&key_rlp_bytes[..]);
             }
 
             const RLP_LIST_LONG_1: u8 = RLP_LIST_LONG + 1;
@@ -357,12 +352,12 @@ pub(crate) fn prepare_witness<F: Field>(witness: &mut [MptWitnessRow<F>]) -> Vec
             let mut is_short = false;
             let mut is_long = false;
             let mut is_very_long = false;
-            let mut is_string = false;
+            let mut _is_string = false;
             match key_bytes[0] {
                 RLP_LIST_SHORT..=RLP_LIST_LONG => is_short = true,
                 RLP_LIST_LONG_1 => is_long = true,
                 RLP_LIST_LONG_2 => is_very_long = true,
-                _ => is_string = true,
+                _ => _is_string = true,
             }
 
             let num_rlp_bytes = if is_short {
@@ -374,14 +369,10 @@ pub(crate) fn prepare_witness<F: Field>(witness: &mut [MptWitnessRow<F>]) -> Vec
             } else {
                 if row.get_type() == MptWitnessRowType::ExtensionNodeS {
                     0
-                } else if is_string {
-                    unreachable!()
                 } else {
                     unreachable!()
                 }
             };
-
-            // println!("bytes: {:?}", key_bytes);
             row.rlp_bytes = key_bytes[..num_rlp_bytes].to_vec();
             for byte in key_bytes[..num_rlp_bytes].iter_mut() {
                 *byte = 0;
@@ -394,9 +385,6 @@ pub(crate) fn prepare_witness<F: Field>(witness: &mut [MptWitnessRow<F>]) -> Vec
             {
                 key_rlp_bytes = row.rlp_bytes.clone();
             }
-
-            // println!("list : {:?}", row.rlp_bytes);
-            // println!("key  : {:?}", row.bytes);
         }
 
         // Separate the RLP bytes and shift the value bytes to the start of the row
@@ -486,7 +474,6 @@ pub(crate) fn prepare_witness<F: Field>(witness: &mut [MptWitnessRow<F>]) -> Vec
         .collect::<Vec<_>>();
     let mut offset = 0;
     while offset < witness.len() {
-        // println!("offset: {}", offset);
         let mut new_proof = offset == 0;
         if offset > 0 {
             let row_prev = witness[offset - 1].clone();
@@ -514,17 +501,18 @@ pub(crate) fn prepare_witness<F: Field>(witness: &mut [MptWitnessRow<F>]) -> Vec
             node_rows[StartRowType::RootC as usize] = new_row.c();
 
             let start_node = StartNode {
-                proof_type: new_row.proof_type.clone(),
+                proof_type: new_row.proof_type,
             };
-            let mut node = Node::default();
-            node.start = Some(start_node);
-            node.values = node_rows;
-            nodes.push(node);
+            nodes.push(Node {
+                start: Some(start_node),
+                values: node_rows,
+                ..Default::default()
+            });
         }
 
         if witness[offset].get_type() == MptWitnessRowType::InitBranch {
             let row_init = witness[offset].to_owned();
-            let is_placeholder = row_init.is_placeholder.clone();
+            let is_placeholder = row_init.is_placeholder;
             let is_extension = row_init.is_extension;
             let modified_index = row_init.modified_index;
             let mut drifted_index = row_init.drifted_index;
@@ -543,9 +531,7 @@ pub(crate) fn prepare_witness<F: Field>(witness: &mut [MptWitnessRow<F>]) -> Vec
             let ext_list_rlp_bytes = witness[offset + 17].rlp_bytes.to_owned();
 
             let mut node_rows = vec![Vec::new(); ExtensionBranchRowType::Count as usize];
-            for idx in 0..ARITY + 1 {
-                node_rows[idx] = child_bytes[idx].clone();
-            }
+            node_rows[..(ARITY + 1)].clone_from_slice(&child_bytes[..(ARITY + 1)]);
             node_rows[ExtensionBranchRowType::KeyS as usize] = witness[offset + 17].s();
             node_rows[ExtensionBranchRowType::ValueS as usize] = witness[offset + 17].c();
             node_rows[ExtensionBranchRowType::KeyC as usize] = witness[offset + 18].s();
@@ -564,12 +550,13 @@ pub(crate) fn prepare_witness<F: Field>(witness: &mut [MptWitnessRow<F>]) -> Vec
                     list_rlp_bytes: branch_list_rlp_bytes,
                 },
             };
-            let mut node = Node::default();
-            node.extension_branch = Some(extension_branch_node);
-            node.values = node_rows;
-            nodes.push(node);
+            nodes.push(Node {
+                extension_branch: Some(extension_branch_node),
+                values: node_rows,
+                ..Default::default()
+            });
         } else if witness[offset].get_type() == MptWitnessRowType::StorageLeafSKey {
-            let row_key = [&witness[offset + 0], &witness[offset + 2]];
+            let row_key = [&witness[offset], &witness[offset + 2]];
             let row_value = [&witness[offset + 1], &witness[offset + 3]];
             let row_drifted = &witness[offset + 4];
             let row_wrong = &witness[offset + 5];
@@ -600,10 +587,11 @@ pub(crate) fn prepare_witness<F: Field>(witness: &mut [MptWitnessRow<F>]) -> Vec
                 drifted_rlp_bytes,
                 wrong_rlp_bytes,
             };
-            let mut node = Node::default();
-            node.storage = Some(storage_node);
-            node.values = node_rows;
-            nodes.push(node);
+            nodes.push(Node {
+                storage: Some(storage_node),
+                values: node_rows,
+                ..Default::default()
+            });
         } else if witness[offset].get_type() == MptWitnessRowType::AccountLeafKeyS {
             let key_s = witness[offset].to_owned();
             let key_c = witness[offset + 1].to_owned();
@@ -650,10 +638,11 @@ pub(crate) fn prepare_witness<F: Field>(witness: &mut [MptWitnessRow<F>]) -> Vec
                 drifted_rlp_bytes,
                 wrong_rlp_bytes,
             };
-            let mut node = Node::default();
-            node.account = Some(account_node);
-            node.values = node_rows;
-            nodes.push(node);
+            nodes.push(Node {
+                account: Some(account_node),
+                values: node_rows,
+                ..Default::default()
+            });
         }
     }
 
@@ -661,10 +650,11 @@ pub(crate) fn prepare_witness<F: Field>(witness: &mut [MptWitnessRow<F>]) -> Vec
     let start_node = StartNode {
         proof_type: MPTProofType::Disabled,
     };
-    let mut node = Node::default();
-    node.start = Some(start_node);
-    node.values = vec![vec![0; 34]; StartRowType::Count as usize];
-    nodes.push(node);
+    nodes.push(Node {
+        start: Some(start_node),
+        values: vec![vec![0; 34]; StartRowType::Count as usize],
+        ..Default::default()
+    });
 
     nodes
 }
