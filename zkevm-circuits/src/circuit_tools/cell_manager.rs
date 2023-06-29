@@ -112,16 +112,16 @@ pub struct CellConfig<C: CellType> {
     pub cell_type: C,
     pub num_columns: usize,
     pub phase: u8,
-    pub is_permute: bool,
+    pub permutable: bool,
 }
 
 impl<C: CellType> From<(C, usize, u8, bool)> for CellConfig<C> {
-    fn from((cell_type, num_columns, phase, is_permute): (C, usize, u8, bool)) -> Self {
+    fn from((cell_type, num_columns, phase, permutable): (C, usize, u8, bool)) -> Self {
         Self {
             cell_type,
             num_columns,
             phase,
-            is_permute,
+            permutable,
         }
     }
 }
@@ -138,7 +138,7 @@ impl<C: CellType> CellConfig<C> {
             };
             columns.push(tmp);
         }
-        if self.is_permute {
+        if self.permutable {
             let _ = columns
                 .iter()
                 .map(|c| meta.enable_equality(*c))
