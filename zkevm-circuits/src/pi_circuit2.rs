@@ -116,40 +116,34 @@ impl PublicData {
     }
 
     fn default<F: Default>() -> Self {
-        Self::new::<F>(
-            &witness::Block::default(),
-            &witness::ProtocolInstance::default(),
-        )
+        Self::new::<F>(&witness::Block::default())
     }
 
     /// create PublicData from block and taiko
-    pub fn new<F>(
-        block: &witness::Block<F>,
-        protocol_instance: &witness::ProtocolInstance,
-    ) -> Self {
+    pub fn new<F>(block: &witness::Block<F>) -> Self {
         use witness::left_shift;
-        let field9 = left_shift(protocol_instance.prover, 96)
-            + left_shift(protocol_instance.parent_gas_used as u64, 64)
-            + left_shift(protocol_instance.gas_used as u64, 32);
+        let field9 = left_shift(block.protocol_instance.prover, 96)
+            + left_shift(block.protocol_instance.parent_gas_used as u64, 64)
+            + left_shift(block.protocol_instance.gas_used as u64, 32);
 
-        let field10 = left_shift(protocol_instance.block_max_gas_limit, 192)
-            + left_shift(protocol_instance.max_transactions_per_block, 128)
-            + left_shift(protocol_instance.max_bytes_per_tx_list, 64);
+        let field10 = left_shift(block.protocol_instance.block_max_gas_limit, 192)
+            + left_shift(block.protocol_instance.max_transactions_per_block, 128)
+            + left_shift(block.protocol_instance.max_bytes_per_tx_list, 64);
         PublicData {
-            l1_signal_service: protocol_instance.l1_signal_service.to_word(),
-            l2_signal_service: protocol_instance.l2_signal_service.to_word(),
-            l2_contract: protocol_instance.l2_contract.to_word(),
-            meta_hash: protocol_instance.meta_hash.hash().to_word(),
-            block_hash: protocol_instance.block_hash.to_word(),
-            parent_hash: protocol_instance.parent_hash.to_word(),
-            signal_root: protocol_instance.signal_root.to_word(),
-            graffiti: protocol_instance.graffiti.to_word(),
-            prover: protocol_instance.prover,
-            parent_gas_used: protocol_instance.parent_gas_used,
-            gas_used: protocol_instance.gas_used,
-            block_max_gas_limit: protocol_instance.block_max_gas_limit,
-            max_transactions_per_block: protocol_instance.max_transactions_per_block,
-            max_bytes_per_tx_list: protocol_instance.max_bytes_per_tx_list,
+            l1_signal_service: block.protocol_instance.l1_signal_service.to_word(),
+            l2_signal_service: block.protocol_instance.l2_signal_service.to_word(),
+            l2_contract: block.protocol_instance.l2_contract.to_word(),
+            meta_hash: block.protocol_instance.meta_hash.hash().to_word(),
+            block_hash: block.protocol_instance.block_hash.to_word(),
+            parent_hash: block.protocol_instance.parent_hash.to_word(),
+            signal_root: block.protocol_instance.signal_root.to_word(),
+            graffiti: block.protocol_instance.graffiti.to_word(),
+            prover: block.protocol_instance.prover,
+            parent_gas_used: block.protocol_instance.parent_gas_used,
+            gas_used: block.protocol_instance.gas_used,
+            block_max_gas_limit: block.protocol_instance.block_max_gas_limit,
+            max_transactions_per_block: block.protocol_instance.max_transactions_per_block,
+            max_bytes_per_tx_list: block.protocol_instance.max_bytes_per_tx_list,
             field9,
             field10,
             block_context: block.context.clone(),
@@ -549,7 +543,7 @@ impl<F: Field> SubCircuit<F> for PiCircuit<F> {
     }
 
     fn new_from_block(block: &witness::Block<F>) -> Self {
-        PiCircuit::new(PublicData::new(block, &block.protocol_instance))
+        PiCircuit::new(PublicData::new(block))
     }
 
     /// Compute the public inputs for this circuit.
@@ -655,7 +649,7 @@ mod pi_circuit_test {
 
     use super::*;
 
-    use eth_types::{ToScalar, H64, U256, U64};
+    use eth_types::ToScalar;
     use halo2_proofs::{
         dev::{MockProver, VerifyFailure},
         halo2curves::bn256::Fr,
@@ -763,36 +757,17 @@ mod pi_circuit_test {
 
     #[test]
     fn test_verify() {
-        let prover =
-            Address::from_slice(&hex::decode("Df08F82De32B8d460adbE8D72043E3a7e25A3B39").unwrap());
-
-        let logs_bloom:[u8;256] = hex::decode("112d60abc05141f1302248e0f4329627f002380f1413820692911863e7d0871261aa07e90cc01a10c3ce589153570dc2db27b8783aa52bc19a5a4a836722e813190401b4214c3908cb8b468b510c3fe482603b00ca694c806206bf099279919c334541094bd2e085210373c0b064083242d727790d2eecdb2e0b90353b66461050447626366328f0965602e8a9802d25740ad4a33162142b08a1b15292952de423fac45d235622bb0ef3b2d2d4c21690d280a0b948a8a3012136542c1c4d0955a501a022e1a1a4582220d1ae50ba475d88ce0310721a9076702d29a27283e68c2278b93a1c60d8f812069c250042cc3180a8fd54f034a2da9a03098c32b03445").unwrap().try_into().unwrap();
-
         let mut block = witness::Block::<Fr>::default();
 
         block.eth_block.parent_hash = *OMMERS_HASH;
         block.eth_block.hash = Some(*OMMERS_HASH);
-        block.eth_block.author = Some(prover);
-        block.eth_block.state_root = *OMMERS_HASH;
-        block.eth_block.transactions_root = *OMMERS_HASH;
-        block.eth_block.receipts_root = *OMMERS_HASH;
-        block.eth_block.logs_bloom = Some(logs_bloom.into());
-        block.eth_block.difficulty = U256::from(0);
-        block.eth_block.number = Some(U64::from(300));
-        block.eth_block.gas_limit = U256::from(0);
-        block.eth_block.gas_used = U256::from(0);
-        block.eth_block.timestamp = U256::from(0);
-        block.eth_block.extra_data = eth_types::Bytes::from([0; 0]);
-        block.eth_block.mix_hash = Some(*OMMERS_HASH);
-        block.eth_block.nonce = Some(H64::from([0, 0, 0, 0, 0, 0, 0, 0]));
-        block.eth_block.base_fee_per_gas = Some(U256::from(0));
         block.protocol_instance.block_hash = *OMMERS_HASH;
         block.protocol_instance.parent_hash = *OMMERS_HASH;
         block.context.history_hashes = vec![OMMERS_HASH.to_word()];
         block.context.block_hash = OMMERS_HASH.to_word();
         block.context.number = 300.into();
 
-        let public_data = PublicData::new(&block, &witness::ProtocolInstance::default());
+        let public_data = PublicData::new(&block);
 
         let k = 17;
 
