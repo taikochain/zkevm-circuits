@@ -6,7 +6,7 @@ use zkevm_circuits::{
     root_circuit::{
         taiko_aggregation::AccumulationSchemeType, KzgDk, KzgSvk, TaikoAggregationCircuit,
     },
-    taiko_super_circuit::{test::block_anchor_1tx, SuperCircuit},
+    taiko_super_circuit::{test::block_1tx, SuperCircuit},
     witness::ProtocolInstance,
 };
 
@@ -154,7 +154,7 @@ fn gen_application_snark(
         ..Default::default()
     };
     let (_, super_circuit, _, _) = SuperCircuit::<_>::build(
-        block_anchor_1tx(&protocol_instance),
+        block_1tx(&protocol_instance),
         circuits_params,
         protocol_instance,
     )
