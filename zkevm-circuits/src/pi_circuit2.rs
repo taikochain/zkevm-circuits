@@ -46,9 +46,13 @@ use lazy_static::lazy_static;
 
 /// Fixed by the spec
 const TX_LEN: usize = 10;
-// Total number of entries in the block table
-const BLOCK_TABLE_LEN: usize = 7 + 256 + 6;
-const EXTRA_LEN: usize = 2;
+// Total number of entries in the block table:
+// 1 empty/zero row
+// + 15 header fields (coinbase, timestamp, number, difficulty, gas_limit,
+// base_fee, blockhash, beneficiary, state_root, transactions_root,
+// receipts_root, gas_used, mix_hash, withdrawals_root)
+// + 256 previous hashes
+const BLOCK_TABLE_LEN: usize = 16 + 256;
 const ZERO_BYTE_GAS_COST: u64 = 4;
 const NONZERO_BYTE_GAS_COST: u64 = 16;
 const MAX_DEGREE: usize = 8;
@@ -715,7 +719,7 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
             vec![q_block_table * (block_value - rpi_block_value)]
         });
 
-        let offset = BLOCK_TABLE_LEN + 1 + EXTRA_LEN + 3;
+        let offset = BLOCK_TABLE_LEN + 3; // +3 for prover, txs_hash_hi, txs_hash_lo
         let tx_table_len = max_txs * TX_LEN + 1;
 
         //  0.3 Tx table -> {tx_id, index, value} column match with raw_public_inputs
@@ -1050,6 +1054,7 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
             for (q_value, var_size) in [(q_number, NUMBER_SIZE), (q_var_field_256, WORD_SIZE)] {
                 let q_field = meta.query_fixed(q_value, Rotation::cur());
                 let q_field_next = meta.query_fixed(q_value, Rotation::next());
+                let q_field_prev = meta.query_fixed(q_value, Rotation::prev());
                 // Only check while we're processing the field
                 cb.condition(q_field.expr(), |cb| {
                     // Length needs to remain zero when skipping over leading zeros
@@ -1101,22 +1106,72 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
                 );
 
                 // Artiicial RLP headers are not included in RLC
+                // `rlp_short_or_zero` checks if the field's RLP header is <0x81 which,
+                // in combination with the fact that an RLP header can be >=0x80
+                // means that `rlp_short_or_zero` checks if the header is = 0x80 and thus
+                // checks if the field is short or zero
                 let rlp_short_or_zero =
                     rlp_is_short.is_lt(meta, Some(Rotation(-(var_size as i32))));
+                // For fields that are short or zero we add an artifical header which is not
+                // part of the RLP and needs to be skipped during the RLC
+                // calculation.
                 cb.condition(
                     and::expr([
-                        not::expr(q_field_next),
+                        not::expr(q_field_next.expr()),
                         q_field.expr(),
-                        length_is_zero.expr(),
-                        rlp_short_or_zero,
+                        rlp_short_or_zero.expr(),
                     ]),
                     |cb| {
                         let do_rlc_acc_header =
                             meta.query_advice(blk_hdr_do_rlc_acc, Rotation(-(var_size as i32)));
-                        cb.require_zero("no RLC for leading zeros", do_rlc_acc_header.expr())
+                        cb.require_zero("no RLC for artificial headers", do_rlc_acc_header.expr())
+                    },
+                );
+
+                let is_header_0x80 = rlp_is_short.is_lt(meta, None);
+                cb.condition(
+                    and::expr([
+                        not::expr(is_header_0x80),
+                        not::expr(q_field_prev.expr()),
+                        q_field.expr(),
+                    ]),
+                    |cb| {
+                        cb.require_equal(
+                            "RLC all non-artificial headers",
+                            meta.query_advice(blk_hdr_do_rlc_acc, Rotation::prev()),
+                            1.expr(),
+                        );
                     },
                 );
             }
+
+            let q_number_after_next = meta.query_fixed(q_number, Rotation(2));
+            let q_number_next = meta.query_fixed(q_number, Rotation::next());
+            let q_var_field_256_after_next = meta.query_fixed(q_var_field_256, Rotation(2));
+            let q_var_field_256_next = meta.query_fixed(q_var_field_256, Rotation::next());
+            // RLC all bytes that are not leading zeros or headers of variable sized fields.
+            // Cases for the variable sized field headers are checked in "RLC all non-artificial headers"
+            cb.condition(
+                and::expr([
+                    q_enabled.expr(),
+                    not::expr(is_leading_zero_next.expr()),
+                    not::expr(and::expr([
+                        not::expr(q_number_next.expr()),
+                        q_number_after_next.expr(),
+                    ])),
+                    not::expr(and::expr([
+                        not::expr(q_var_field_256_next.expr()),
+                        q_var_field_256_after_next.expr(),
+                    ])),
+                ]),
+                |cb| {
+                    cb.require_equal(
+                        "RLC all non leading zeros excluding RLP headers",
+                        meta.query_advice(blk_hdr_do_rlc_acc, Rotation::cur()),
+                        1.expr(),
+                    );
+                },
+            );
 
             // Check total length of RLP stream.
             // For the block header, the total RLP length is always two bytes long and only
@@ -1291,11 +1346,8 @@ impl<F: Field> PiCircuitConfig<F> {
     /// Return the number of rows in the circuit
     #[inline]
     fn circuit_block_len(&self) -> usize {
-        // +1 empty row in block table
-        // +3 prover, txs_hash_hi, txs_hash_lo
-        // EXTRA_LEN: state_root, prev_root
-        // total = 269
-        BLOCK_TABLE_LEN + 1 + EXTRA_LEN + 3
+        // +3 for prover, txs_hash_hi, txs_hash_lo
+        BLOCK_TABLE_LEN + 3
     }
 
     #[inline]
