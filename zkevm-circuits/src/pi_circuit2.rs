@@ -55,7 +55,7 @@ const TX_LEN: usize = 10;
 const BLOCK_TABLE_LEN: usize = 16 + 256;
 const ZERO_BYTE_GAS_COST: u64 = 4;
 const NONZERO_BYTE_GAS_COST: u64 = 16;
-const MAX_DEGREE: usize = 8;
+const MAX_DEGREE: usize = 9;
 const BYTE_POW_BASE: u64 = 1 << 8;
 
 const WORD_SIZE: usize = 32;
@@ -223,6 +223,9 @@ pub struct PublicData<F: Field> {
     /// Withdrawals Root
     pub withdrawals_root: H256,
 
+    /// All data of the past 256 blocks
+    pub previous_blocks: Vec<witness::Block::<F>>,
+
     // private values
     block_rlp: Bytes,
     block_hash: H256,
@@ -365,6 +368,8 @@ impl<F: Field> PublicData<F> {
         let (blockhash_blk_hdr_rlp, blockhash_rlp_hash_hi, blockhash_rlp_hash_lo) =
             Self::get_block_header_rlp_from_block(block);
 
+        // Only initializing `previous_blocks` here, these values are set outside of `new`
+        let previous_blocks = vec![witness::Block::<F>::default(); 256];
         PublicData {
             chain_id: block.context.chain_id,
             history_hashes: block.context.history_hashes.clone(),
@@ -398,6 +403,7 @@ impl<F: Field> PublicData<F> {
             gas_used: block.eth_block.gas_used,
             mix_hash: block.eth_block.mix_hash.unwrap_or_else(H256::zero),
             withdrawals_root: block.eth_block.withdrawals_root.unwrap_or_else(H256::zero),
+            previous_blocks: previous_blocks,
         }
     }
 
@@ -1014,10 +1020,6 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
                 cb.require_boolean("is_leading_zero boolean", is_leading_zero.expr());
                 // `q_rlc_acc` needs to be boolean
                 cb.require_boolean("q_rlc_acc boolean", do_rlc_acc.expr());
-                // leading zeros are not included in RLC
-                cb.condition(is_leading_zero_next.expr(), |cb| {
-                    cb.require_zero("no RLC for leading zeros", do_rlc_acc.expr())
-                });
 
                 // Covers a corner case where MSB bytes can be skipped by annotating them as
                 // leading zeroes. This can occur when `blk_hdr_is_leading_zero`
@@ -1105,74 +1107,7 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
                     },
                 );
 
-                // Artiicial RLP headers are not included in RLC
-                // `rlp_short_or_zero` checks if the field's RLP header is <0x81 which,
-                // in combination with the fact that an RLP header can be >=0x80
-                // means that `rlp_short_or_zero` checks if the header is = 0x80 and thus
-                // checks if the field is short or zero
-                let rlp_short_or_zero =
-                    rlp_is_short.is_lt(meta, Some(Rotation(-(var_size as i32))));
-                // For fields that are short or zero we add an artifical header which is not
-                // part of the RLP and needs to be skipped during the RLC
-                // calculation.
-                cb.condition(
-                    and::expr([
-                        not::expr(q_field_next.expr()),
-                        q_field.expr(),
-                        rlp_short_or_zero.expr(),
-                    ]),
-                    |cb| {
-                        let do_rlc_acc_header =
-                            meta.query_advice(blk_hdr_do_rlc_acc, Rotation(-(var_size as i32)));
-                        cb.require_zero("no RLC for artificial headers", do_rlc_acc_header.expr())
-                    },
-                );
-
-                let is_header_0x80 = rlp_is_short.is_lt(meta, None);
-                cb.condition(
-                    and::expr([
-                        not::expr(is_header_0x80),
-                        not::expr(q_field_prev.expr()),
-                        q_field.expr(),
-                    ]),
-                    |cb| {
-                        cb.require_equal(
-                            "RLC all non-artificial headers",
-                            meta.query_advice(blk_hdr_do_rlc_acc, Rotation::prev()),
-                            1.expr(),
-                        );
-                    },
-                );
             }
-
-            let q_number_after_next = meta.query_fixed(q_number, Rotation(2));
-            let q_number_next = meta.query_fixed(q_number, Rotation::next());
-            let q_var_field_256_after_next = meta.query_fixed(q_var_field_256, Rotation(2));
-            let q_var_field_256_next = meta.query_fixed(q_var_field_256, Rotation::next());
-            // RLC all bytes that are not leading zeros or headers of variable sized fields.
-            // Cases for the variable sized field headers are checked in "RLC all
-            // non-artificial headers"
-            cb.condition(
-                and::expr([
-                    q_enabled.expr(),
-                    not::expr(is_leading_zero_next.expr()),
-                    not::expr(and::expr([
-                        not::expr(q_number_next.expr()),
-                        q_number_after_next.expr(),
-                    ])),
-                    not::expr(and::expr([
-                        not::expr(q_var_field_256_next.expr()),
-                        q_var_field_256_after_next.expr(),
-                    ])),
-                ]),
-                |cb| {
-                    cb.require_equal(
-                        "RLC all non leading zeros excluding RLP headers",
-                        meta.query_advice(blk_hdr_do_rlc_acc, Rotation::cur()),
-                        1.expr(),
-                    );
-                },
-            );
 
             // Check total length of RLP stream.
             // For the block header, the total RLP length is always two bytes long and only
@@ -1209,6 +1144,32 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
                         + timestamp_len
                         + base_fee_len,
                 );
+            });
+
+            // Leading zeros artificical headers are not part of the RLC calculation
+            let q_number_next = meta.query_fixed(q_number, Rotation::next());
+            let q_number_after_next = meta.query_fixed(q_number, Rotation(2));
+            let q_var_field_256_next = meta.query_fixed(q_var_field_256, Rotation::next());
+            let q_var_field_256_after_next = meta.query_fixed(q_var_field_256, Rotation(2));
+            let is_number_header = and::expr([not::expr(q_number_next.expr()), q_number_after_next.expr()]);
+            let is_var_field_header = and::expr([not::expr(q_var_field_256_next.expr()), q_var_field_256_after_next.expr()]);
+            let is_number_zero = meta.query_advice(blk_hdr_is_leading_zero, Rotation((NUMBER_SIZE + 1) as i32));
+            let is_var_field_zero = meta.query_advice(blk_hdr_is_leading_zero, Rotation((WORD_SIZE + 1) as i32));
+            let rlp_short_or_zero = rlp_is_short.is_lt(meta, Some(Rotation::next()));
+            // Artificial headers exist for header fields with short values greater than zero
+            let is_artificial_header = and::expr(
+                [
+                 rlp_short_or_zero.expr(),
+                 or::expr([
+                     and::expr([is_number_header, not::expr(is_number_zero.expr())]),
+                     and::expr([is_var_field_header, not::expr(is_var_field_zero.expr())])
+                    ]
+                )]);
+            let no_rlc = or::expr([is_leading_zero_next.expr(), is_artificial_header]);
+
+            let do_rlc_val = select::expr(no_rlc, 0.expr(), 1.expr());
+            cb.condition(q_enabled.expr(), |cb| {
+                cb.require_equal("skip leading zeros and artifical headers in RLC ", meta.query_advice(blk_hdr_do_rlc_acc, Rotation::cur()), do_rlc_val);
             });
 
             // Decode the field values
@@ -1618,6 +1579,7 @@ impl<F: Field> PiCircuitConfig<F> {
         ),
         Error,
     > {
+        // When in negative testing, we need to bypass the actual public_data with some wrong test data
         let pb = test_public_data.as_ref().unwrap_or(public_data);
 
         let block_values = pb.get_block_table_values();
@@ -2189,16 +2151,19 @@ impl<F: Field> PiCircuitConfig<F> {
         &self,
         region: &mut Region<'_, F>,
         public_data: &PublicData<F>,
+        block_number: usize,
         challenges: &Challenges<Value<F>>,
     ) {
+        let block_offset = block_number * BLOCKHASH_TOTAL_ROWS;
         self.blockhash_cols
             .q_blk_hdr_rlc_start
-            .enable(region, 0)
+            .enable(region, block_offset)
             .unwrap();
         self.blockhash_cols
             .q_blk_hdr_rlp_end
-            .enable(region, BLOCKHASH_TOTAL_ROWS - 1)
+            .enable(region, block_offset + BLOCKHASH_TOTAL_ROWS - 1)
             .unwrap();
+
         let (
             block_header_rlp_byte,
             leading_zeros,
@@ -2250,11 +2215,12 @@ impl<F: Field> PiCircuitConfig<F> {
         .concat();
 
         for (offset, rlp_byte) in block_header_rlp_byte.iter().enumerate() {
+            let absolute_offset = block_offset + offset;
             region
                 .assign_advice(
                     || "blk_hdr_rlp",
                     self.blockhash_cols.blk_hdr_rlp,
-                    offset,
+                    absolute_offset,
                     || Value::known(F::from(*rlp_byte as u64)),
                 )
                 .unwrap();
@@ -2262,7 +2228,7 @@ impl<F: Field> PiCircuitConfig<F> {
                 .assign_advice(
                     || "blk_hdr_rlp_inv",
                     self.blockhash_cols.blk_hdr_rlp_inv,
-                    offset,
+                    absolute_offset,
                     || Value::known(F::from((*rlp_byte) as u64).invert().unwrap_or(F::zero())),
                 )
                 .unwrap();
@@ -2270,7 +2236,7 @@ impl<F: Field> PiCircuitConfig<F> {
                 .assign_advice(
                     || "blk_hdr_do_rlc_acc",
                     self.blockhash_cols.blk_hdr_do_rlc_acc,
-                    offset,
+                    absolute_offset,
                     || Value::known(F::from(blk_hdr_do_rlc_acc[offset] as u64)),
                 )
                 .unwrap();
@@ -2278,7 +2244,7 @@ impl<F: Field> PiCircuitConfig<F> {
                 .assign_advice(
                     || "blk_hdr_rlc_acc",
                     self.blockhash_cols.blk_hdr_rlc_acc,
-                    offset,
+                    absolute_offset,
                     || blk_hdr_rlc_acc[offset],
                 )
                 .unwrap();
@@ -2286,14 +2252,14 @@ impl<F: Field> PiCircuitConfig<F> {
                 .assign_advice(
                     || "blk_hdr_is_leading_zero",
                     self.blockhash_cols.blk_hdr_is_leading_zero,
-                    offset,
+                    absolute_offset,
                     || Value::known(F::from(leading_zeros[offset] as u64)),
                 )
                 .unwrap();
 
             self.blockhash_cols
                 .q_blk_hdr_rlp
-                .enable(region, offset)
+                .enable(region, absolute_offset)
                 .unwrap();
         }
 
@@ -2331,18 +2297,19 @@ impl<F: Field> PiCircuitConfig<F> {
         }
 
         for (offset, (v, q)) in rlp_const.iter().enumerate() {
+            let absolute_offset = block_offset + offset;
             region
                 .assign_fixed(
                     || "blk_hdr_rlp_const",
                     self.blockhash_cols.blk_hdr_rlp_const,
-                    offset,
+                    absolute_offset,
                     || Value::known(F::from(*v)),
                 )
                 .unwrap();
             if *q == 1 {
                 self.blockhash_cols
                     .q_blk_hdr_rlp_const
-                    .enable(region, offset)
+                    .enable(region, absolute_offset)
                     .unwrap();
             }
         }
@@ -2366,11 +2333,12 @@ impl<F: Field> PiCircuitConfig<F> {
         .enumerate()
         {
             for (offset, val) in reconstructed_values[field_num].iter().enumerate() {
+                let absolute_offset = block_offset + base_offset + offset;
                 region
                     .assign_advice(
                         || "reconstruct_value for ".to_string() + name,
                         self.blockhash_cols.blk_hdr_reconstruct_value,
-                        base_offset + offset,
+                        absolute_offset,
                         || *val,
                     )
                     .unwrap();
@@ -2380,7 +2348,7 @@ impl<F: Field> PiCircuitConfig<F> {
                         .assign_fixed(
                             || "q_reconstruct for ".to_string() + name,
                             self.blockhash_cols.q_reconstruct,
-                            base_offset + offset,
+                            absolute_offset,
                             || Value::known(F::one()),
                         )
                         .unwrap();
@@ -2444,7 +2412,7 @@ impl<F: Field> PiCircuitConfig<F> {
                         .assign_advice(
                             || "length of ".to_string() + name,
                             self.blockhash_cols.blk_hdr_rlp_len_calc,
-                            base_offset + offset,
+                            absolute_offset,
                             || Value::known(length_calc),
                         )
                         .unwrap();
@@ -2452,7 +2420,7 @@ impl<F: Field> PiCircuitConfig<F> {
                         .assign_advice(
                             || "inverse length of ".to_string() + name,
                             self.blockhash_cols.blk_hdr_rlp_len_calc_inv,
-                            base_offset + offset,
+                            absolute_offset,
                             || Value::known(length_calc.invert().unwrap_or(F::zero())),
                         )
                         .unwrap();
@@ -2466,7 +2434,7 @@ impl<F: Field> PiCircuitConfig<F> {
                         .assign_fixed(
                             || "q_number and q_var_field_256",
                             selector,
-                            base_offset + offset,
+                            absolute_offset,
                             || Value::known(F::one()),
                         )
                         .unwrap();
@@ -2523,11 +2491,12 @@ impl<F: Field> PiCircuitConfig<F> {
         ]
         .iter()
         {
+            let absolute_offset = block_offset + offset - 1;
             region
                 .assign_fixed(
                     || "block_table_tag",
                     self.blockhash_cols.block_table_tag,
-                    offset - 1,
+                    absolute_offset,
                     || Value::known(F::from(*tag as u64)),
                 )
                 .unwrap();
@@ -2535,7 +2504,7 @@ impl<F: Field> PiCircuitConfig<F> {
                 .assign_fixed(
                     || "block_table_index",
                     self.blockhash_cols.block_table_index,
-                    offset - 1,
+                    absolute_offset,
                     || Value::known(F::zero()),
                 )
                 .unwrap();
@@ -2546,7 +2515,7 @@ impl<F: Field> PiCircuitConfig<F> {
             .assign_fixed(
                 || "block_table_tag",
                 self.blockhash_cols.block_table_tag,
-                PARENT_HASH_RLP_OFFSET + PARENT_HASH_SIZE - 1,
+                block_offset + PARENT_HASH_RLP_OFFSET + PARENT_HASH_SIZE - 1,
                 || Value::known(F::from(BlockContextFieldTag::PreviousHash as u64)),
             )
             .unwrap();
@@ -2554,7 +2523,7 @@ impl<F: Field> PiCircuitConfig<F> {
             .assign_fixed(
                 || "block_table_index",
                 self.blockhash_cols.block_table_index,
-                PARENT_HASH_RLP_OFFSET + PARENT_HASH_SIZE - 1,
+                block_offset + PARENT_HASH_RLP_OFFSET + PARENT_HASH_SIZE - 1,
                 || Value::known(F::from(255u64)),
             )
             .unwrap();
@@ -2563,7 +2532,7 @@ impl<F: Field> PiCircuitConfig<F> {
         let lt_chip = LtChip::construct(self.blk_hdr_rlp_is_short);
         for (offset, &byte) in block_header_rlp_byte.iter().enumerate() {
             lt_chip
-                .assign(region, offset, F::from(byte as u64), F::from(0x81))
+                .assign(region, block_offset + offset, F::from(byte as u64), F::from(0x81))
                 .unwrap();
         }
 
@@ -2572,7 +2541,7 @@ impl<F: Field> PiCircuitConfig<F> {
             .assign_advice(
                 || "blk_hdr_hash_hi",
                 self.rpi_encoding,
-                BLOCKHASH_TOTAL_ROWS - 1,
+                block_offset + BLOCKHASH_TOTAL_ROWS - 1,
                 || blk_hdr_hash_hi,
             )
             .unwrap();
@@ -2580,7 +2549,7 @@ impl<F: Field> PiCircuitConfig<F> {
             .assign_advice(
                 || "blk_hdr_hash_lo",
                 self.rpi_encoding,
-                BLOCKHASH_TOTAL_ROWS - 2,
+                block_offset + BLOCKHASH_TOTAL_ROWS - 2,
                 || blk_hdr_hash_lo,
             )
             .unwrap();
@@ -2746,7 +2715,15 @@ impl<F: Field> PiCircuitConfig<F> {
                     offset += 1;
                 }
 
-                self.assign_block_hash_calc(&mut region, public_data, challenges);
+
+                self.assign_block_hash_calc(&mut region, public_data, 0, challenges);
+                // TODO(George): expand to all 256 previous blocks
+                /*
+                for (block_number, prev_block) in public_data.previous_blocks[0..1].iter().enumerate() {
+                    let prev_public_data = PublicData::new(prev_block, public_data.prover, Bytes::default());
+                    self.assign_block_hash_calc(&mut region, &prev_public_data, block_number+1, challenges);
+                }
+                 */
 
                 // NOTE: we add this empty row so as to pass mock prover's check
                 //      otherwise it will emit CellNotAssigned Error
@@ -3007,7 +2984,7 @@ mod pi_circuit_test {
         const MAX_CALLDATA: usize = 8;
         let public_data = PublicData::default();
 
-        let k = 17;
+        let k = 18;
         assert_eq!(
             run::<Fr, MAX_TXS, MAX_CALLDATA>(k, public_data, None, None),
             Ok(())
@@ -3020,7 +2997,7 @@ mod pi_circuit_test {
         const MAX_CALLDATA: usize = 8;
         let public_data = PublicData::default();
 
-        let k = 17;
+        let k = 18;
         match run::<Fr, MAX_TXS, MAX_CALLDATA>(
             k,
             public_data,
@@ -3052,7 +3029,7 @@ mod pi_circuit_test {
         public_data.prover = Address::from_slice(&address_bytes);
 
         let prover: Fr = public_data.prover.to_scalar().unwrap();
-        let k = 17;
+        let k = 18;
         match run::<Fr, MAX_TXS, MAX_CALLDATA>(
             k,
             public_data,
@@ -3089,14 +3066,14 @@ mod pi_circuit_test {
             public_data.transactions.push(eth_tx);
         }
 
-        let k = 17;
+        let k = 18;
         assert_eq!(
             run::<Fr, MAX_TXS, MAX_CALLDATA>(k, public_data, None, None),
             Ok(())
         );
     }
 
-    fn default_test_block() -> (witness::Block<Fr>, Address) {
+    fn default_test_block() -> (witness::Block<Fr>, Address, Vec<witness::Block::<Fr>>) {
         let prover =
             Address::from_slice(&hex::decode("Df08F82De32B8d460adbE8D72043E3a7e25A3B39").unwrap());
 
@@ -3121,17 +3098,20 @@ mod pi_circuit_test {
         block.context.history_hashes[255] =
             U256::from_big_endian(block.eth_block.parent_hash.as_fixed_bytes());
 
-        (block, prover)
+        let previous_blocks: Vec<witness::Block::<Fr>> = vec![witness::Block::<Fr>::default(); 256];
+
+        (block, prover, previous_blocks)
     }
 
     #[test]
     fn test_blockhash_verify() {
         const MAX_TXS: usize = 8;
         const MAX_CALLDATA: usize = 200;
-        let k = 17;
+        let k = 18;
 
-        let (block, prover) = default_test_block();
-        let public_data = PublicData::new(&block, prover, Default::default());
+        let (block, prover, previous_blocks) = default_test_block();
+        let mut public_data = PublicData::new(&block, prover, Default::default());
+        public_data.previous_blocks = previous_blocks;
 
         assert_eq!(
             run::<Fr, MAX_TXS, MAX_CALLDATA>(k, public_data, None, None),
@@ -3143,16 +3123,17 @@ mod pi_circuit_test {
     fn test_blockhash_calc_short_values() {
         const MAX_TXS: usize = 8;
         const MAX_CALLDATA: usize = 200;
-        let k = 17;
+        let k = 18;
 
-        let (mut block, prover) = default_test_block();
+        let (mut block, prover, previous_blocks) = default_test_block();
         block.context.number = U256::from(0x75);
         block.context.gas_limit = 0x76;
         block.eth_block.gas_used = U256::from(0x77);
         block.context.timestamp = U256::from(0x78);
         block.context.base_fee = U256::from(0x79);
 
-        let public_data = PublicData::new(&block, prover, Default::default());
+        let mut public_data = PublicData::new(&block, prover, Default::default());
+        public_data.previous_blocks = previous_blocks;
 
         assert_eq!(
             run::<Fr, MAX_TXS, MAX_CALLDATA>(k, public_data, None, None),
@@ -3164,16 +3145,17 @@ mod pi_circuit_test {
     fn test_blockhash_calc_one_byte_non_short_values() {
         const MAX_TXS: usize = 8;
         const MAX_CALLDATA: usize = 200;
-        let k = 17;
+        let k = 18;
 
-        let (mut block, prover) = default_test_block();
+        let (mut block, prover ,previous_blocks) = default_test_block();
         block.context.number = U256::from(0x81);
         block.context.gas_limit = 0x81;
         block.eth_block.gas_used = U256::from(0x81);
         block.context.timestamp = U256::from(0x81);
         block.context.base_fee = U256::from(0x81);
 
-        let public_data = PublicData::new(&block, prover, Default::default());
+        let mut public_data = PublicData::new(&block, prover, Default::default());
+        public_data.previous_blocks = previous_blocks;
 
         assert_eq!(
             run::<Fr, MAX_TXS, MAX_CALLDATA>(k, public_data, None, None),
@@ -3185,16 +3167,17 @@ mod pi_circuit_test {
     fn test_blockhash_calc_one_byte_non_short_values_2() {
         const MAX_TXS: usize = 8;
         const MAX_CALLDATA: usize = 200;
-        let k = 17;
+        let k = 18;
 
-        let (mut block, prover) = default_test_block();
+        let (mut block, prover, previous_blocks) = default_test_block();
         block.context.number = U256::from(0xFF);
         block.context.gas_limit = 0xFF;
         block.eth_block.gas_used = U256::from(0xFF);
         block.context.timestamp = U256::from(0xFF);
         block.context.base_fee = U256::from(0xFF);
 
-        let public_data = PublicData::new(&block, prover, Default::default());
+        let mut public_data = PublicData::new(&block, prover, Default::default());
+        public_data.previous_blocks = previous_blocks;
 
         assert_eq!(
             run::<Fr, MAX_TXS, MAX_CALLDATA>(k, public_data, None, None),
@@ -3206,16 +3189,17 @@ mod pi_circuit_test {
     fn test_blockhash_calc_leading_zeros() {
         const MAX_TXS: usize = 8;
         const MAX_CALLDATA: usize = 200;
-        let k = 17;
+        let k = 18;
 
-        let (mut block, prover) = default_test_block();
+        let (mut block, prover, previous_blocks) = default_test_block();
         block.context.number = U256::from(0x0090909090909090_u128);
         block.context.gas_limit = 0x0000919191919191;
         block.eth_block.gas_used = U256::from(0x92) << (28 * 8);
         block.context.timestamp = U256::from(0x93) << (27 * 8);
         block.context.base_fee = U256::from(0x94) << (26 * 8);
 
-        let public_data = PublicData::new(&block, prover, Default::default());
+        let mut public_data = PublicData::new(&block, prover, Default::default());
+        public_data.previous_blocks = previous_blocks;
 
         assert_eq!(
             run::<Fr, MAX_TXS, MAX_CALLDATA>(k, public_data, None, None),
@@ -3227,9 +3211,9 @@ mod pi_circuit_test {
     fn test_blockhash_calc_max_lengths() {
         const MAX_TXS: usize = 8;
         const MAX_CALLDATA: usize = 200;
-        let k = 17;
+        let k = 18;
 
-        let (mut block, prover) = default_test_block();
+        let (mut block, prover, previous_blocks) = default_test_block();
 
         block.context.number = U256::from(0x9090909090909090_u128);
         block.context.gas_limit = 0x9191919191919191;
@@ -3237,7 +3221,8 @@ mod pi_circuit_test {
         block.context.timestamp = U256::from(0x93) << (31 * 8);
         block.context.base_fee = U256::from(0x94) << (31 * 8);
 
-        let public_data = PublicData::new(&block, prover, Default::default());
+        let mut public_data = PublicData::new(&block, prover, Default::default());
+        public_data.previous_blocks = previous_blocks;
 
         assert_eq!(
             run::<Fr, MAX_TXS, MAX_CALLDATA>(k, public_data, None, None),
@@ -3249,9 +3234,9 @@ mod pi_circuit_test {
     fn test_blockhash_calc_fail_lookups() {
         const MAX_TXS: usize = 8;
         const MAX_CALLDATA: usize = 200;
-        let k = 17;
+        let k = 18;
 
-        let (mut block, prover) = default_test_block();
+        let (mut block, prover ,previous_blocks) = default_test_block();
 
         block.eth_block.state_root = H256::from_slice(
             &hex::decode("21223344dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49349")
@@ -3281,9 +3266,12 @@ mod pi_circuit_test {
                 .unwrap(),
         ));
 
-        let public_data = PublicData::new(&block, prover, Default::default());
-        let test_block = witness::Block::<Fr>::default();
+        let mut public_data = PublicData::new(&block, prover, Default::default());
+        public_data.previous_blocks = previous_blocks;
+
+        let (test_block, _, test_previous_blocks) = default_test_block();
         let test_public_data = PublicData::new(&test_block, H160::default(), Default::default());
+        public_data.previous_blocks = test_previous_blocks;
 
         match run::<Fr, MAX_TXS, MAX_CALLDATA>(k, public_data, Some(test_public_data), None) {
             Ok(_) => unreachable!("this case must fail"),
