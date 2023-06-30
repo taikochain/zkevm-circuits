@@ -198,5 +198,16 @@ pub async fn build_circuit_input_builder_block(block_num: u64) {
     trace!("CircuitInputBuilder: {:#?}", builder);
 }
 
+lazy_static! {
+    /// The block that has only one anchor
+    pub static ref TAIKO_BLOCK_ANCHOR_ONLY: u64 = 3261;
+    /// The block that has propose block contract call
+    pub static ref TAIKO_BLOCK_PROPOSE_BLOCK: u64 = 3209;
+    /// The block that has prove block contract call
+    pub static ref TAIKO_BLOCK_PROVE_BLOCK: u64 = 3211;
+    /// The block that has ERC20 transfer
+    pub static ref TAIKO_BLOCK_TRANSFER_SUCCEED: u64 = 3347;
+}
+
 /// Common code for integration tests of circuits.
 pub mod integration_test_circuits;
