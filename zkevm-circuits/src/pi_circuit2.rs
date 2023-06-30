@@ -224,7 +224,7 @@ pub struct PublicData<F: Field> {
     pub withdrawals_root: H256,
 
     /// All data of the past 256 blocks
-    pub previous_blocks: Vec<witness::Block::<F>>,
+    pub previous_blocks: Vec<witness::Block<F>>,
 
     // private values
     block_rlp: Bytes,
@@ -368,7 +368,8 @@ impl<F: Field> PublicData<F> {
         let (blockhash_blk_hdr_rlp, blockhash_rlp_hash_hi, blockhash_rlp_hash_lo) =
             Self::get_block_header_rlp_from_block(block);
 
-        // Only initializing `previous_blocks` here, these values are set outside of `new`
+        // Only initializing `previous_blocks` here, these values are set outside of
+        // `new`
         let previous_blocks = vec![witness::Block::<F>::default(); 256];
         PublicData {
             chain_id: block.context.chain_id,
@@ -403,7 +404,7 @@ impl<F: Field> PublicData<F> {
             gas_used: block.eth_block.gas_used,
             mix_hash: block.eth_block.mix_hash.unwrap_or_else(H256::zero),
             withdrawals_root: block.eth_block.withdrawals_root.unwrap_or_else(H256::zero),
-            previous_blocks: previous_blocks,
+            previous_blocks,
         }
     }
 
@@ -1056,7 +1057,6 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
             for (q_value, var_size) in [(q_number, NUMBER_SIZE), (q_var_field_256, WORD_SIZE)] {
                 let q_field = meta.query_fixed(q_value, Rotation::cur());
                 let q_field_next = meta.query_fixed(q_value, Rotation::next());
-                let q_field_prev = meta.query_fixed(q_value, Rotation::prev());
                 // Only check while we're processing the field
                 cb.condition(q_field.expr(), |cb| {
                     // Length needs to remain zero when skipping over leading zeros
@@ -1106,7 +1106,6 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
                         cb.require_equal("RLP length", byte.expr(), 0x80.expr() + length.expr());
                     },
                 );
-
             }
 
             // Check total length of RLP stream.
@@ -1151,25 +1150,35 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
             let q_number_after_next = meta.query_fixed(q_number, Rotation(2));
             let q_var_field_256_next = meta.query_fixed(q_var_field_256, Rotation::next());
             let q_var_field_256_after_next = meta.query_fixed(q_var_field_256, Rotation(2));
-            let is_number_header = and::expr([not::expr(q_number_next.expr()), q_number_after_next.expr()]);
-            let is_var_field_header = and::expr([not::expr(q_var_field_256_next.expr()), q_var_field_256_after_next.expr()]);
-            let is_number_zero = meta.query_advice(blk_hdr_is_leading_zero, Rotation((NUMBER_SIZE + 1) as i32));
-            let is_var_field_zero = meta.query_advice(blk_hdr_is_leading_zero, Rotation((WORD_SIZE + 1) as i32));
+            let is_number_header =
+                and::expr([not::expr(q_number_next.expr()), q_number_after_next.expr()]);
+            let is_var_field_header = and::expr([
+                not::expr(q_var_field_256_next.expr()),
+                q_var_field_256_after_next.expr(),
+            ]);
+            let is_number_zero =
+                meta.query_advice(blk_hdr_is_leading_zero, Rotation((NUMBER_SIZE + 1) as i32));
+            let is_var_field_zero =
+                meta.query_advice(blk_hdr_is_leading_zero, Rotation((WORD_SIZE + 1) as i32));
             let rlp_short_or_zero = rlp_is_short.is_lt(meta, Some(Rotation::next()));
-            // Artificial headers exist for header fields with short values greater than zero
-            let is_artificial_header = and::expr(
-                [
-                 rlp_short_or_zero.expr(),
-                 or::expr([
-                     and::expr([is_number_header, not::expr(is_number_zero.expr())]),
-                     and::expr([is_var_field_header, not::expr(is_var_field_zero.expr())])
-                    ]
-                )]);
+            // Artificial headers exist for header fields with short values greater than
+            // zero
+            let is_artificial_header = and::expr([
+                rlp_short_or_zero.expr(),
+                or::expr([
+                    and::expr([is_number_header, not::expr(is_number_zero.expr())]),
+                    and::expr([is_var_field_header, not::expr(is_var_field_zero.expr())]),
+                ]),
+            ]);
             let no_rlc = or::expr([is_leading_zero_next.expr(), is_artificial_header]);
 
             let do_rlc_val = select::expr(no_rlc, 0.expr(), 1.expr());
             cb.condition(q_enabled.expr(), |cb| {
-                cb.require_equal("skip leading zeros and artifical headers in RLC ", meta.query_advice(blk_hdr_do_rlc_acc, Rotation::cur()), do_rlc_val);
+                cb.require_equal(
+                    "skip leading zeros and artifical headers in RLC ",
+                    meta.query_advice(blk_hdr_do_rlc_acc, Rotation::cur()),
+                    do_rlc_val,
+                );
             });
 
             // Decode the field values
@@ -1579,7 +1588,8 @@ impl<F: Field> PiCircuitConfig<F> {
         ),
         Error,
     > {
-        // When in negative testing, we need to bypass the actual public_data with some wrong test data
+        // When in negative testing, we need to bypass the actual public_data with some
+        // wrong test data
         let pb = test_public_data.as_ref().unwrap_or(public_data);
 
         let block_values = pb.get_block_table_values();
@@ -2532,7 +2542,12 @@ impl<F: Field> PiCircuitConfig<F> {
         let lt_chip = LtChip::construct(self.blk_hdr_rlp_is_short);
         for (offset, &byte) in block_header_rlp_byte.iter().enumerate() {
             lt_chip
-                .assign(region, block_offset + offset, F::from(byte as u64), F::from(0x81))
+                .assign(
+                    region,
+                    block_offset + offset,
+                    F::from(byte as u64),
+                    F::from(0x81),
+                )
                 .unwrap();
         }
 
@@ -2714,7 +2729,6 @@ impl<F: Field> PiCircuitConfig<F> {
                     )?;
                     offset += 1;
                 }
-
 
                 self.assign_block_hash_calc(&mut region, public_data, 0, challenges);
                 // TODO(George): expand to all 256 previous blocks
@@ -3073,7 +3087,7 @@ mod pi_circuit_test {
         );
     }
 
-    fn default_test_block() -> (witness::Block<Fr>, Address, Vec<witness::Block::<Fr>>) {
+    fn default_test_block() -> (witness::Block<Fr>, Address, Vec<witness::Block<Fr>>) {
         let prover =
             Address::from_slice(&hex::decode("Df08F82De32B8d460adbE8D72043E3a7e25A3B39").unwrap());
 
@@ -3098,7 +3112,7 @@ mod pi_circuit_test {
         block.context.history_hashes[255] =
             U256::from_big_endian(block.eth_block.parent_hash.as_fixed_bytes());
 
-        let previous_blocks: Vec<witness::Block::<Fr>> = vec![witness::Block::<Fr>::default(); 256];
+        let previous_blocks: Vec<witness::Block<Fr>> = vec![witness::Block::<Fr>::default(); 256];
 
         (block, prover, previous_blocks)
     }
@@ -3147,7 +3161,7 @@ mod pi_circuit_test {
         const MAX_CALLDATA: usize = 200;
         let k = 18;
 
-        let (mut block, prover ,previous_blocks) = default_test_block();
+        let (mut block, prover, previous_blocks) = default_test_block();
         block.context.number = U256::from(0x81);
         block.context.gas_limit = 0x81;
         block.eth_block.gas_used = U256::from(0x81);
@@ -3236,7 +3250,7 @@ mod pi_circuit_test {
         const MAX_CALLDATA: usize = 200;
         let k = 18;
 
-        let (mut block, prover ,previous_blocks) = default_test_block();
+        let (mut block, prover, previous_blocks) = default_test_block();
 
         block.eth_block.state_root = H256::from_slice(
             &hex::decode("21223344dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49349")
