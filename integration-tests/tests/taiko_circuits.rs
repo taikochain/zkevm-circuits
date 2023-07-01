@@ -53,11 +53,8 @@ macro_rules! unroll_tests {
 }
 
 unroll_tests!(
-    (circuit_block_anchor_only, *TAIKO_BLOCK_ANCHOR_ONLY),
-    (circuit_block_propose_block, *TAIKO_BLOCK_PROPOSE_BLOCK),
-    (circuit_block_prove_block, *TAIKO_BLOCK_PROVE_BLOCK),
-    (
-        circuit_block_transfer_succeed,
-        *TAIKO_BLOCK_TRANSFER_SUCCEED
-    )
+    (circuit_block_anchor_only, TAIKO_BLOCK_ANCHOR_ONLY),
+    (circuit_block_propose_block, TAIKO_BLOCK_PROPOSE_BLOCK),
+    (circuit_block_prove_block, TAIKO_BLOCK_PROVE_BLOCK),
+    (circuit_block_transfer_succeed, TAIKO_BLOCK_TRANSFER_SUCCEED)
 );
