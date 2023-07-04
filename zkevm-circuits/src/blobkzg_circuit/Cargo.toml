@@ -13,6 +13,4 @@ halo2wrong_maingate = {package = "maingate", git = "https://github.com/mabbamOG/
 
 [dev-dependencies]
 rand_core = "0.6.4"
-lazy_static = "1.4.0"
-
-[workspace] # necessary for testing
+rand = "0.8.5"
