@@ -45,7 +45,7 @@ impl From<u64> for AccumulationSchemeType {
     }
 }
 
-/// PCDAggregationCircuit for aggregating various sub circuits into a smaller proof.
+/// TaikoAggregationCircuit for aggregating various sub circuits into a smaller proof.
 #[derive(Clone)]
 pub struct TaikoAggregationCircuit<AS>
 where
