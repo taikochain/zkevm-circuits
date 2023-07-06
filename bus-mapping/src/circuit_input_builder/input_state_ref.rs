@@ -491,7 +491,12 @@ impl<'a> CircuitInputStateRef<'a> {
             );
         }
         if let Some(fee) = fee {
-            let sender_balance = sender_balance_prev - fee;
+            let sender_balance = if is_first_tx {
+                // anchor tx doesn't need fee
+                sender_balance_prev
+            } else {
+                sender_balance_prev - fee
+            };
             log::trace!(
                 "sender balance update with fee (not reversible): {:?} {:?}->{:?}",
                 sender,
