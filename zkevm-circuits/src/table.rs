@@ -638,7 +638,7 @@ impl DynamicTableColumns for BytecodeTable {
 
 /// Tag to identify the field in a Block Table row
 // Keep the sequence consistent with OpcodeId for scalar
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BlockContextFieldTag {
     /// Coinbase field
     Coinbase = 1,
@@ -673,6 +673,10 @@ pub enum BlockContextFieldTag {
     WithdrawalsRoot,
     /// Previous Hashes field
     PreviousHash,
+    /// Previous Hashes hi part
+    PreviousHashHi,
+    /// Previous Hashes lo part
+    PreviousHashLo,
     /// None for the all zeros row needed in block table
     None,
 }
