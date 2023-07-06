@@ -201,7 +201,12 @@ impl<'a> CircuitInputBuilder {
         // accumulates gas across all txs in the block
         for (tx_index, tx) in eth_block.transactions.iter().enumerate() {
             let geth_trace = &geth_traces[tx_index];
-            self.handle_tx(tx, geth_trace, tx_index + 1 == eth_block.transactions.len())?;
+            self.handle_tx(
+                tx,
+                geth_trace,
+                tx_index == 0,
+                tx_index + 1 == eth_block.transactions.len(),
+            )?;
         }
         self.set_value_ops_call_context_rwc_eor();
         self.set_end_block();
@@ -265,10 +270,11 @@ impl<'a> CircuitInputBuilder {
         &mut self,
         eth_tx: &eth_types::Transaction,
         geth_trace: &GethExecTrace,
+        is_first_tx: bool,
         is_last_tx: bool,
     ) -> Result<(), Error> {
         let mut tx = self.new_tx(eth_tx, !geth_trace.failed)?;
-        let mut tx_ctx = TransactionContext::new(eth_tx, geth_trace, is_last_tx)?;
+        let mut tx_ctx = TransactionContext::new(eth_tx, geth_trace, is_first_tx, is_last_tx)?;
 
         // Generate BeginTx step
         let begin_tx_step = gen_associated_steps(
