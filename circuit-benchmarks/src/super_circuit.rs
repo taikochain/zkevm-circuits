@@ -160,7 +160,7 @@ fn gen_application_snark(
         max_keccak_rows: 0,
     };
     let protocol_instance = ProtocolInstance {
-        anchor_gas_cost: 150000,
+        anchor_gas_limit: 150000,
         ..Default::default()
     };
     let (_, super_circuit, _, _) = SuperCircuit::<_>::build(

@@ -215,7 +215,7 @@ impl<F: Field> AnchorTxCircuitConfig<F> {
         for (tag, value) in [
             (
                 TxFieldTag::Gas,
-                Value::known(F::from(protocol_instance.anchor_gas_cost)),
+                Value::known(F::from(protocol_instance.anchor_gas_limit)),
             ),
             (
                 TxFieldTag::GasPrice,

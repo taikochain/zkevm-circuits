@@ -42,8 +42,8 @@ pub struct ProtocolInstance {
     /// maxBytesPerTxList
     pub max_bytes_per_tx_list: u64,
 
-    /// anchor gas cost
-    pub anchor_gas_cost: u64,
+    /// anchor gas limit
+    pub anchor_gas_limit: u64,
 }
 
 /// l1 meta hash
@@ -151,11 +151,17 @@ impl ProtocolInstance {
             ],
             [
                 Value::known(F::from(PiFieldTag::L1Height as u64)),
-                Value::known(F::from(self.meta_hash.l1_height)),
+                rlc_be_bytes(
+                    &self.meta_hash.l1_height.to_word().to_be_bytes(),
+                    randomness,
+                ),
             ],
             [
                 Value::known(F::from(PiFieldTag::ParentGasUsed as u64)),
-                Value::known(F::from(self.parent_gas_used as u64)),
+                rlc_be_bytes(
+                    &(self.parent_gas_used as u64).to_word().to_be_bytes(),
+                    randomness,
+                ),
             ],
         ]
     }

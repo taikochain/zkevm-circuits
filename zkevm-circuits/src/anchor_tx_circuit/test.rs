@@ -144,7 +144,7 @@ pub(crate) fn add_anchor_tx<const NACC: usize, FTx>(
     FTx: FnOnce(Vec<&mut MockTransaction>, [MockAccount; NACC]),
 {
     txs[0]
-        .gas(protocol_instance.anchor_gas_cost.to_word())
+        .gas(protocol_instance.anchor_gas_limit.to_word())
         .gas_price(ANCHOR_TX_GAS_PRICE.to_word())
         .from(*GOLDEN_TOUCH_ADDRESS)
         .to(protocol_instance.l2_contract)
@@ -237,7 +237,7 @@ fn anchor_tx_circuit_unusable_rows() {
 #[test]
 fn anchor_test() {
     let protocol_instance = ProtocolInstance {
-        anchor_gas_cost: 150000,
+        anchor_gas_limit: 150000,
         ..Default::default()
     };
     let block = gen_block::<1>(2, 200, protocol_instance, sign_tx);
@@ -247,7 +247,7 @@ fn anchor_test() {
 #[test]
 fn anchor_test_when_sign_r_is_gx2() {
     let protocol_instance = ProtocolInstance {
-        anchor_gas_cost: 150000,
+        anchor_gas_limit: 150000,
         ..Default::default()
     };
     let msg_hash = *N - *GX1_MUL_PRIVATEKEY;

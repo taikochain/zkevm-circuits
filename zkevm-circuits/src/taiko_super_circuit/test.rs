@@ -166,7 +166,7 @@ fn block_2tx(protocol_instance: &ProtocolInstance) -> GethData {
 #[test]
 fn serial_test_super_circuit_1tx_1max_tx() {
     let protocol_instance = ProtocolInstance {
-        anchor_gas_cost: 150000,
+        anchor_gas_limit: 150000,
         ..Default::default()
     };
     let block = block_1tx(&protocol_instance);
@@ -186,7 +186,7 @@ fn serial_test_super_circuit_1tx_1max_tx() {
 #[test]
 fn taiko_serial_test_super_circuit_1tx_3max_tx() {
     let protocol_instance = ProtocolInstance {
-        anchor_gas_cost: 150000,
+        anchor_gas_limit: 150000,
         ..Default::default()
     };
     let block = block_1tx(&protocol_instance);
@@ -206,7 +206,7 @@ fn taiko_serial_test_super_circuit_1tx_3max_tx() {
 #[test]
 fn taiko_serial_test_super_circuit_2tx_3max_tx() {
     let protocol_instance = ProtocolInstance {
-        anchor_gas_cost: 150000,
+        anchor_gas_limit: 150000,
         ..Default::default()
     };
     let block = block_2tx(&protocol_instance);
