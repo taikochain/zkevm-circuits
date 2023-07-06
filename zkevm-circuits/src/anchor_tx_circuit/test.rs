@@ -240,7 +240,7 @@ fn anchor_test() {
         anchor_gas_cost: 150000,
         ..Default::default()
     };
-    let block = gen_block::<1>(2, 100, protocol_instance, sign_tx);
+    let block = gen_block::<1>(2, 200, protocol_instance, sign_tx);
     assert_eq!(run::<Fr>(&block, None), Ok(()));
 }
 
@@ -252,6 +252,6 @@ fn anchor_test_when_sign_r_is_gx2() {
     };
     let msg_hash = *N - *GX1_MUL_PRIVATEKEY;
     let msg_hash = H256::from(msg_hash.to_le_bytes());
-    let block = gen_block::<1>(2, 100, protocol_instance, sign_tx_r_is_gx2);
+    let block = gen_block::<1>(2, 200, protocol_instance, sign_tx_r_is_gx2);
     assert_eq!(run::<Fr>(&block, Some(msg_hash)), Ok(()));
 }

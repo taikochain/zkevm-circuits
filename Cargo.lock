@@ -515,6 +515,7 @@ dependencies = [
  "rand_chacha",
  "rand_xorshift",
  "serde",
+ "serde_json",
  "snark-verifier",
  "snark-verifier-sdk",
  "zkevm-circuits",

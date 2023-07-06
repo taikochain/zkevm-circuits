@@ -1,6 +1,8 @@
 //! SuperCircuit circuit benchmarks
 
+use eth_types::{Bytes, U256};
 use halo2_proofs::poly::commitment::Params;
+use serde::{Deserialize, Serialize};
 use std::{fs, rc::Rc};
 use zkevm_circuits::{
     root_circuit::{
@@ -14,16 +16,18 @@ use bus_mapping::circuit_input_builder::CircuitsParams;
 
 use rand::SeedableRng;
 
+use ark_std::{end_timer, start_timer};
 use halo2_proofs::{
-    halo2curves::bn256::{Bn256, Fq, Fr, G1Affine},
+    halo2curves::{
+        bn256::{Bn256, Fq, Fr, G1Affine},
+        ff::PrimeField,
+    },
     plonk::{keygen_pk, keygen_vk, ProvingKey, VerifyingKey},
     poly::{
         commitment::ParamsProver,
         kzg::commitment::{KZGCommitmentScheme, ParamsKZG},
     },
 };
-
-use ark_std::{end_timer, start_timer};
 use std::path::Path;
 
 use snark_verifier_sdk::{
@@ -56,6 +60,12 @@ pub type PlonkVerifierSHPLONK =
     snark_verifier::verifier::plonk::PlonkVerifier<SHPLONK, LimbsEncoding<LIMBS, BITS>>;
 
 use rand::rngs::StdRng;
+
+#[derive(Serialize, Deserialize, Debug)]
+struct BlockProofData {
+    instances: Vec<U256>,
+    proof: Bytes,
+}
 
 /// Fixed rng for testing purposes
 pub fn fixed_rng() -> StdRng {
@@ -255,6 +265,21 @@ fn create_root_super_circuit_prover_sdk<const T: u64, AS: AccumulationSchemeSDK>
         }
     };
 
+    let block_proof_data = BlockProofData {
+        instances: instances
+            .iter()
+            .flatten()
+            .map(|v| U256::from_little_endian(v.to_repr().as_ref()))
+            .collect(),
+        proof: proof_calldata.clone().into(),
+    };
+
+    fs::write(
+        Path::new("./proof.json"),
+        serde_json::to_vec(&block_proof_data).unwrap(),
+    )
+    .unwrap();
+
     let deployment_code = gen_verifier(
         &params,
         &vk,
@@ -313,6 +338,21 @@ fn create_1_level_root_super_circuit_prover_sdk<const T: u64, AS: AccumulationSc
             gen_evm_proof_shplonk(&params, &pk, agg_circuit, instances.clone())
         }
     };
+
+    let block_proof_data = BlockProofData {
+        instances: instances
+            .iter()
+            .flatten()
+            .map(|v| U256::from_little_endian(v.to_repr().as_ref()))
+            .collect(),
+        proof: proof_calldata.clone().into(),
+    };
+
+    fs::write(
+        Path::new("./proof.json"),
+        serde_json::to_vec(&block_proof_data).unwrap(),
+    )
+    .unwrap();
 
     let deployment_code = gen_verifier(
         &params,

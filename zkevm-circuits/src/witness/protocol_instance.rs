@@ -125,8 +125,8 @@ impl ProtocolInstance {
         result.extend_from_slice(&ANCHOR_TX_METHOD_SIGNATURE.to_be_bytes());
         result.extend_from_slice(&self.meta_hash.l1_hash.to_fixed_bytes());
         result.extend_from_slice(&self.signal_root.to_fixed_bytes());
-        result.extend_from_slice(&self.meta_hash.l1_height.to_be_bytes());
-        result.extend_from_slice(&(self.parent_gas_used as u64).to_be_bytes());
+        result.extend_from_slice(&self.meta_hash.l1_height.to_word().to_be_bytes());
+        result.extend_from_slice(&(self.parent_gas_used as u64).to_word().to_be_bytes());
         result.into()
     }
 
@@ -158,5 +158,37 @@ impl ProtocolInstance {
                 Value::known(F::from(self.parent_gas_used as u64)),
             ],
         ]
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::str::FromStr;
+
+    use super::*;
+    #[test]
+    fn test_left_shift() {
+        let _field0 = left_shift(1u64, 192) + left_shift(1688574587u64, 128) + left_shift(9u64, 64);
+
+        let _field5 = left_shift(0u32 as u64, 232)
+            + left_shift(124u32 as u64, 208)
+            + left_shift(21000u32 as u64, 176)
+            + left_shift(
+                Address::from_str("0000777700000000000000000000000000000001").unwrap(),
+                16,
+            );
+        let _field6 = left_shift(
+            Address::from_str("df09A0afD09a63fb04ab3573922437e1e637dE8b").unwrap(),
+            96,
+        );
+
+        let _field9 = left_shift(
+            Address::from_str("70997970C51812dc3A010C7d01b50e0d17dc79C8").unwrap(),
+            96,
+        ) + left_shift(0u64, 64)
+            + left_shift(141003u64, 32);
+
+        let _field10 =
+            left_shift(6000000u64, 192) + left_shift(79u64, 128) + left_shift(120000u64, 64);
     }
 }

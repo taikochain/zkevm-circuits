@@ -44,8 +44,8 @@ const BYTE_POW_BASE: u64 = 1 << 8;
 //     uint64 parentGasUsed
 // )
 // anchor(bytes32,bytes32,uint64,uint64) =
-// method_signature(4B)+l1Hash(32B)+l1SignalRoot(32B)+l1Height(8B)+parentGasUsed(8B)
-const ANCHOR_CALL_DATA_LEN: usize = 84;
+// method_signature(4B)+l1Hash(32B)+l1SignalRoot(32B)+l1Height(32B)+parentGasUsed(32B)
+const ANCHOR_CALL_DATA_LEN: usize = 132;
 
 struct CallData {
     start: usize,
@@ -284,12 +284,12 @@ impl<F: Field> AnchorTxCircuitConfig<F> {
             ),
             (
                 "l1_height",
-                &anchor_tx.call_data[68..76],
+                &anchor_tx.call_data[68..100],
                 PiFieldTag::L1Height,
             ),
             (
                 "parent_gas_used",
-                &anchor_tx.call_data[76..84],
+                &anchor_tx.call_data[100..132],
                 PiFieldTag::ParentGasUsed,
             ),
         ] {
