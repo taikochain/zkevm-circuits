@@ -28,6 +28,8 @@ pub mod root_circuit;
 pub mod state_circuit;
 pub mod super_circuit;
 pub mod table;
+pub mod rlp_decoder;
+pub mod rlp_decoder_tables;
 
 #[cfg(any(feature = "test", test))]
 pub mod test_util;
