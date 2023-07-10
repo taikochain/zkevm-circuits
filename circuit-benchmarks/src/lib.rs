@@ -38,3 +38,7 @@ pub mod exp_circuit;
 #[cfg(test)]
 //#[cfg(feature = "benches")]
 pub mod constants;
+
+#[cfg(test)]
+#[cfg(feature = "benches")]
+pub mod rlp_decode_circuit;
