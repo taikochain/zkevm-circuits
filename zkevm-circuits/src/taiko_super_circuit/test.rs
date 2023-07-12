@@ -1,4 +1,9 @@
-use crate::anchor_tx_circuit::{add_anchor_accounts, add_anchor_tx, sign_tx};
+use std::str::FromStr;
+
+use crate::{
+    anchor_tx_circuit::{add_anchor_accounts, add_anchor_tx, sign_tx},
+    witness::MetaHash,
+};
 
 pub use super::*;
 use ethers_signers::{LocalWallet, Signer};
@@ -8,7 +13,7 @@ use mock::{TestContext, MOCK_CHAIN_ID};
 use rand::SeedableRng;
 use rand_chacha::ChaCha20Rng;
 
-use eth_types::{address, bytecode, geth_types::GethData, ToWord, Word};
+use eth_types::{address, bytecode, geth_types::GethData, Hash, ToWord, Word};
 
 #[test]
 fn super_circuit_degree() {
@@ -165,11 +170,26 @@ fn block_2tx(protocol_instance: &ProtocolInstance) -> GethData {
 // #[ignore]
 #[test]
 fn serial_test_super_circuit_1tx_1max_tx() {
+    let block_hash =
+        Hash::from_str("0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347")
+            .unwrap();
+    let parent_hash =
+        Hash::from_str("0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49346")
+            .unwrap();
     let protocol_instance = ProtocolInstance {
         anchor_gas_limit: 150000,
+        block_hash,
+        parent_hash,
+        meta_hash: MetaHash {
+            l1_hash: block_hash,
+            l1_height: 20,
+            ..Default::default()
+        },
+        signal_root: block_hash,
+        parent_gas_used: 2000,
         ..Default::default()
     };
-    let block = block_1tx(&protocol_instance);
+    let mut block = block_1tx(&protocol_instance);
     let circuits_params = CircuitsParams {
         max_txs: 2,
         max_calldata: 200,
@@ -180,6 +200,9 @@ fn serial_test_super_circuit_1tx_1max_tx() {
         max_evm_rows: 0,
         max_keccak_rows: 0,
     };
+    block.eth_block.hash = Some(block_hash);
+    block.eth_block.parent_hash = parent_hash;
+    block.history_hashes = vec![block.eth_block.parent_hash.to_word()];
     test_super_circuit(block, protocol_instance, circuits_params);
 }
 #[ignore]
