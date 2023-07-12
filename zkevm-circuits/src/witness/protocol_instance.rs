@@ -8,7 +8,7 @@ use halo2_proofs::circuit::Value;
 use keccak256::plain::Keccak;
 
 // hash(anchor)
-const ANCHOR_TX_METHOD_SIGNATURE: u32 = 0x3d384a4b;
+const ANCHOR_TX_METHOD_SIGNATURE: u32 = 0xda69d3db;
 
 /// Taiko witness
 #[derive(Debug, Default, Clone)]
