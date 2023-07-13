@@ -251,7 +251,9 @@ pub fn block_convert<F: Field>(
         circuits_params: block.circuits_params,
         exp_circuit_pad_to: <usize>::default(),
         prev_state_root: block.prev_state_root,
-        keccak_inputs: circuit_input_builder::keccak_inputs(block, code_db)?,
+        // Use EVM Circuit's related inputs for keccak inputs
+        // keccak_inputs: circuit_input_builder::keccak_inputs(block, code_db)?,
+        keccak_inputs: block.sha3_inputs.clone(),
         eth_block: block.eth_block.clone(),
         taiko: Taiko::default(),
     })
