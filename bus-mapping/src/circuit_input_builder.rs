@@ -468,7 +468,8 @@ impl<P: JsonRpcClient> BuilderClient<P> {
         block_num: u64,
     ) -> Result<(EthBlock, Vec<eth_types::GethExecTrace>, Vec<Word>, Word), Error> {
         let eth_block = self.cli.get_block_by_number(block_num.into()).await?;
-        let geth_traces = self.cli.trace_block_by_number(block_num.into()).await?;
+        // let geth_traces = self.cli.trace_block_by_number(block_num.into()).await?;
+        let geth_traces = vec![];
 
         // fetch up to 256 blocks
         let mut n_blocks = std::cmp::min(256, block_num as usize);
