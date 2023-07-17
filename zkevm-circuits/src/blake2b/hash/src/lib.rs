@@ -71,11 +71,7 @@ fn compress(h: &mut [u64; 8], m: &[u64; 16], t: u128, f: bool, r: u32) {
     }
 }
 
-fn load_bytes(d: &mut [u8], s: &[u64]) {
-    if s.len() * 8 < d.len() {
-        panic!("Not enough data in the source slice!");
-    }
-    
+fn load_bytes(d: &mut [u8], s: &[u64]) {    
     let q = d.len() / 8;
     for i in 0..q {
         d[8 * i..][..8].copy_from_slice(&s[i].to_le_bytes());
@@ -92,10 +88,6 @@ fn load_bytes(d: &mut [u8], s: &[u64]) {
 }
 
 fn save_bytes(d: &mut [u64], s: &[u8]) {
-    if d.len() * 8 < s.len() {
-        panic!("Not enough memory in the destination slice!");
-    }
-
     let q = s.len() / 8;
     for i in 0..q {
         d[i] = u64::from_le_bytes(s[8 * i..][..8].try_into().unwrap());
