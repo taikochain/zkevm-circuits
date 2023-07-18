@@ -1688,9 +1688,9 @@ fn generate_rlp_type_witness(
         0x80 => RlpDecodeTypeTag::NullValue,
         0x81..=0xb7 => {
             if header_byte == 0x81 {
-                value_decodable = bytes[1] >= 0x80;
+                value_decodable = bytes.len() > 1 && bytes[1] >= 0x80;
             } else {
-                value_decodable = bytes[1] > 0;
+                value_decodable = bytes.len() > 1 && bytes[1] > 0;
             }
             match tx_member {
                 RlpTxFieldTag::To => {
@@ -1705,15 +1705,15 @@ fn generate_rlp_type_witness(
             }
         }
         0xb8 => {
-            len_decodable = bytes[1] >= 0x80;
+            len_decodable = bytes.len() > 1 && bytes[1] >= 0x80;
             RlpDecodeTypeTag::LongString1
         }
         0xb9 => {
-            len_decodable = bytes[1] > 0;
+            len_decodable = bytes.len() > 1 && bytes[1] > 0;
             RlpDecodeTypeTag::LongString2
         }
         0xba => {
-            len_decodable = bytes[1] > 0;
+            len_decodable = bytes.len() > 1 && bytes[1] > 0;
             RlpDecodeTypeTag::LongString3
         }
         0xc0 => RlpDecodeTypeTag::EmptyList,
@@ -2833,8 +2833,9 @@ mod rlp_witness_gen_test {
     }
 }
 
-#[cfg(test)]
-mod rlp_decode_circuit_tests {
+/// test module for rlp decoder circuit
+#[cfg(feature = "test")]
+pub mod rlp_decode_circuit_tests {
     use super::*;
     use crate::util::log2_ceil;
     use halo2_proofs::{
@@ -2845,6 +2846,19 @@ mod rlp_decode_circuit_tests {
     use pretty_assertions::assert_eq;
     use rand::SeedableRng;
     use rand_chacha::ChaCha20Rng;
+
+    /// test rlp decoder circuit
+    pub fn run_rlp_circuit<F: Field>(
+        rlp_bytes: Vec<u8>,
+        k: usize,
+    ) -> Result<(), Vec<VerifyFailure>> {
+        let circuit = RlpDecoderCircuit::<F>::new(rlp_bytes, k);
+        let prover = match MockProver::run(k as u32, &circuit, vec![]) {
+            Ok(prover) => prover,
+            Err(e) => panic!("{:#?}", e),
+        };
+        prover.verify()
+    }
 
     fn run<F: Field>(txs: Vec<Transaction>) -> Result<(), Vec<VerifyFailure>> {
         let k = log2_ceil(RlpDecoderCircuit::<Fr>::min_num_rows_from_tx(&txs).0);
@@ -2936,6 +2950,7 @@ mod rlp_decode_circuit_tests {
         assert_eq!(run::<Fr>(vec![tx.clone(), tx.clone()]), Ok(()));
     }
 
+    /// invalid rlp_test
     mod invalid_rlp_test {
         use super::*;
         use pretty_assertions::assert_eq;
@@ -2974,18 +2989,6 @@ mod rlp_decode_circuit_tests {
             rlp_bytes.to_vec()
         }
 
-        fn run_invalid_rlp<F: Field>(
-            rlp_bytes: Vec<u8>,
-            k: usize,
-        ) -> Result<(), Vec<VerifyFailure>> {
-            let circuit = RlpDecoderCircuit::<F>::new(rlp_bytes, k);
-            let prover = match MockProver::run(k as u32, &circuit, vec![]) {
-                Ok(prover) => prover,
-                Err(e) => panic!("{:#?}", e),
-            };
-            prover.verify()
-        }
-
         #[test]
         fn const_tx_decode_is_ok() {
             let k = 12;
@@ -2993,7 +2996,7 @@ mod rlp_decode_circuit_tests {
             let witness = gen_rlp_decode_state_witness(&rlp_bytes, Fr::one(), 1 << k);
             // println!("witness = {:?}", &witness);
             assert_eq!(witness[witness.len() - 2].valid, true);
-            assert_eq!(run_invalid_rlp::<Fr>(rlp_bytes, k), Ok(()));
+            assert_eq!(run_rlp_circuit::<Fr>(rlp_bytes, k), Ok(()));
         }
 
         #[test]
@@ -3006,7 +3009,7 @@ mod rlp_decode_circuit_tests {
             assert_eq!(witness[1].valid, false);
             assert_eq!(witness[witness.len() - 2].valid, false);
 
-            assert_eq!(run_invalid_rlp::<Fr>(rlp_bytes, k), Ok(()));
+            assert_eq!(run_rlp_circuit::<Fr>(rlp_bytes, k), Ok(()));
         }
 
         #[test]
@@ -3019,7 +3022,7 @@ mod rlp_decode_circuit_tests {
             assert_eq!(witness[1].valid, false);
             assert_eq!(witness[witness.len() - 2].valid, false);
 
-            assert_eq!(run_invalid_rlp::<Fr>(rlp_bytes, k), Ok(()));
+            assert_eq!(run_rlp_circuit::<Fr>(rlp_bytes, k), Ok(()));
         }
 
         #[test]
@@ -3033,11 +3036,11 @@ mod rlp_decode_circuit_tests {
             assert_eq!(witness[2].valid, false);
             assert_eq!(witness[witness.len() - 2].valid, false);
 
-            assert_eq!(run_invalid_rlp::<Fr>(rlp_bytes, k), Ok(()));
+            assert_eq!(run_rlp_circuit::<Fr>(rlp_bytes, k), Ok(()));
         }
 
         #[test]
-        fn invalid_rlp_wrong_tx_header_len() {
+        fn invalid_rlp_wrong_tx_header_0_len() {
             let mut rlp_bytes = hex::decode(&const_tx_hex()).unwrap();
             rlp_bytes[3] = 0x00;
 
@@ -3045,7 +3048,31 @@ mod rlp_decode_circuit_tests {
             let witness = gen_rlp_decode_state_witness(&rlp_bytes, Fr::one(), 1 << k);
             assert_eq!(witness[witness.len() - 2].valid, false);
 
-            assert_eq!(run_invalid_rlp::<Fr>(rlp_bytes, k), Ok(()));
+            assert_eq!(run_rlp_circuit::<Fr>(rlp_bytes, k), Ok(()));
+        }
+
+        #[test]
+        fn invalid_rlp_wrong_tx_header_small_len() {
+            let mut rlp_bytes = hex::decode(&const_tx_hex()).unwrap();
+            rlp_bytes[3] = 0x3c;
+
+            let k = 12;
+            let witness = gen_rlp_decode_state_witness(&rlp_bytes, Fr::one(), 1 << k);
+            // assert_eq!(witness[witness.len() - 2].valid, false);
+
+            assert_eq!(run_rlp_circuit::<Fr>(rlp_bytes, k), Ok(()));
+        }
+
+        #[test]
+        fn invalid_rlp_wrong_tx_header_big_len() {
+            let mut rlp_bytes = hex::decode(&const_tx_hex()).unwrap();
+            rlp_bytes[3] = 0xff;
+
+            let k = 12;
+            let witness = gen_rlp_decode_state_witness(&rlp_bytes, Fr::one(), 1 << k);
+            assert_eq!(witness[witness.len() - 2].valid, false);
+
+            assert_eq!(run_rlp_circuit::<Fr>(rlp_bytes, k), Ok(()));
         }
 
         #[test]
@@ -3059,7 +3086,7 @@ mod rlp_decode_circuit_tests {
             assert_eq!(witness[3].valid, false);
             assert_eq!(witness[witness.len() - 2].valid, false);
 
-            assert_eq!(run_invalid_rlp::<Fr>(rlp_bytes, k), Ok(()));
+            assert_eq!(run_rlp_circuit::<Fr>(rlp_bytes, k), Ok(()));
         }
 
         #[test]
@@ -3073,7 +3100,7 @@ mod rlp_decode_circuit_tests {
             assert_eq!(witness[4].valid, false);
             assert_eq!(witness[witness.len() - 2].valid, false);
 
-            assert_eq!(run_invalid_rlp::<Fr>(rlp_bytes, k), Ok(()));
+            assert_eq!(run_rlp_circuit::<Fr>(rlp_bytes, k), Ok(()));
         }
 
         #[test]
@@ -3087,7 +3114,7 @@ mod rlp_decode_circuit_tests {
             assert_eq!(witness[6].valid, false);
             assert_eq!(witness[witness.len() - 2].valid, false);
 
-            assert_eq!(run_invalid_rlp::<Fr>(rlp_bytes, k), Ok(()));
+            assert_eq!(run_rlp_circuit::<Fr>(rlp_bytes, k), Ok(()));
         }
 
         #[test]
@@ -3102,7 +3129,7 @@ mod rlp_decode_circuit_tests {
             assert_eq!(witness[8].valid, false);
             assert_eq!(witness[witness.len() - 2].valid, false);
 
-            assert_eq!(run_invalid_rlp::<Fr>(rlp_bytes, k), Ok(()));
+            assert_eq!(run_rlp_circuit::<Fr>(rlp_bytes, k), Ok(()));
         }
 
         #[test]
@@ -3116,7 +3143,7 @@ mod rlp_decode_circuit_tests {
             // assert_eq!(witness[1].valid, false);
             // assert_eq!(witness[witness.len() - 2].valid, false);
 
-            assert_eq!(run_invalid_rlp::<Fr>(trimmed_rlp_bytes.to_vec(), k), Ok(()));
+            assert_eq!(run_rlp_circuit::<Fr>(trimmed_rlp_bytes.to_vec(), k), Ok(()));
         }
 
         #[test]
@@ -3140,7 +3167,28 @@ mod rlp_decode_circuit_tests {
             assert_eq!(witness[1].valid, false);
 
             let k = log2_ceil(size) as usize;
-            assert_eq!(run_invalid_rlp::<Fr>(trimmed_rlp_bytes.to_vec(), k), Ok(()));
+            assert_eq!(run_rlp_circuit::<Fr>(trimmed_rlp_bytes.to_vec(), k), Ok(()));
         }
+    }
+
+    #[test]
+    fn fuzz_regression_1() {
+        let rlp_bytes = vec![0xba];
+
+        let k = 12;
+        let witness = gen_rlp_decode_state_witness(&rlp_bytes, Fr::one(), 1 << k);
+        assert_eq!(witness[1].valid, false);
+
+        assert_eq!(run_rlp_circuit::<Fr>(rlp_bytes.to_vec(), k), Ok(()));
+    }
+
+    #[test]
+    fn fuzz_regression_2() {
+        let rlp_bytes = vec![0, 178];
+        let k = 12;
+        let witness = gen_rlp_decode_state_witness(&rlp_bytes, Fr::one(), 1 << k);
+        assert_eq!(witness[1].valid, false);
+
+        assert_eq!(run_rlp_circuit::<Fr>(rlp_bytes.to_vec(), k), Ok(()));
     }
 }
