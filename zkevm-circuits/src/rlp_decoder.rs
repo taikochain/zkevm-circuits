@@ -50,7 +50,7 @@ type RlpDecoderFixedTable6Columns = RlpDecoderFixedTable<6>;
 pub enum RlpDecodeTypeTag {
     #[default]
     /// Nothing for no rlp decoding
-    DoNothing,
+    DoNothing = 0,
     /// SingleByte: 0x00 - 0x7f
     SingleByte,
     /// NullValue: 0x80
@@ -146,7 +146,7 @@ impl<T> std::ops::Index<RlpDecodeErrorType> for Vec<T> {
 pub enum RlpTxFieldTag {
     #[default]
     /// for tx list rlp header
-    TxListRlpHeader,
+    TxListRlpHeader = 0,
     /// for rlp header
     TxRlpHeader,
     /// for tx nonce
@@ -209,7 +209,7 @@ const TX1559_TX_FIELD_NUM: usize = RlpTxFieldTag::AccessList as usize + 1;
 pub enum RlpTxTypeTag {
     #[default]
     /// legacy tx
-    TxLegacyType,
+    TxLegacyType = 0,
     /// 1559 tx
     Tx1559Type,
 }
@@ -518,7 +518,13 @@ impl<F: Field> SubCircuitConfig<F> for RlpDecoderCircuitConfig<F> {
             let q_enable = meta.query_selector(q_enable);
             let is_last = meta.query_fixed(q_last, Rotation::cur());
 
-            let query_able = and::expr([not::expr(is_last.expr()), q_enable.expr()]);
+            // state change happens only if current member is complete.
+            let curr_member_is_complete = meta.query_advice(complete, Rotation::cur());
+            let query_able = and::expr([
+                not::expr(is_last.expr()),
+                q_enable.expr(),
+                curr_member_is_complete.expr(),
+            ]);
             vec![
                 (
                     query_able.expr() * RlpDecoderFixedTableTag::TxFieldSwitchTable.expr(),
