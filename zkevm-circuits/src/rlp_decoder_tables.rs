@@ -561,7 +561,7 @@ impl<const N: usize> RangeTable<N> {
                         || Value::known(F::from(tag)),
                     )?;
                     region.assign_fixed(
-                        || "pow",
+                        || "range value",
                         self.value,
                         i,
                         || Value::known(F::from(i as u64)),
