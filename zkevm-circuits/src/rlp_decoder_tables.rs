@@ -209,7 +209,7 @@ impl RlpDecoderTable {
         }
     }
 
-    /// build from existed columns
+    /// build from existing columns
     pub fn build_from_columns(columns: &[Column<Fixed>]) -> Self {
         assert!(columns.len() > 5);
         Self {
