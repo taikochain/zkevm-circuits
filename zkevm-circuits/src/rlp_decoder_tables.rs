@@ -224,6 +224,7 @@ impl RlpDecoderTable {
 
     /// Get the row num of the RLP decoding table
     pub fn table_size() -> usize {
+        // item count * 256
         (RlpDecodeRule::LongList as usize + 1) * 256
     }
 
@@ -293,7 +294,7 @@ pub struct TxFieldSwitchTable {
     pub next_tx_field: Column<Fixed>,
 }
 
-static TX_FIELD_TRANSITION_TABLE: [(RlpTxFieldTag, &[RlpTxFieldTag]); 15] = [
+static TX_FIELD_TRANSITION_TABLE: [(RlpTxFieldTag, &[RlpTxFieldTag]); 14] = [
     (
         RlpTxFieldTag::TxListRlpHeader,
         &[RlpTxFieldTag::TxRlpHeader, RlpTxFieldTag::DecodeError],
@@ -320,10 +321,6 @@ static TX_FIELD_TRANSITION_TABLE: [(RlpTxFieldTag, &[RlpTxFieldTag]); 15] = [
     ),
     (
         RlpTxFieldTag::Value,
-        &[RlpTxFieldTag::Data, RlpTxFieldTag::DecodeError],
-    ),
-    (
-        RlpTxFieldTag::Data,
         &[RlpTxFieldTag::Data, RlpTxFieldTag::DecodeError],
     ),
     (
@@ -685,7 +682,7 @@ impl InvalidRlpBytesTable {
 #[derive(Clone, Copy, Debug)]
 pub enum RlpDecoderFixedTableTag {
     /// All zero lookup data
-    Disabled=0,
+    Disabled = 0,
     /// Power of randomness: [1, r], [2, r^2],...
     RMult,
     /// 0 - 255
