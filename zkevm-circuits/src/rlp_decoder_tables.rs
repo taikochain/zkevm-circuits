@@ -685,7 +685,7 @@ impl InvalidRlpBytesTable {
 #[derive(Clone, Copy, Debug)]
 pub enum RlpDecoderFixedTableTag {
     /// All zero lookup data
-    Disabled,
+    Disabled=0,
     /// Power of randomness: [1, r], [2, r^2],...
     RMult,
     /// 0 - 255
