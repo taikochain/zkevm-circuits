@@ -26,7 +26,7 @@ pub enum RlpDecodeRule {
     Padding,
     /// The RLP encoding type is a empty string, i.e., 0x80
     Empty,
-    /// The RLP encoding type is a uint96
+    /// The RLP encoding type is a uint64
     Uint64,
     /// The RLP encoding type is a uint96, for gas/nonce/price/ect
     Uint96,
