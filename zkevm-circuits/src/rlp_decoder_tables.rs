@@ -23,7 +23,7 @@ use halo2_proofs::{
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum RlpDecodeRule {
     /// The Padding RLP encoding type is a single byte 0x00
-    Padding,
+    Padding = 0,
     /// The RLP encoding type is a empty string, i.e., 0x80
     Empty,
     /// The RLP encoding type is a uint64
@@ -182,7 +182,7 @@ pub const RLP_TX_FIELD_DECODE_RULES: [(RlpTxTypeTag, RlpTxFieldTag, RlpDecodeRul
 /// Table that contains the fields of all possible RLP decodable fields
 #[derive(Clone, Debug)]
 pub struct RlpDecoderTable {
-    /// The length of the field
+    /// The table tag
     pub table_tag: Column<Fixed>,
     /// The tx type tag
     pub tx_type: Column<Fixed>,
