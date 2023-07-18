@@ -44,7 +44,7 @@ pub enum RlpDecodeRule {
 }
 
 impl RlpDecodeRule {
-    /// load the decode rult table, like.:
+    /// load the decode rule table, like.:
     /// | tx_type(legacy/1559) | field | rlp type | byte[0] | decodable |
     /// | legacy               | nonce | uint96   | 0x00    | false     |
     /// | legacy               | nonce | uint96   | 0x01    | true      |
