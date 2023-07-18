@@ -1798,7 +1798,24 @@ impl<F: Field> RlpTxFieldStateWittnessGenerator<F> for RlpTxFieldTag {
         }
 
         match self {
-            RlpTxFieldTag::TxListRlpHeader => state_switch!(RlpTxFieldTag::TxRlpHeader),
+            RlpTxFieldTag::TxListRlpHeader => {
+                // this is the begining row
+                let res = state_switch!(RlpTxFieldTag::TxRlpHeader);
+
+                // check the length of the whole list here as txlist header should have the same
+                // length as the whole byte stream
+                let mut wit = witness.last_mut().unwrap();
+                let valid = rlp_bytes_len(&wit.bytes[1..wit.rlp_bytes_in_row as usize])
+                    == wit.rlp_remain_length;
+                if valid {
+                    res
+                } else {
+                    // TODO: use a specific error type
+                    wit.errors[usize::from(RlpDecodeErrorType::ValueError)] = true;
+                    wit.valid = false;
+                    (RlpTxFieldTag::DecodeError, res.1)
+                }
+            }
             RlpTxFieldTag::TxRlpHeader => state_switch!(RlpTxFieldTag::Nonce),
             RlpTxFieldTag::Nonce => state_switch!(RlpTxFieldTag::GasPrice),
             RlpTxFieldTag::GasPrice => state_switch!(RlpTxFieldTag::Gas),
@@ -3019,9 +3036,23 @@ pub mod rlp_decode_circuit_tests {
         }
 
         #[test]
-        fn invalid_rlp_wrong_list_header_len() {
+        fn invalid_rlp_wrong_list_header_0_len() {
             let mut rlp_bytes = hex::decode(const_tx_hex()).unwrap();
             rlp_bytes[1] = 0x00;
+
+            let k = 12;
+            let witness = gen_rlp_decode_state_witness(&rlp_bytes, Fr::one(), 1 << k);
+            assert_eq!(witness[1].valid, false);
+            assert_eq!(witness[witness.len() - 2].valid, false);
+
+            assert_eq!(run_rlp_circuit::<Fr>(rlp_bytes, k), Ok(()));
+        }
+
+        // rlp.exceptions.DecodingError: RLP string ends with 1 superfluous bytes
+        #[test]
+        fn invalid_rlp_wrong_list_header_short_len() {
+            let mut rlp_bytes = hex::decode(const_tx_hex()).unwrap();
+            rlp_bytes[1] = 0x49;
 
             let k = 12;
             let witness = gen_rlp_decode_state_witness(&rlp_bytes, Fr::one(), 1 << k);
@@ -3142,7 +3173,6 @@ pub mod rlp_decode_circuit_tests {
         fn invalid_rlp_not_enough_length() {
             let rlp_bytes = hex::decode(&const_tx_hex()).unwrap();
             let trimmed_rlp_bytes = &rlp_bytes[..1];
-            println!("trimmed_rlp_bytes: {:?}", trimmed_rlp_bytes);
 
             let k = 12;
             let witness = gen_rlp_decode_state_witness(trimmed_rlp_bytes, Fr::one(), 1 << k);
