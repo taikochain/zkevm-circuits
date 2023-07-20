@@ -172,6 +172,10 @@ pub enum RlpTxFieldTag {
     /// Padding
     Padding,
     // 1559 extra field
+    /// 1559 tx container, which is a long string starts with 0xb8/b9/ba
+    TypedTxHeader,
+    /// for 1559 typed tx
+    TxType,
     /// ChainID
     ChainID,
     /// GasTipCap
@@ -991,9 +995,9 @@ impl<F: Field> SubCircuitConfig<F> for RlpDecoderCircuitConfig<F> {
                 tx_id_prev.expr() + 1.expr(),
             );
             cb.require_equal(
-                "legacy tx_type",
+                "1559 tx_type",
                 tx_type_cur.expr(),
-                RlpTxTypeTag::TxLegacyType.expr(),
+                RlpTxTypeTag::Tx1559Type.expr(),
             );
             cb.require_equal(
                 "tag is tx header",
@@ -1786,7 +1790,7 @@ impl<F: Field> RlpTxFieldStateWittnessGenerator<F> for RlpTxFieldTag {
     ) -> (Self, Option<usize>) {
         let decode_rules = RLP_TX_FIELD_DECODE_RULES
             .iter()
-            .filter(|rule| rule.0 == RlpTxTypeTag::TxLegacyType && rule.1 == *self)
+            .filter(|rule| rule.0 == RlpTxTypeTag::Tx1559Type && rule.1 == *self)
             .collect::<Vec<&(RlpTxTypeTag, RlpTxFieldTag, RlpDecodeRule)>>();
         assert!(decode_rules.len() >= 1);
         let (_, _, mut decode_rule) = decode_rules[0];
@@ -1800,7 +1804,7 @@ impl<F: Field> RlpTxFieldStateWittnessGenerator<F> for RlpTxFieldTag {
         match self {
             RlpTxFieldTag::TxListRlpHeader => {
                 // this is the begining row
-                let res = state_switch!(RlpTxFieldTag::TxRlpHeader);
+                let res = state_switch!(RlpTxFieldTag::TypedTxHeader);
 
                 // check the length of the whole list here as txlist header should have the same
                 // length as the whole byte stream
@@ -1816,9 +1820,14 @@ impl<F: Field> RlpTxFieldStateWittnessGenerator<F> for RlpTxFieldTag {
                     (RlpTxFieldTag::DecodeError, res.1)
                 }
             }
-            RlpTxFieldTag::TxRlpHeader => state_switch!(RlpTxFieldTag::Nonce),
-            RlpTxFieldTag::Nonce => state_switch!(RlpTxFieldTag::GasPrice),
-            RlpTxFieldTag::GasPrice => state_switch!(RlpTxFieldTag::Gas),
+            RlpTxFieldTag::TypedTxHeader => state_switch!(RlpTxFieldTag::TxType),
+            RlpTxFieldTag::TxType => state_switch!(RlpTxFieldTag::TxRlpHeader),
+            RlpTxFieldTag::TxRlpHeader => state_switch!(RlpTxFieldTag::ChainID),
+            RlpTxFieldTag::ChainID => state_switch!(RlpTxFieldTag::Nonce),
+            RlpTxFieldTag::Nonce => state_switch!(RlpTxFieldTag::GasTipCap),
+            RlpTxFieldTag::GasTipCap => state_switch!(RlpTxFieldTag::GasFeeCap),
+            RlpTxFieldTag::GasFeeCap => state_switch!(RlpTxFieldTag::Gas),
+            RlpTxFieldTag::GasPrice => todo!(), // state_switch!(RlpTxFieldTag::Gas),
             RlpTxFieldTag::Gas => state_switch!(RlpTxFieldTag::To),
             RlpTxFieldTag::To => {
                 assert!(decode_rules.len() == 2);
@@ -1830,7 +1839,8 @@ impl<F: Field> RlpTxFieldStateWittnessGenerator<F> for RlpTxFieldTag {
                 state_switch!(RlpTxFieldTag::Value)
             }
             RlpTxFieldTag::Value => state_switch!(RlpTxFieldTag::Data),
-            RlpTxFieldTag::Data => state_switch!(RlpTxFieldTag::SignV),
+            RlpTxFieldTag::Data => state_switch!(RlpTxFieldTag::AccessList),
+            RlpTxFieldTag::AccessList => state_switch!(RlpTxFieldTag::SignV),
             RlpTxFieldTag::SignV => state_switch!(RlpTxFieldTag::SignR),
             RlpTxFieldTag::SignR => state_switch!(RlpTxFieldTag::SignS),
             RlpTxFieldTag::SignS => {
@@ -1838,7 +1848,7 @@ impl<F: Field> RlpTxFieldStateWittnessGenerator<F> for RlpTxFieldTag {
                 let next_state = if bytes.len() == MAX_BYTE_COLUMN_NUM {
                     RlpTxFieldTag::Padding
                 } else {
-                    RlpTxFieldTag::TxRlpHeader
+                    RlpTxFieldTag::TxType
                 };
                 self.rlp_decode_field_check(bytes, tx_id, r, &decode_rule, witness, next_state)
             }
@@ -1849,10 +1859,6 @@ impl<F: Field> RlpTxFieldStateWittnessGenerator<F> for RlpTxFieldTag {
                 complete_paddings_new(witness, r, k as usize - witness_len - 1 - NUM_BLINDING_ROWS);
                 (RlpTxFieldTag::Padding, None)
             }
-            RlpTxFieldTag::ChainID => todo!(),
-            RlpTxFieldTag::GasTipCap => todo!(),
-            RlpTxFieldTag::GasFeeCap => todo!(),
-            RlpTxFieldTag::AccessList => todo!(),
             RlpTxFieldTag::DecodeError => {
                 let rest_bytes = bytes.len().min(MAX_BYTE_COLUMN_NUM);
                 let rlp_remain_length: usize = witness.last().unwrap().rlp_remain_length;
@@ -1916,6 +1922,30 @@ impl<F: Field> RlpTxFieldStateWittnessGenerator<F> for RlpTxFieldTag {
                                 (next_state, Some(1))
                             }
                             _ => unreachable!(),
+                        },
+                        RlpDecodeRule::TxType1559 => match head_byte0 {
+                            0x02 => {
+                                witness.append(&mut generate_rlp_row_witness_new(
+                                    tx_id,
+                                    self,
+                                    &bytes[..1],
+                                    r,
+                                    rlp_remain_length,
+                                    None,
+                                ));
+                                (next_state, Some(1))
+                            }
+                            _ => {
+                                witness.append(&mut generate_rlp_row_witness_new(
+                                    tx_id,
+                                    self,
+                                    &bytes[..1],
+                                    r,
+                                    rlp_remain_length,
+                                    Some(RlpDecodeErrorType::HeaderDecError),
+                                ));
+                                (RlpTxFieldTag::DecodeError, Some(1))
+                            }
                         },
                         RlpDecodeRule::Uint64 => unreachable!(),
                         RlpDecodeRule::Uint96 => match head_byte0 {
@@ -2242,7 +2272,114 @@ impl<F: Field> RlpTxFieldStateWittnessGenerator<F> for RlpTxFieldTag {
                             }
                             _ => unreachable!(),
                         },
-                        RlpDecodeRule::EmptyList => todo!(),
+                        RlpDecodeRule::EmptyList => match head_byte0 {
+                            0xc0 => {
+                                witness.append(&mut generate_rlp_row_witness_new(
+                                    tx_id,
+                                    self,
+                                    &bytes[..1],
+                                    r,
+                                    rlp_remain_length,
+                                    None,
+                                ));
+                                (next_state, Some(1))
+                            }
+                            _ => {
+                                witness.append(&mut generate_rlp_row_witness_new(
+                                    tx_id,
+                                    self,
+                                    &bytes[..1],
+                                    r,
+                                    rlp_remain_length,
+                                    Some(RlpDecodeErrorType::ValueError),
+                                ));
+                                (RlpTxFieldTag::DecodeError, Some(1))
+                            }
+                        },
+                        RlpDecodeRule::LongBytes => match head_byte0 {
+                            0xb8..=0xba => {
+                                let mut offset = 1;
+                                let len_of_len = (head_byte0 - 0xb7) as usize;
+                                let res = read_nbytes(&bytes[offset..], len_of_len);
+                                match res {
+                                    Ok(len_bytes_read) => {
+                                        let len_byte0 = len_bytes_read[0];
+                                        if len_of_len == 1 && len_byte0 <= 55 {
+                                            offset += 1;
+                                            witness.append(&mut generate_rlp_row_witness_new(
+                                                tx_id,
+                                                self,
+                                                &bytes[..offset],
+                                                r,
+                                                rlp_remain_length,
+                                                Some(RlpDecodeErrorType::LenOfLenError),
+                                            ));
+                                            (RlpTxFieldTag::DecodeError, Some(offset))
+                                        } else if len_of_len > 1 && len_byte0 == 0 {
+                                            offset += 1;
+                                            witness.append(&mut generate_rlp_row_witness_new(
+                                                tx_id,
+                                                self,
+                                                &bytes[..offset],
+                                                r,
+                                                rlp_remain_length,
+                                                Some(RlpDecodeErrorType::LenOfLenError),
+                                            ));
+                                            (RlpTxFieldTag::DecodeError, Some(offset))
+                                        } else {
+                                            offset += len_bytes_read.len();
+                                            let val_bytes_len = rlp_bytes_len(len_bytes_read);
+                                            let res = read_nbytes(&bytes[offset..], val_bytes_len);
+                                            match res {
+                                                Ok(_) => {
+                                                    witness.append(
+                                                        &mut generate_rlp_row_witness_new(
+                                                            tx_id,
+                                                            self,
+                                                            &bytes[..offset],
+                                                            r,
+                                                            rlp_remain_length,
+                                                            None,
+                                                        ),
+                                                    );
+                                                    (next_state, Some(offset))
+                                                }
+                                                Err(val_bytes_read) => {
+                                                    let read_len = val_bytes_read.len();
+                                                    let bytes_len = offset + read_len;
+                                                    witness
+                                                        .append(&mut generate_rlp_row_witness_new(
+                                                        tx_id,
+                                                        self,
+                                                        &bytes[..bytes_len],
+                                                        r,
+                                                        rlp_remain_length,
+                                                        Some(
+                                                            RlpDecodeErrorType::RunOutOfDataError(
+                                                                offset + val_bytes_len,
+                                                            ),
+                                                        ),
+                                                    ));
+                                                    (RlpTxFieldTag::DecodeError, Some(bytes_len))
+                                                }
+                                            }
+                                        }
+                                    }
+                                    Err(_) => {
+                                        witness.append(&mut generate_rlp_row_witness_new(
+                                            tx_id,
+                                            self,
+                                            &bytes[..offset],
+                                            r,
+                                            rlp_remain_length,
+                                            Some(RlpDecodeErrorType::ValueError),
+                                        ));
+                                        (RlpTxFieldTag::DecodeError, Some(offset))
+                                    }
+                                }
+                            }
+                            _ => unreachable!(),
+                        },
                         RlpDecodeRule::LongList => {
                             let header_byte0 = bytes_read_header[0];
                             // if decode rule check failed
@@ -2426,7 +2563,7 @@ fn complete_paddings_new<F: Field>(
     for i in 0..num_padding_to_last_row {
         witness.push(RlpDecoderCircuitConfigWitness::<F> {
             tx_id: 0,
-            tx_type: RlpTxTypeTag::TxLegacyType,
+            tx_type: RlpTxTypeTag::Tx1559Type,
             tx_member: RlpTxFieldTag::Padding,
             complete: true,
             rlp_type: RlpDecodeTypeTag::DoNothing,
@@ -2457,9 +2594,11 @@ fn generate_rlp_row_witness_new<F: Field>(
     rlp_remain_length: usize,
     error_type: Option<RlpDecodeErrorType>,
 ) -> Vec<RlpDecoderCircuitConfigWitness<F>> {
-    // log::trace!("generate witness for (tx_id: {}, tx_member: {:?}, raw_bytes: {:?}, r: {:?},
-    // rlp_remain_length: {:?}, error_id: {:?})",             tx_id, tx_member, raw_bytes, r,
-    // rlp_remain_length, error_type);
+    // print!(
+    //     "generate witness for (tx_id: {}, tx_member: {:?}, raw_bytes: {:?}, r: {:?},
+    // rlp_remain_length: {:?}, error_id: {:?})",
+    //     tx_id, tx_member, raw_bytes, r, rlp_remain_length, error_type
+    // );
     let mut witness = vec![];
     let (mut rlp_type, _, _, _) = generate_rlp_type_witness(tx_member, raw_bytes);
     let partial_rlp_type = RlpDecodeTypeTag::PartialRlp;
@@ -2493,7 +2632,7 @@ fn generate_rlp_row_witness_new<F: Field>(
             while rlp_bytes_remain_len > MAX_BYTE_COLUMN_NUM {
                 temp_witness_vec.push(RlpDecoderCircuitConfigWitness::<F> {
                     tx_id: tx_id,
-                    tx_type: RlpTxTypeTag::TxLegacyType,
+                    tx_type: RlpTxTypeTag::Tx1559Type,
                     tx_member: tx_member.clone(),
                     complete: false,
                     rlp_type: rlp_type,
@@ -2521,7 +2660,7 @@ fn generate_rlp_row_witness_new<F: Field>(
             }
             temp_witness_vec.push(RlpDecoderCircuitConfigWitness::<F> {
                 tx_id: tx_id,
-                tx_type: RlpTxTypeTag::TxLegacyType,
+                tx_type: RlpTxTypeTag::Tx1559Type,
                 tx_member: tx_member.clone(),
                 complete: true,
                 rlp_type: rlp_type,
@@ -2558,11 +2697,14 @@ fn generate_rlp_row_witness_new<F: Field>(
         RlpTxFieldTag::SignR => witness.append(&mut generate_witness!()),
         RlpTxFieldTag::SignS => witness.append(&mut generate_witness!()),
         RlpTxFieldTag::DecodeError => witness.append(&mut generate_witness!()),
+        RlpTxFieldTag::TypedTxHeader => witness.append(&mut generate_witness!()),
+        RlpTxFieldTag::TxType => witness.append(&mut generate_witness!()),
+        RlpTxFieldTag::ChainID => witness.append(&mut generate_witness!()),
+        RlpTxFieldTag::GasTipCap => witness.append(&mut generate_witness!()),
+        RlpTxFieldTag::GasFeeCap => witness.append(&mut generate_witness!()),
+        RlpTxFieldTag::AccessList => witness.append(&mut generate_witness!()),
         RlpTxFieldTag::Padding => {
             unreachable!("Padding should not be here")
-        }
-        _ => {
-            unreachable!("1559 not support now")
         }
     }
     witness
@@ -3226,5 +3368,98 @@ pub mod rlp_decode_circuit_tests {
         assert_eq!(witness[1].valid, false);
 
         assert_eq!(run_rlp_circuit::<Fr>(rlp_bytes.to_vec(), k), Ok(()));
+    }
+}
+
+#[cfg(test)]
+mod test_1559_rlp_circuit {
+    use super::*;
+    use crate::util::log2_ceil;
+    use halo2_proofs::{
+        dev::{MockProver, VerifyFailure},
+        halo2curves::bn256::Fr,
+    };
+    use mock::AddrOrWallet;
+    use pretty_assertions::assert_eq;
+    use rand::SeedableRng;
+    use rand_chacha::ChaCha20Rng;
+
+    /// test rlp decoder circuit
+    pub fn run_rlp_circuit<F: Field>(
+        rlp_bytes: Vec<u8>,
+        k: usize,
+    ) -> Result<(), Vec<VerifyFailure>> {
+        let circuit = RlpDecoderCircuit::<F>::new(rlp_bytes, k);
+        let prover = match MockProver::run(k as u32, &circuit, vec![]) {
+            Ok(prover) => prover,
+            Err(e) => panic!("{:#?}", e),
+        };
+        prover.verify()
+    }
+
+    /// predefined tx bytes:</br>
+    /// f865b86302f86001800201649400000000000000000000000000000000000000006480c080a091e9a510919059098df3c43b00657fbc596d075773b19b173a747e274503fdc5a0561e1db778068ade22d5fbeafe88a6beb9257b3ddaecf1c0f163e04c9cca6aa0 </br>
+    /// fields: </br>
+    /// "f8 65"   : tx list rlp header </br>
+    /// "b8 63"   : witness[1]: typed tx header </br>
+    /// "02"      : witness[2]: tx type </br>
+    /// "f8 60"   : witness[.]: tx rlp header </br>
+    /// "01"      : witness[.]: chain id </br>
+    /// "80"      : witness[.]: nonce </br>
+    /// "02"      : witness[.]: tip cap </br>
+    /// "01"      : witness[.]: fee cap </br>
+    /// "64"      : witness[.]: gas </br>
+    /// "94 ...." : witness[.]: to </br>
+    /// "64"      : witness[.]: value </br>
+    /// "80"      : witness[.]: input </br>
+    /// "c0"      : witness[.]: access list </br>
+    /// "80"      : witness[.]: v </br>
+    /// "a0 ...." : witness[.]: r </br>
+    /// "a0 ...." : witness[.]: s </br>
+    fn const_1559_hex() -> String {
+        String::from("f865")
+            + "b863"
+            + "02"
+            + "f860"
+            + "01"
+            + "80"
+            + "02"
+            + "01"
+            + "64"
+            + "940000000000000000000000000000000000000000"
+            + "64"
+            + "80"
+            + "c0"
+            + "80"
+            + "a01c758784e91d3e616d6d4b70a6dac27a00512a76c96dc258a9ad48cdada0267d"
+            + "a01343bbb9dc377773f13519dbdb71051ee90d52080c2bc77f5f808118dff5341a"
+    }
+
+    #[test]
+    fn gen_1559_witness() {
+        let rlp_bytes = hex::decode(const_1559_hex()).unwrap();
+
+        let k = 12;
+        let witness = gen_rlp_decode_state_witness(&rlp_bytes, Fr::one(), 1 << k);
+        // for wit in &witness[..=16] {
+        //     println!("{:?}", wit);
+        // }
+
+        assert_eq!(witness[1].tx_member, RlpTxFieldTag::TxListRlpHeader);
+        assert_eq!(witness[2].tx_member, RlpTxFieldTag::TypedTxHeader);
+        assert_eq!(witness[3].tx_member, RlpTxFieldTag::TxType);
+        assert_eq!(witness[4].tx_member, RlpTxFieldTag::TxRlpHeader);
+        assert_eq!(witness[5].tx_member, RlpTxFieldTag::ChainID);
+        assert_eq!(witness[6].tx_member, RlpTxFieldTag::Nonce);
+        assert_eq!(witness[7].tx_member, RlpTxFieldTag::GasTipCap);
+        assert_eq!(witness[8].tx_member, RlpTxFieldTag::GasFeeCap);
+        assert_eq!(witness[9].tx_member, RlpTxFieldTag::Gas);
+        assert_eq!(witness[10].tx_member, RlpTxFieldTag::To);
+        assert_eq!(witness[11].tx_member, RlpTxFieldTag::Value);
+        assert_eq!(witness[12].tx_member, RlpTxFieldTag::Data);
+        assert_eq!(witness[13].tx_member, RlpTxFieldTag::AccessList);
+        assert_eq!(witness[14].tx_member, RlpTxFieldTag::SignV);
+        assert_eq!(witness[15].tx_member, RlpTxFieldTag::SignR);
+        assert_eq!(witness[16].tx_member, RlpTxFieldTag::SignS);
     }
 }

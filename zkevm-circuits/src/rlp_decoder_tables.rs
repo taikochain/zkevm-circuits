@@ -26,6 +26,8 @@ pub enum RlpDecodeRule {
     Padding = 0,
     /// The RLP encoding type is a empty string, i.e., 0x80
     Empty,
+    /// The RLP encoding type is a single byte value 2, i.e., 0x02
+    TxType1559,
     /// The RLP encoding type is a uint64
     Uint64,
     /// The RLP encoding type is a uint96, for gas/nonce/price/ect
@@ -37,6 +39,8 @@ pub enum RlpDecodeRule {
     /// The RLP encoding type is a string which is upto 48k bytes, a exception is it accepts
     /// leading 00
     Bytes48K,
+    /// The RLP encoding type is a string which is upto 16M bytes, i.e., 0xb800 ~ 0xbaFFFFFF
+    LongBytes,
     /// The RLP encoding empty list type
     EmptyList,
     /// The RLP encoding empty long list type, upto 16M, i.e., 0xF9FFFFFF
@@ -57,6 +61,10 @@ impl RlpDecodeRule {
             RlpDecodeRule::Padding => (RlpDecodeTypeTag::DoNothing, true),
             RlpDecodeRule::Empty => match byte0 {
                 0x80 => (RlpDecodeTypeTag::SingleByte, true),
+                _ => (RlpDecodeTypeTag::DoNothing, false),
+            },
+            RlpDecodeRule::TxType1559 => match byte0 {
+                0x2 => (RlpDecodeTypeTag::SingleByte, true),
                 _ => (RlpDecodeTypeTag::DoNothing, false),
             },
             RlpDecodeRule::Uint64 => match byte0 {
@@ -90,8 +98,14 @@ impl RlpDecodeRule {
                 0xba => (RlpDecodeTypeTag::LongString3, true),
                 _ => (RlpDecodeTypeTag::DoNothing, false),
             },
+            RlpDecodeRule::LongBytes => match byte0 {
+                0xb8 => (RlpDecodeTypeTag::LongString1, true),
+                0xb9 => (RlpDecodeTypeTag::LongString2, true),
+                0xba => (RlpDecodeTypeTag::LongString3, true),
+                _ => (RlpDecodeTypeTag::DoNothing, false),
+            },
             RlpDecodeRule::EmptyList => match byte0 {
-                0xc0 => (RlpDecodeTypeTag::EmptyList, false),
+                0xc0 => (RlpDecodeTypeTag::EmptyList, true),
                 _ => (RlpDecodeTypeTag::DoNothing, false),
             },
             RlpDecodeRule::LongList => match byte0 {
@@ -106,74 +120,104 @@ impl RlpDecodeRule {
 }
 
 /// rules of tx members
-pub const RLP_TX_FIELD_DECODE_RULES: [(RlpTxTypeTag, RlpTxFieldTag, RlpDecodeRule); 14] = [
+pub const RLP_TX_FIELD_DECODE_RULES: [(RlpTxTypeTag, RlpTxFieldTag, RlpDecodeRule); 20] = [
     (
-        RlpTxTypeTag::TxLegacyType,
+        RlpTxTypeTag::Tx1559Type,
         RlpTxFieldTag::TxListRlpHeader,
         RlpDecodeRule::LongList,
     ),
     (
-        RlpTxTypeTag::TxLegacyType,
+        RlpTxTypeTag::Tx1559Type,
+        RlpTxFieldTag::TypedTxHeader,
+        RlpDecodeRule::LongBytes,
+    ),
+    (
+        RlpTxTypeTag::Tx1559Type,
+        RlpTxFieldTag::TxType,
+        RlpDecodeRule::TxType1559,
+    ),
+    (
+        RlpTxTypeTag::Tx1559Type,
         RlpTxFieldTag::TxRlpHeader,
         RlpDecodeRule::LongList,
     ),
     (
-        RlpTxTypeTag::TxLegacyType,
+        RlpTxTypeTag::Tx1559Type,
+        RlpTxFieldTag::ChainID,
+        RlpDecodeRule::Uint96,
+    ),
+    (
+        RlpTxTypeTag::Tx1559Type,
         RlpTxFieldTag::Nonce,
         RlpDecodeRule::Uint96,
     ),
     (
-        RlpTxTypeTag::TxLegacyType,
+        RlpTxTypeTag::Tx1559Type,
         RlpTxFieldTag::GasPrice,
         RlpDecodeRule::Uint96,
     ),
     (
-        RlpTxTypeTag::TxLegacyType,
+        RlpTxTypeTag::Tx1559Type,
+        RlpTxFieldTag::GasTipCap,
+        RlpDecodeRule::Uint96,
+    ),
+    (
+        RlpTxTypeTag::Tx1559Type,
+        RlpTxFieldTag::GasFeeCap,
+        RlpDecodeRule::Uint96,
+    ),
+    (
+        RlpTxTypeTag::Tx1559Type,
         RlpTxFieldTag::Gas,
         RlpDecodeRule::Uint96,
     ),
     (
-        RlpTxTypeTag::TxLegacyType,
+        RlpTxTypeTag::Tx1559Type,
         RlpTxFieldTag::To,
         RlpDecodeRule::Address,
     ),
     (
-        RlpTxTypeTag::TxLegacyType,
+        RlpTxTypeTag::Tx1559Type,
         RlpTxFieldTag::To,
         RlpDecodeRule::Empty,
     ),
     (
-        RlpTxTypeTag::TxLegacyType,
+        RlpTxTypeTag::Tx1559Type,
         RlpTxFieldTag::Value,
         RlpDecodeRule::Uint96,
     ),
     (
-        RlpTxTypeTag::TxLegacyType,
+        RlpTxTypeTag::Tx1559Type,
         RlpTxFieldTag::Data,
         RlpDecodeRule::Bytes48K,
     ),
     (
-        RlpTxTypeTag::TxLegacyType,
+        RlpTxTypeTag::Tx1559Type,
+        RlpTxFieldTag::AccessList,
+        RlpDecodeRule::EmptyList,
+    ),
+    (
+        RlpTxTypeTag::Tx1559Type,
         RlpTxFieldTag::SignV,
         RlpDecodeRule::Uint96,
     ),
     (
-        RlpTxTypeTag::TxLegacyType,
+        RlpTxTypeTag::Tx1559Type,
         RlpTxFieldTag::SignR,
         RlpDecodeRule::Uint256,
     ),
     (
-        RlpTxTypeTag::TxLegacyType,
+        RlpTxTypeTag::Tx1559Type,
         RlpTxFieldTag::SignS,
         RlpDecodeRule::Uint256,
     ),
     (
-        RlpTxTypeTag::TxLegacyType,
+        RlpTxTypeTag::Tx1559Type,
         RlpTxFieldTag::Padding,
         RlpDecodeRule::Padding,
     ),
     (
-        RlpTxTypeTag::TxLegacyType,
+        RlpTxTypeTag::Tx1559Type,
         RlpTxFieldTag::DecodeError,
         RlpDecodeRule::Padding,
     ),
@@ -294,25 +338,33 @@ pub struct TxFieldSwitchTable {
     pub next_tx_field: Column<Fixed>,
 }
 
-static TX_FIELD_TRANSITION_TABLE: [(RlpTxFieldTag, &[RlpTxFieldTag]); 14] = [
+static TX_FIELD_TRANSITION_TABLE: [(RlpTxFieldTag, &[RlpTxFieldTag]); 17] = [
     (
         RlpTxFieldTag::TxListRlpHeader,
+        &[RlpTxFieldTag::TxType, RlpTxFieldTag::DecodeError],
+    ),
+    (
+        RlpTxFieldTag::TxType,
         &[RlpTxFieldTag::TxRlpHeader, RlpTxFieldTag::DecodeError],
     ),
     (
         RlpTxFieldTag::TxRlpHeader,
+        &[RlpTxFieldTag::ChainID, RlpTxFieldTag::DecodeError],
+    ),
+    (
+        RlpTxFieldTag::ChainID,
         &[RlpTxFieldTag::Nonce, RlpTxFieldTag::DecodeError],
     ),
     (
         RlpTxFieldTag::Nonce,
-        &[RlpTxFieldTag::GasPrice, RlpTxFieldTag::DecodeError],
+        &[RlpTxFieldTag::GasTipCap, RlpTxFieldTag::DecodeError],
     ),
     (
-        RlpTxFieldTag::GasPrice,
-        &[RlpTxFieldTag::Gas, RlpTxFieldTag::DecodeError],
+        RlpTxFieldTag::GasTipCap,
+        &[RlpTxFieldTag::GasFeeCap, RlpTxFieldTag::DecodeError],
     ),
     (
-        RlpTxFieldTag::Gas,
+        RlpTxFieldTag::GasFeeCap,
         &[RlpTxFieldTag::To, RlpTxFieldTag::DecodeError],
     ),
     (
@@ -325,6 +377,10 @@ static TX_FIELD_TRANSITION_TABLE: [(RlpTxFieldTag, &[RlpTxFieldTag]); 14] = [
     ),
     (
         RlpTxFieldTag::Data,
+        &[RlpTxFieldTag::AccessList, RlpTxFieldTag::DecodeError],
+    ),
+    (
+        RlpTxFieldTag::AccessList,
         &[RlpTxFieldTag::SignV, RlpTxFieldTag::DecodeError],
     ),
     (
@@ -337,7 +393,7 @@ static TX_FIELD_TRANSITION_TABLE: [(RlpTxFieldTag, &[RlpTxFieldTag]); 14] = [
     ),
     (
         RlpTxFieldTag::SignS,
-        &[RlpTxFieldTag::TxRlpHeader, RlpTxFieldTag::DecodeError],
+        &[RlpTxFieldTag::TxType, RlpTxFieldTag::DecodeError],
     ),
     (
         RlpTxFieldTag::SignS,
@@ -348,7 +404,6 @@ static TX_FIELD_TRANSITION_TABLE: [(RlpTxFieldTag, &[RlpTxFieldTag]); 14] = [
         &[RlpTxFieldTag::Padding, RlpTxFieldTag::DecodeError],
     ),
     (RlpTxFieldTag::Padding, &[RlpTxFieldTag::Padding]),
-    // TODO: add 1559 fields
 ];
 
 impl TxFieldSwitchTable {
