@@ -598,6 +598,7 @@ impl<P: JsonRpcClient> BuilderClient<P> {
 
     /// Step 5. For each step in TxExecTraces, gen the associated ops and state
     /// circuit inputs
+    #[allow(clippy::too_many_arguments)]
     pub fn gen_inputs_from_state_with_anchor(
         &self,
         sdb: StateDB,
