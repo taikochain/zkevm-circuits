@@ -338,9 +338,13 @@ pub struct TxFieldSwitchTable {
     pub next_tx_field: Column<Fixed>,
 }
 
-static TX_FIELD_TRANSITION_TABLE: [(RlpTxFieldTag, &[RlpTxFieldTag]); 17] = [
+static TX_FIELD_TRANSITION_TABLE: [(RlpTxFieldTag, &[RlpTxFieldTag]); 19] = [
     (
         RlpTxFieldTag::TxListRlpHeader,
+        &[RlpTxFieldTag::TypedTxHeader, RlpTxFieldTag::DecodeError],
+    ),
+    (
+        RlpTxFieldTag::TypedTxHeader,
         &[RlpTxFieldTag::TxType, RlpTxFieldTag::DecodeError],
     ),
     (
@@ -365,6 +369,10 @@ static TX_FIELD_TRANSITION_TABLE: [(RlpTxFieldTag, &[RlpTxFieldTag]); 17] = [
     ),
     (
         RlpTxFieldTag::GasFeeCap,
+        &[RlpTxFieldTag::Gas, RlpTxFieldTag::DecodeError],
+    ),
+    (
+        RlpTxFieldTag::Gas,
         &[RlpTxFieldTag::To, RlpTxFieldTag::DecodeError],
     ),
     (
@@ -393,7 +401,7 @@ static TX_FIELD_TRANSITION_TABLE: [(RlpTxFieldTag, &[RlpTxFieldTag]); 17] = [
     ),
     (
         RlpTxFieldTag::SignS,
-        &[RlpTxFieldTag::TxType, RlpTxFieldTag::DecodeError],
+        &[RlpTxFieldTag::TypedTxHeader, RlpTxFieldTag::DecodeError],
     ),
     (
         RlpTxFieldTag::SignS,
