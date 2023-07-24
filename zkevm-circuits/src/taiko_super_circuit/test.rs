@@ -1,17 +1,16 @@
-use std::str::FromStr;
-
+#![allow(unused_imports)]
+pub use super::*;
 use crate::{
     anchor_tx_circuit::{add_anchor_accounts, add_anchor_tx, sign_tx},
     witness::MetaHash,
 };
-
-pub use super::*;
 use ethers_signers::{LocalWallet, Signer};
 use halo2_proofs::{dev::MockProver, halo2curves::bn256::Fr};
 use log::error;
 use mock::{TestContext, MOCK_CHAIN_ID};
 use rand::SeedableRng;
 use rand_chacha::ChaCha20Rng;
+use std::str::FromStr;
 
 use eth_types::{address, bytecode, geth_types::GethData, Hash, ToWord, Word};
 

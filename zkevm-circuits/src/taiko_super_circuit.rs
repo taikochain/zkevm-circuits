@@ -6,8 +6,8 @@ pub mod test;
 
 use crate::{
     anchor_tx_circuit::{AnchorTxCircuit, AnchorTxCircuitConfig, AnchorTxCircuitConfigArgs},
-    pi_circuit2::{PiCircuit, PiCircuitConfig, PiCircuitConfigArgs},
     table::{byte_table::ByteTable, BlockTable, KeccakTable, PiTable, TxTable},
+    taiko_pi_circuit::{TaikoPiCircuit, TaikoPiCircuitConfig, TaikoPiCircuitConfigArgs},
     util::{log2_ceil, Challenges, SubCircuit, SubCircuitConfig},
     witness::{block_convert, Block, ProtocolInstance},
 };
@@ -32,7 +32,7 @@ pub struct SuperCircuitConfig<F: Field> {
     keccak_table: KeccakTable,
     block_table: BlockTable,
     byte_table: ByteTable,
-    pi_circuit: PiCircuitConfig<F>,
+    pi_circuit: TaikoPiCircuitConfig<F>,
     anchor_tx_circuit: AnchorTxCircuitConfig<F>,
 }
 
@@ -56,9 +56,9 @@ impl<F: Field> SubCircuitConfig<F> for SuperCircuitConfig<F> {
         let keccak_table = KeccakTable::construct(meta);
         let byte_table = ByteTable::construct(meta);
 
-        let pi_circuit = PiCircuitConfig::new(
+        let pi_circuit = TaikoPiCircuitConfig::new(
             meta,
-            PiCircuitConfigArgs {
+            TaikoPiCircuitConfigArgs {
                 block_table: block_table.clone(),
                 keccak_table: keccak_table.clone(),
                 byte_table: byte_table.clone(),
@@ -92,7 +92,7 @@ impl<F: Field> SubCircuitConfig<F> for SuperCircuitConfig<F> {
 #[derive(Clone, Default, Debug)]
 pub struct SuperCircuit<F: Field> {
     /// Public Input Circuit
-    pub pi_circuit: PiCircuit<F>,
+    pub pi_circuit: TaikoPiCircuit<F>,
     /// Anchor Transaction Circuit
     pub anchor_tx_circuit: AnchorTxCircuit<F>,
     /// Block witness
@@ -116,11 +116,11 @@ impl<F: Field> SubCircuit<F> for SuperCircuit<F> {
     type Config = SuperCircuitConfig<F>;
 
     fn unusable_rows() -> usize {
-        PiCircuit::<F>::unusable_rows()
+        TaikoPiCircuit::<F>::unusable_rows()
     }
 
     fn new_from_block(block: &Block<F>) -> Self {
-        let pi_circuit = PiCircuit::new_from_block(block);
+        let pi_circuit = TaikoPiCircuit::new_from_block(block);
         let anchor_tx_circuit = AnchorTxCircuit::new_from_block(block);
 
         SuperCircuit::<_> {
@@ -140,7 +140,7 @@ impl<F: Field> SubCircuit<F> for SuperCircuit<F> {
     /// Return the minimum number of rows required to prove the block
     fn min_num_rows_block(block: &Block<F>) -> (usize, usize) {
         [
-            PiCircuit::min_num_rows_block(block),
+            TaikoPiCircuit::min_num_rows_block(block),
             AnchorTxCircuit::min_num_rows_block(block),
         ]
         .iter()

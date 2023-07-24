@@ -59,7 +59,7 @@ impl<AS> TaikoAggregationCircuit<AS>
 where
     AS: AccumulationSchemeSDK,
 {
-    /// Create a `PCDAggregationCircuit` with accumulator computed by
+    /// Create a `TaikoAggregationCircuit` with accumulator computed by
     /// Snark array. Returns `None` if given proof is invalid.
     pub fn new(
         params: &ParamsKZG<Bn256>,
@@ -193,7 +193,7 @@ where
 }
 
 #[cfg(test)]
-mod pcd_test {
+mod test {
     use super::*;
     use halo2_proofs::{
         circuit::{Layouter, SimpleFloorPlanner, Value},
@@ -356,7 +356,7 @@ mod pcd_test {
     }
 
     #[test]
-    fn test_simple_pcd_agg() {
+    fn test_simple_taiko_agg() {
         let k = 21;
         let params = gen_srs(k);
         let mut app_params = params.clone();

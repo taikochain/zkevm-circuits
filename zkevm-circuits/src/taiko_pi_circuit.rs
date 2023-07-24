@@ -160,7 +160,7 @@ impl PublicData {
 
 /// Config for PiCircuit
 #[derive(Clone, Debug)]
-pub struct PiCircuitConfig<F: Field> {
+pub struct TaikoPiCircuitConfig<F: Field> {
     rpi_field_bytes: Column<Advice>,
     rpi_field_bytes_acc: Column<Advice>,
     rpi_rlc_acc: Column<Advice>,
@@ -185,7 +185,7 @@ pub struct PiCircuitConfig<F: Field> {
 }
 
 /// Circuit configuration arguments
-pub struct PiCircuitConfigArgs<F: Field> {
+pub struct TaikoPiCircuitConfigArgs<F: Field> {
     /// BlockTable
     pub block_table: BlockTable,
     /// KeccakTable
@@ -196,10 +196,10 @@ pub struct PiCircuitConfigArgs<F: Field> {
     pub challenges: Challenges<Expression<F>>,
 }
 
-impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
-    type ConfigArgs = PiCircuitConfigArgs<F>;
+impl<F: Field> SubCircuitConfig<F> for TaikoPiCircuitConfig<F> {
+    type ConfigArgs = TaikoPiCircuitConfigArgs<F>;
 
-    /// Return a new PiCircuitConfig
+    /// Return a new TaikoPiCircuitConfig
     fn new(
         meta: &mut ConstraintSystem<F>,
         Self::ConfigArgs {
@@ -331,7 +331,7 @@ impl<F: Field> SubCircuitConfig<F> for PiCircuitConfig<F> {
     }
 }
 
-impl<F: Field> PiCircuitConfig<F> {
+impl<F: Field> TaikoPiCircuitConfig<F> {
     #[allow(clippy::too_many_arguments)]
     fn assign_pi_field(
         &self,
@@ -513,14 +513,14 @@ impl<F: Field> PiCircuitConfig<F> {
 
 /// Public Inputs Circuit
 #[derive(Clone, Default, Debug)]
-pub struct PiCircuit<F: Field> {
+pub struct TaikoPiCircuit<F: Field> {
     /// PublicInputs data known by the verifier
     pub public_data: PublicData,
     _marker: PhantomData<F>,
 }
 
-impl<F: Field> PiCircuit<F> {
-    /// Creates a new PiCircuit
+impl<F: Field> TaikoPiCircuit<F> {
+    /// Creates a new TaikoPiCircuit
     pub fn new(public_data: PublicData) -> Self {
         Self {
             public_data,
@@ -529,8 +529,8 @@ impl<F: Field> PiCircuit<F> {
     }
 }
 
-impl<F: Field> SubCircuit<F> for PiCircuit<F> {
-    type Config = PiCircuitConfig<F>;
+impl<F: Field> SubCircuit<F> for TaikoPiCircuit<F> {
+    type Config = TaikoPiCircuitConfig<F>;
 
     fn unusable_rows() -> usize {
         // No column queried at more than 3 distinct rotations, so returns 6 as
@@ -543,7 +543,7 @@ impl<F: Field> SubCircuit<F> for PiCircuit<F> {
     }
 
     fn new_from_block(block: &witness::Block<F>) -> Self {
-        PiCircuit::new(PublicData::new(block))
+        TaikoPiCircuit::new(PublicData::new(block))
     }
 
     /// Compute the public inputs for this circuit.
@@ -590,11 +590,11 @@ impl<F: Field> SubCircuit<F> for PiCircuit<F> {
 /// Test Circuit for PiCircuit
 #[cfg(any(feature = "test", test))]
 #[derive(Default, Clone)]
-pub struct PiTestCircuit<F: Field>(pub PiCircuit<F>);
+pub struct TaikoPiTestCircuit<F: Field>(pub TaikoPiCircuit<F>);
 
 #[cfg(any(feature = "test", test))]
-impl<F: Field> Circuit<F> for PiTestCircuit<F> {
-    type Config = (PiCircuitConfig<F>, Challenges);
+impl<F: Field> Circuit<F> for TaikoPiTestCircuit<F> {
+    type Config = (TaikoPiCircuitConfig<F>, Challenges);
     type FloorPlanner = SimpleFloorPlanner;
     type Params = ();
 
@@ -609,9 +609,9 @@ impl<F: Field> Circuit<F> for PiTestCircuit<F> {
         let challenges = Challenges::construct(meta);
         let challenge_exprs = challenges.exprs(meta);
         (
-            PiCircuitConfig::new(
+            TaikoPiCircuitConfig::new(
                 meta,
-                PiCircuitConfigArgs {
+                TaikoPiCircuitConfigArgs {
                     block_table,
                     keccak_table,
                     byte_table,
@@ -645,7 +645,7 @@ impl<F: Field> Circuit<F> for PiTestCircuit<F> {
 }
 
 #[cfg(test)]
-mod pi_circuit_test {
+mod taiko_pi_circuit_test {
 
     use super::*;
 
@@ -669,7 +669,7 @@ mod pi_circuit_test {
         public_data: PublicData,
         pi: Option<Vec<Vec<F>>>,
     ) -> Result<(), Vec<VerifyFailure>> {
-        let circuit = PiTestCircuit::<F>(PiCircuit::new(public_data));
+        let circuit = TaikoPiTestCircuit::<F>(TaikoPiCircuit::new(public_data));
         let public_inputs = pi.unwrap_or_else(|| circuit.0.instance());
 
         let prover = match MockProver::run(k, &circuit, public_inputs) {

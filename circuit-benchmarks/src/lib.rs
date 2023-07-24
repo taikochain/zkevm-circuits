@@ -9,8 +9,11 @@ pub mod state_circuit;
 pub mod tx_circuit;
 
 #[cfg(test)]
-//#[cfg(feature = "benches")]
+#[cfg(feature = "benches")]
 pub mod super_circuit;
+
+#[cfg(test)]
+pub mod taiko_super_circuit;
 
 #[cfg(test)]
 #[cfg(feature = "benches")]
