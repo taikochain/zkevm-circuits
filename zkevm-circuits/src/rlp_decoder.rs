@@ -15,7 +15,7 @@ use crate::{
     util::{log2_ceil, Challenges, SubCircuit, SubCircuitConfig},
     witness,
 };
-use eth_types::{Field, Signature, Transaction, Word};
+use eth_types::{AccessList, Field, Signature, Transaction, Word};
 use ethers_core::{types::TransactionRequest, utils::rlp};
 use gadgets::{
     less_than::{LtChip, LtConfig, LtInstruction},
@@ -1560,8 +1560,9 @@ impl<F: Field> RlpDecoderCircuitConfig<F> {
 }
 
 /// rlp decode Circuit for verifying transaction signatures
+/// also using GOOD flag to indicate whether the circuit is for good or bad witness
 #[derive(Clone, Default, Debug)]
-pub struct RlpDecoderCircuit<F: Field> {
+pub struct RlpDecoderCircuit<F: Field, const GOOD: bool> {
     /// input bytes
     pub bytes: Vec<u8>,
     /// Size of the circuit
@@ -1570,10 +1571,10 @@ pub struct RlpDecoderCircuit<F: Field> {
     pub _marker: PhantomData<F>,
 }
 
-impl<F: Field> RlpDecoderCircuit<F> {
+impl<F: Field, const G: bool> RlpDecoderCircuit<F, { G }> {
     /// Return a new RlpDecoderCircuit
     pub fn new(bytes: Vec<u8>, degree: usize) -> Self {
-        RlpDecoderCircuit::<F> {
+        RlpDecoderCircuit::<F, G> {
             bytes,
             size: 1 << degree,
             _marker: PhantomData,
@@ -1617,7 +1618,7 @@ impl<F: Field> RlpDecoderCircuit<F> {
     }
 }
 
-impl<F: Field> SubCircuit<F> for RlpDecoderCircuit<F> {
+impl<F: Field, const GOOD: bool> SubCircuit<F> for RlpDecoderCircuit<F, GOOD> {
     type Config = RlpDecoderCircuitConfig<F>;
 
     fn new_from_block(block: &witness::Block<F>) -> Self {
@@ -1629,7 +1630,7 @@ impl<F: Field> SubCircuit<F> for RlpDecoderCircuit<F> {
             .collect::<Vec<_>>();
         let bytes = rlp::encode_list(&txs).to_vec();
         let degree = log2_ceil(Self::min_num_rows(block).0);
-        RlpDecoderCircuit::<F> {
+        RlpDecoderCircuit::<F, GOOD> {
             bytes,
             size: 1 << degree,
             _marker: PhantomData,
@@ -1638,7 +1639,7 @@ impl<F: Field> SubCircuit<F> for RlpDecoderCircuit<F> {
 
     /// Return the minimum number of rows required to prove the block
     fn min_num_rows_block(block: &witness::Block<F>) -> (usize, usize) {
-        RlpDecoderCircuit::<F>::min_num_rows(block)
+        RlpDecoderCircuit::<F, GOOD>::min_num_rows(block)
     }
 
     /// Make the assignments to the RlpDecodeCircuit
@@ -1662,6 +1663,9 @@ impl<F: Field> SubCircuit<F> for RlpDecoderCircuit<F> {
         for (i, w) in witness.iter().enumerate() {
             log::trace!("witness[{}]: {:?}", i, w);
         }
+
+        assert_eq!(witness[witness.len() - 2].q_last, true);
+        assert_eq!(witness[witness.len() - 2].valid, GOOD);
 
         config
             .aux_tables
@@ -1701,7 +1705,7 @@ impl<F: Field> SubCircuit<F> for RlpDecoderCircuit<F> {
 }
 
 #[cfg(any(feature = "test", test, feature = "test-circuits"))]
-impl<F: Field> Circuit<F> for RlpDecoderCircuit<F> {
+impl<F: Field, const G: bool> Circuit<F> for RlpDecoderCircuit<F, G> {
     type Config = (RlpDecoderCircuitConfig<F>, Challenges);
     type FloorPlanner = SimpleFloorPlanner;
 
@@ -2681,7 +2685,7 @@ impl Encodable for SignedDynamicFeeTransaction {
         }
         s.append(&self.tx.value);
         s.append(&self.tx.input.to_vec());
-        s.append(&vec![]); // todo access list
+        s.append(&self.tx.access_list.clone().unwrap()); // todo access list
         s.append(&self.signature.v);
         s.append(&self.signature.r);
         s.append(&self.signature.s);
@@ -2713,7 +2717,7 @@ impl From<MockTransaction> for SignedDynamicFeeTransaction {
             to: mock_tx.to.map(|to| to.address()),
             value: mock_tx.value,
             input: mock_tx.input,
-            access_list: None, // TODO: add access list
+            access_list: Some(AccessList(vec![])), // TODO: add access list
             v: mock_tx.v.unwrap(),
             r: mock_tx.r.unwrap(),
             s: mock_tx.s.unwrap(),
@@ -2941,7 +2945,7 @@ pub mod rlp_decode_circuit_tests {
         rlp_bytes: Vec<u8>,
         k: usize,
     ) -> Result<(), Vec<VerifyFailure>> {
-        let circuit = RlpDecoderCircuit::<F>::new(rlp_bytes, k);
+        let circuit = RlpDecoderCircuit::<F, true>::new(rlp_bytes, k);
         let prover = match MockProver::run(k as u32, &circuit, vec![]) {
             Ok(prover) => prover,
             Err(e) => panic!("{:#?}", e),
@@ -2950,13 +2954,13 @@ pub mod rlp_decode_circuit_tests {
     }
 
     fn run<F: Field>(txs: Vec<Transaction>) -> Result<(), Vec<VerifyFailure>> {
-        let k = log2_ceil(RlpDecoderCircuit::<Fr>::min_num_rows_from_tx(&txs).0);
+        let k = log2_ceil(RlpDecoderCircuit::<Fr, true>::min_num_rows_from_tx(&txs).0);
 
         let encodable_txs: Vec<SignedTransaction> =
             txs.iter().map(|tx| tx.into()).collect::<Vec<_>>();
         let rlp_bytes = rlp::encode_list(&encodable_txs);
 
-        let circuit = RlpDecoderCircuit::<F>::new(rlp_bytes.to_vec(), k as usize);
+        let circuit = RlpDecoderCircuit::<F, true>::new(rlp_bytes.to_vec(), k as usize);
         let prover = match MockProver::run(k, &circuit, vec![]) {
             Ok(prover) => prover,
             Err(e) => panic!("{:#?}", e),
@@ -3078,6 +3082,18 @@ pub mod rlp_decode_circuit_tests {
             rlp_bytes.to_vec()
         }
 
+        pub fn run_bad_rlp_circuit<F: Field>(
+            rlp_bytes: Vec<u8>,
+            k: usize,
+        ) -> Result<(), Vec<VerifyFailure>> {
+            let circuit = RlpDecoderCircuit::<F, false>::new(rlp_bytes, k);
+            let prover = match MockProver::run(k as u32, &circuit, vec![]) {
+                Ok(prover) => prover,
+                Err(e) => panic!("{:#?}", e),
+            };
+            prover.verify()
+        }
+
         #[test]
         fn const_tx_decode_is_ok() {
             let k = 12;
@@ -3085,7 +3101,7 @@ pub mod rlp_decode_circuit_tests {
             let witness = gen_rlp_decode_state_witness(&rlp_bytes, Fr::one(), 1 << k);
             // println!("witness = {:?}", &witness);
             assert_eq!(witness[witness.len() - 2].valid, true);
-            assert_eq!(run_rlp_circuit::<Fr>(rlp_bytes, k), Ok(()));
+            assert_eq!(run_bad_rlp_circuit::<Fr>(rlp_bytes, k), Ok(()));
         }
 
         #[test]
@@ -3098,7 +3114,7 @@ pub mod rlp_decode_circuit_tests {
             assert_eq!(witness[1].valid, false);
             assert_eq!(witness[witness.len() - 2].valid, false);
 
-            assert_eq!(run_rlp_circuit::<Fr>(rlp_bytes, k), Ok(()));
+            assert_eq!(run_bad_rlp_circuit::<Fr>(rlp_bytes, k), Ok(()));
         }
 
         #[test]
@@ -3111,7 +3127,7 @@ pub mod rlp_decode_circuit_tests {
             assert_eq!(witness[1].valid, false);
             assert_eq!(witness[witness.len() - 2].valid, false);
 
-            assert_eq!(run_rlp_circuit::<Fr>(rlp_bytes, k), Ok(()));
+            assert_eq!(run_bad_rlp_circuit::<Fr>(rlp_bytes, k), Ok(()));
         }
 
         // rlp.exceptions.DecodingError: RLP string ends with 1 superfluous bytes
@@ -3125,7 +3141,7 @@ pub mod rlp_decode_circuit_tests {
             assert_eq!(witness[1].valid, false);
             assert_eq!(witness[witness.len() - 2].valid, false);
 
-            assert_eq!(run_rlp_circuit::<Fr>(rlp_bytes, k), Ok(()));
+            assert_eq!(run_bad_rlp_circuit::<Fr>(rlp_bytes, k), Ok(()));
         }
 
         #[test]
@@ -3139,7 +3155,7 @@ pub mod rlp_decode_circuit_tests {
             assert_eq!(witness[2].valid, false);
             assert_eq!(witness[witness.len() - 2].valid, false);
 
-            assert_eq!(run_rlp_circuit::<Fr>(rlp_bytes, k), Ok(()));
+            assert_eq!(run_bad_rlp_circuit::<Fr>(rlp_bytes, k), Ok(()));
         }
 
         #[test]
@@ -3151,7 +3167,7 @@ pub mod rlp_decode_circuit_tests {
             let witness = gen_rlp_decode_state_witness(&rlp_bytes, Fr::one(), 1 << k);
             assert_eq!(witness[witness.len() - 2].valid, false);
 
-            assert_eq!(run_rlp_circuit::<Fr>(rlp_bytes, k), Ok(()));
+            assert_eq!(run_bad_rlp_circuit::<Fr>(rlp_bytes, k), Ok(()));
         }
 
         #[test]
@@ -3163,7 +3179,7 @@ pub mod rlp_decode_circuit_tests {
             let witness = gen_rlp_decode_state_witness(&rlp_bytes, Fr::one(), 1 << k);
             // assert_eq!(witness[witness.len() - 2].valid, false);
 
-            assert_eq!(run_rlp_circuit::<Fr>(rlp_bytes, k), Ok(()));
+            assert_eq!(run_bad_rlp_circuit::<Fr>(rlp_bytes, k), Ok(()));
         }
 
         #[test]
@@ -3175,7 +3191,7 @@ pub mod rlp_decode_circuit_tests {
             let witness = gen_rlp_decode_state_witness(&rlp_bytes, Fr::one(), 1 << k);
             assert_eq!(witness[witness.len() - 2].valid, false);
 
-            assert_eq!(run_rlp_circuit::<Fr>(rlp_bytes, k), Ok(()));
+            assert_eq!(run_bad_rlp_circuit::<Fr>(rlp_bytes, k), Ok(()));
         }
 
         #[test]
@@ -3189,7 +3205,7 @@ pub mod rlp_decode_circuit_tests {
             assert_eq!(witness[3].valid, false);
             assert_eq!(witness[witness.len() - 2].valid, false);
 
-            assert_eq!(run_rlp_circuit::<Fr>(rlp_bytes, k), Ok(()));
+            assert_eq!(run_bad_rlp_circuit::<Fr>(rlp_bytes, k), Ok(()));
         }
 
         #[test]
@@ -3203,7 +3219,7 @@ pub mod rlp_decode_circuit_tests {
             assert_eq!(witness[4].valid, false);
             assert_eq!(witness[witness.len() - 2].valid, false);
 
-            assert_eq!(run_rlp_circuit::<Fr>(rlp_bytes, k), Ok(()));
+            assert_eq!(run_bad_rlp_circuit::<Fr>(rlp_bytes, k), Ok(()));
         }
 
         #[test]
@@ -3217,7 +3233,7 @@ pub mod rlp_decode_circuit_tests {
             assert_eq!(witness[6].valid, false);
             assert_eq!(witness[witness.len() - 2].valid, false);
 
-            assert_eq!(run_rlp_circuit::<Fr>(rlp_bytes, k), Ok(()));
+            assert_eq!(run_bad_rlp_circuit::<Fr>(rlp_bytes, k), Ok(()));
         }
 
         #[test]
@@ -3232,7 +3248,7 @@ pub mod rlp_decode_circuit_tests {
             assert_eq!(witness[8].valid, false);
             assert_eq!(witness[witness.len() - 2].valid, false);
 
-            assert_eq!(run_rlp_circuit::<Fr>(rlp_bytes, k), Ok(()));
+            assert_eq!(run_bad_rlp_circuit::<Fr>(rlp_bytes, k), Ok(()));
         }
 
         #[test]
@@ -3245,7 +3261,10 @@ pub mod rlp_decode_circuit_tests {
             // assert_eq!(witness[1].valid, false);
             // assert_eq!(witness[witness.len() - 2].valid, false);
 
-            assert_eq!(run_rlp_circuit::<Fr>(trimmed_rlp_bytes.to_vec(), k), Ok(()));
+            assert_eq!(
+                run_bad_rlp_circuit::<Fr>(trimmed_rlp_bytes.to_vec(), k),
+                Ok(())
+            );
         }
 
         #[test]
@@ -3264,12 +3283,15 @@ pub mod rlp_decode_circuit_tests {
             let trimmed_size = rlp_bytes.len() - 33 - 33 - 3 - 1500;
             let trimmed_rlp_bytes = &rlp_bytes[..trimmed_size];
 
-            let size = RlpDecoderCircuit::<Fr>::min_num_rows_from_tx(&txs.clone()).0;
+            let size = RlpDecoderCircuit::<Fr, false>::min_num_rows_from_tx(&txs.clone()).0;
             let witness = gen_rlp_decode_state_witness(trimmed_rlp_bytes, Fr::one(), size);
             assert_eq!(witness[1].valid, false);
 
             let k = log2_ceil(size) as usize;
-            assert_eq!(run_rlp_circuit::<Fr>(trimmed_rlp_bytes.to_vec(), k), Ok(()));
+            assert_eq!(
+                run_bad_rlp_circuit::<Fr>(trimmed_rlp_bytes.to_vec(), k),
+                Ok(())
+            );
         }
     }
 
@@ -3309,11 +3331,11 @@ mod test_1559_rlp_circuit {
     use rand_chacha::ChaCha20Rng;
 
     /// test rlp decoder circuit
-    pub fn run_rlp_circuit<F: Field>(
+    pub fn run_good_rlp_circuit<F: Field>(
         rlp_bytes: Vec<u8>,
         k: usize,
     ) -> Result<(), Vec<VerifyFailure>> {
-        let circuit = RlpDecoderCircuit::<F>::new(rlp_bytes, k);
+        let circuit = RlpDecoderCircuit::<F, true>::new(rlp_bytes, k);
         let prover = match MockProver::run(k as u32, &circuit, vec![]) {
             Ok(prover) => prover,
             Err(e) => panic!("{:#?}", e),
@@ -3412,7 +3434,7 @@ mod test_1559_rlp_circuit {
         let rlp_bytes = hex::decode(const_1559_hex()).unwrap();
 
         let k = 13;
-        assert_eq!(run_rlp_circuit::<Fr>(rlp_bytes, k), Ok(()));
+        assert_eq!(run_good_rlp_circuit::<Fr>(rlp_bytes, k), Ok(()));
     }
 
     #[test]
@@ -3420,7 +3442,7 @@ mod test_1559_rlp_circuit {
         let rlp_bytes = prepare_eip1559_txlist_rlp_bytes(3);
 
         let k = 13;
-        assert_eq!(run_rlp_circuit::<Fr>(rlp_bytes, k), Ok(()));
+        assert_eq!(run_good_rlp_circuit::<Fr>(rlp_bytes, k), Ok(()));
     }
 
     #[test]
@@ -3591,6 +3613,6 @@ f7db141d30cf3e0100000000000000000000000000000000000000c001a01733fac519ba5e54250d
         .unwrap();
 
         let k = 15;
-        assert_eq!(run_rlp_circuit::<Fr>(rlp_bytes, k), Ok(()));
+        assert_eq!(run_good_rlp_circuit::<Fr>(rlp_bytes, k), Ok(()));
     }
 }
