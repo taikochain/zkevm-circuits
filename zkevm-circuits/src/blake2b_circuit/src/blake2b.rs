@@ -2001,8 +2001,8 @@ mod benchmark {
         }
     ];
     
-    // Runs the test bench for the BLAKE2b compression function circuit. In order to obtain correct
-    // results, it is recommended to run the tests by executing "cargo test --release -- --nocapture"
+    // Runs the test bench for the BLAKE2b compression function circuit. In order to obtain correct results,
+    // it is recommended to run the tests by executing "cargo test --release -- --nocapture --test-threads=1"
     #[test]
     #[ignore]
     fn bench() {
