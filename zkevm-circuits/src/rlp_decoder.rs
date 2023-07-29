@@ -1605,6 +1605,23 @@ impl<F: Field, const G: bool> RlpDecoderCircuit<F, { G }> {
         (min_num_rows, min_num_rows)
     }
 
+    /// Return the minimum number of rows required to prove an input of a
+    /// particular size.
+    /// Note: valid 1559 rlp encoded bytes only
+    pub fn min_num_rows_from_valid_bytes(txlist_bytes: &Vec<u8>) -> (usize, usize) {
+        let typed_tx_bytes_vec: Vec<Vec<u8>> = rlp::decode_list(txlist_bytes);
+        let txs = typed_tx_bytes_vec
+            .iter()
+            .map(|typed_tx_bytes| {
+                // skip the type byte
+                assert_eq!(*typed_tx_bytes.first().unwrap(), 0x02);
+                rlp::decode(typed_tx_bytes).unwrap()
+            })
+            .collect::<Vec<Transaction>>();
+
+        Self::min_num_rows_from_tx(&txs)
+    }
+
     fn calc_min_num_rows(txs_len: usize, call_data_rows: usize) -> usize {
         // add 2 for prev and next rotations.
         let constraint_size = txs_len * TX1559_TX_FIELD_NUM + call_data_rows + 2;
@@ -2927,18 +2944,13 @@ mod rlp_witness_gen_test {
 }
 
 /// test module for rlp decoder circuit
-#[cfg(test)]
-pub mod rlp_decode_circuit_tests {
+pub mod rlp_decode_circuit_test_helper {
     use super::*;
     use crate::util::log2_ceil;
     use halo2_proofs::{
         dev::{MockProver, VerifyFailure},
         halo2curves::bn256::Fr,
     };
-    use mock::AddrOrWallet;
-    use pretty_assertions::assert_eq;
-    use rand::SeedableRng;
-    use rand_chacha::ChaCha20Rng;
 
     /// test rlp decoder circuit
     pub fn run_rlp_circuit<F: Field>(
@@ -2953,7 +2965,20 @@ pub mod rlp_decode_circuit_tests {
         prover.verify()
     }
 
-    fn run<F: Field>(txs: Vec<Transaction>) -> Result<(), Vec<VerifyFailure>> {
+    /// test valid rlp bytes
+    pub fn run_rlp_circuit_for_valid_bytes(rlp_bytes: &Vec<u8>) -> Result<(), Vec<VerifyFailure>> {
+        let k =
+            log2_ceil(RlpDecoderCircuit::<Fr, true>::min_num_rows_from_valid_bytes(&rlp_bytes).0);
+        let circuit = RlpDecoderCircuit::<Fr, true>::new(rlp_bytes.clone(), k as usize);
+        let prover = match MockProver::run(k as u32, &circuit, vec![]) {
+            Ok(prover) => prover,
+            Err(e) => panic!("{:#?}", e),
+        };
+        prover.verify()
+    }
+
+    /// run rlp decode circuit for a list of transactions
+    pub fn run<F: Field>(txs: Vec<Transaction>) -> Result<(), Vec<VerifyFailure>> {
         let k = log2_ceil(RlpDecoderCircuit::<Fr, true>::min_num_rows_from_tx(&txs).0);
 
         let encodable_txs: Vec<SignedTransaction> =
@@ -2967,6 +2992,19 @@ pub mod rlp_decode_circuit_tests {
         };
         prover.verify()
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        rlp_decode_circuit_test_helper::{run, run_rlp_circuit},
+        *,
+    };
+    use halo2_proofs::halo2curves::bn256::Fr;
+    use mock::AddrOrWallet;
+    use pretty_assertions::assert_eq;
+    use rand::SeedableRng;
+    use rand_chacha::ChaCha20Rng;
 
     #[test]
     #[ignore]
@@ -3046,6 +3084,7 @@ pub mod rlp_decode_circuit_tests {
     /// invalid rlp_test
     mod invalid_rlp_test {
         use super::*;
+        use halo2_proofs::dev::{MockProver, VerifyFailure};
         use pretty_assertions::assert_eq;
 
         /// predefined tx bytes:</br>
@@ -3325,10 +3364,7 @@ mod test_1559_rlp_circuit {
         dev::{MockProver, VerifyFailure},
         halo2curves::bn256::Fr,
     };
-    use mock::AddrOrWallet;
     use pretty_assertions::assert_eq;
-    use rand::SeedableRng;
-    use rand_chacha::ChaCha20Rng;
 
     /// test rlp decoder circuit
     pub fn run_good_rlp_circuit<F: Field>(
@@ -3427,6 +3463,14 @@ mod test_1559_rlp_circuit {
         println!("rlp_txs = {:?}", hex::encode(rlp_txs.clone()));
 
         rlp_txs.to_vec()
+    }
+
+    #[test]
+    fn test_min_rows() {
+        let rlp_bytes = hex::decode(const_1559_hex()).unwrap();
+        let k =
+            log2_ceil(RlpDecoderCircuit::<Fr, true>::min_num_rows_from_valid_bytes(&rlp_bytes).0);
+        assert_eq!(k, 13);
     }
 
     #[test]

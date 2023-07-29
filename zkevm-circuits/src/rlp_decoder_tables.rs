@@ -269,7 +269,7 @@ impl RlpDecoderTable {
     /// Get the row num of the RLP decoding table
     pub fn table_size() -> usize {
         // item count * 256
-        (RlpDecodeRule::LongList as usize + 1) * 256
+        RLP_TX_FIELD_DECODE_RULES.len() * 256
     }
 
     /// Assign the values of the table to the circuit
@@ -449,7 +449,7 @@ impl TxFieldSwitchTable {
         let tx_field_trans_table = &TX_FIELD_TRANSITION_TABLE;
 
         layouter.assign_region(
-            || "load rlp decoder table",
+            || "load tx struct field switch table",
             |mut region| {
                 let mut offset = 0;
                 tx_field_trans_table
