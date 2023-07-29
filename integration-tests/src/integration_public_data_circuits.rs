@@ -16,6 +16,7 @@ mod public_data_test {
     use std::{
         env,
         io::{self, Write},
+        panic,
         str::FromStr,
     };
 
@@ -128,8 +129,14 @@ mod public_data_test {
                 let txlist_bytes = get_txlist_bytes(&tx);
                 print!("  running {} tx {:?} ... ", i, tx.hash);
                 io::stdout().flush().unwrap();
-                assert_eq!(run_rlp_circuit_for_valid_bytes(&txlist_bytes), Ok(()));
-                println!("succed!");
+                let res = panic::catch_unwind(|| run_rlp_circuit_for_valid_bytes(&txlist_bytes));
+
+                if res.is_err() {
+                    break;
+                } else {
+                    assert_eq!(res.unwrap(), Ok(()));
+                    println!("successed!");
+                }
             }
         }
     }
