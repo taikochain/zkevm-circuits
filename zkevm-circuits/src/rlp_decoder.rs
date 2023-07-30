@@ -1942,7 +1942,7 @@ impl<F: Field> RlpTxFieldStateWittnessGenerator<F> for RlpTxFieldTag {
             RlpTxFieldTag::SignR => state_switch!(RlpTxFieldTag::SignS),
             RlpTxFieldTag::SignS => {
                 // Tricky: we need to check if the bytes hold SignS only.
-                let next_state = if bytes.len() == MAX_BYTE_COLUMN_NUM {
+                let next_state = if bytes.len() <= MAX_BYTE_COLUMN_NUM {
                     RlpTxFieldTag::Padding
                 } else {
                     RlpTxFieldTag::TypedTxHeader
@@ -3358,6 +3358,8 @@ mod tests {
 
 #[cfg(test)]
 mod test_1559_rlp_circuit {
+    use std::{fs, path::PathBuf};
+
     use super::*;
     use crate::util::log2_ceil;
     use halo2_proofs::{
@@ -3646,6 +3648,24 @@ f08c5e3e77b6a30a890c018e5b9e96f02cee01b70ab954490a80ebefa04e76da9a823e00ef9590b2
 63")
         .unwrap();
 
+        let k = 15;
+        assert_eq!(run_good_rlp_circuit::<Fr>(rlp_bytes, k), Ok(()));
+    }
+
+    #[test]
+    fn test_devnet_txlist_from_file() {
+        let d: PathBuf = [
+            env!("CARGO_MANIFEST_DIR"),
+            "resources",
+            "test",
+            "txlist_rlp_bytes.hex",
+        ]
+        .iter()
+        .collect::<PathBuf>();
+        println!("read file from {}", d.display());
+        let rlp_bytes = hex::decode(fs::read_to_string(d).unwrap()).unwrap();
+
+        // println!("rlp_bytes = {:?}", rlp_bytes);
         let k = 15;
         assert_eq!(run_good_rlp_circuit::<Fr>(rlp_bytes, k), Ok(()));
     }
