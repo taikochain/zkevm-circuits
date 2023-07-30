@@ -3663,7 +3663,13 @@ f08c5e3e77b6a30a890c018e5b9e96f02cee01b70ab954490a80ebefa04e76da9a823e00ef9590b2
         .iter()
         .collect::<PathBuf>();
         println!("read file from {}", d.display());
-        let rlp_bytes = hex::decode(fs::read_to_string(d).unwrap()).unwrap();
+        let rlp_bytes = hex::decode(
+            fs::read_to_string(d)
+                .unwrap()
+                .to_ascii_lowercase()
+                .trim_start_matches("0x"),
+        )
+        .unwrap();
 
         // println!("rlp_bytes = {:?}", rlp_bytes);
         let k = 15;
