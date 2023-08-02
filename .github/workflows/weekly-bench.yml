@@ -1,0 +1,21 @@
+name: Weekly Circuits Benchmark
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 0 * * MON"
+
+env:
+  BENCH_RESULTS_PASS: ${{ secrets.BENCH_RESULTS_PASS }}
+
+jobs:
+  taiko-weekly-circuits-benchmark:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout the repository
+        uses: actions/checkout@v3
+
+      - name: Trigger
+        run: |
+          cd .github/weeklyBenchScripts
+          ./github-action-trigger.sh
