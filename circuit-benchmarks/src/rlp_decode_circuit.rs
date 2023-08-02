@@ -23,8 +23,6 @@ mod bench {
     use std::env::var;
     use zkevm_circuits::rlp_decoder::RlpDecoderCircuit;
 
-    type RlpDecoderCircuitForEmptyWitness = RlpDecoderCircuit<Fr, false>;
-
     #[test]
     fn bench_rlp_decode_circuit_prover() {
         let setup_prfx = "crate::constants::SETUP";
@@ -40,7 +38,7 @@ mod bench {
 
         let mut rng = ChaChaRng::seed_from_u64(2);
         let input_bytes = hex::decode("f850f84e8001830f4240808080820a97a0805d3057e9b74379d814e2c4d264be888a9b560ea2256781af8a6ea83af41208a07168d2b6d3aa47cbc5020c8a9b120926a197e1135b3aaa13ef0b292663345c15").unwrap();
-        let circuit = RlpDecoderCircuitForEmptyWitness::new(input_bytes, degree as usize);
+        let circuit = RlpDecoderCircuit::<Fr>::new(input_bytes, degree as usize);
 
         // Bench setup generation
         let setup_message = format!("{} {} with degree = {}", BENCHMARK_ID, setup_prfx, degree);
@@ -67,7 +65,7 @@ mod bench {
             Challenge255<G1Affine>,
             ChaChaRng,
             Blake2bWrite<Vec<u8>, G1Affine, Challenge255<G1Affine>>,
-            RlpDecoderCircuitForEmptyWitness,
+            RlpDecoderCircuit<Fr>,
         >(
             &general_params,
             &pk,
