@@ -16,7 +16,7 @@ pub use halo2_proofs::halo2curves::{
 };
 use halo2_proofs::{
     circuit::{Layouter, Value},
-    plonk::{Column, ConstraintSystem, Error, Expression, Fixed},
+    plonk::{Advice, Column, ConstraintSystem, Error, Expression, Fixed, SecondPhase},
 };
 
 /// Rlp encoding types
@@ -495,7 +495,7 @@ pub struct RMultPowTable {
     /// pow number
     pub length: Column<Fixed>,
     /// pow of randomness
-    pub r_mult: Column<Fixed>,
+    pub r_mult: Column<Advice>,
 }
 
 impl RMultPowTable {
@@ -504,17 +504,20 @@ impl RMultPowTable {
         Self {
             table_tag: meta.fixed_column(),
             length: meta.fixed_column(),
-            r_mult: meta.fixed_column(),
+            r_mult: meta.advice_column(),
         }
     }
 
     /// build from existed columns
-    pub fn build_from_columns(columns: &[Column<Fixed>]) -> Self {
-        assert!(columns.len() > 2);
+    pub fn build_from_columns(
+        advice_columns: &[Column<Advice>],
+        fixed_columns: &[Column<Fixed>],
+    ) -> Self {
+        assert!(advice_columns.len() > 0 && fixed_columns.len() > 1);
         Self {
-            table_tag: columns[0],
-            length: columns[1],
-            r_mult: columns[2],
+            table_tag: fixed_columns[0],
+            length: fixed_columns[1],
+            r_mult: advice_columns[0],
         }
     }
 
@@ -548,7 +551,7 @@ impl RMultPowTable {
                         i,
                         || Value::known(F::from(i as u64)),
                     )?;
-                    region.assign_fixed(
+                    region.assign_advice(
                         || "r_mult",
                         self.r_mult,
                         i,
@@ -761,7 +764,7 @@ impl_expr!(RlpDecoderFixedTableTag);
 
 #[derive(Clone, Debug)]
 /// shared fix tables
-pub struct RlpDecoderFixedTable<const N: usize> {
+pub struct RlpDecoderFixedTable<const NA: usize, const NF: usize> {
     /// rlp decoder table
     pub tx_decode_table: RlpDecoderTable,
     /// tx field switch table
@@ -772,19 +775,23 @@ pub struct RlpDecoderFixedTable<const N: usize> {
     pub byte_range_table: ByteRangeTable,
     // TODO: range table, invalid byte table
     /// shared columns for all fix tables
-    fixed_columns: [Column<Fixed>; N],
+    fixed_columns: [Column<Fixed>; NF],
+    /// shared columns for all fix tables
+    advice_columns: [Column<Advice>; NA],
 }
 
-impl<const N: usize> RlpDecoderFixedTable<N> {
+impl<const NA: usize, const NF: usize> RlpDecoderFixedTable<NA, NF> {
     /// Construct a new RlpDecoderTable
     pub fn construct<F: Field>(meta: &mut ConstraintSystem<F>) -> Self {
-        let fix_columns = array_init::array_init(|_| meta.fixed_column());
+        let fixed_columns = array_init::array_init(|_| meta.fixed_column());
+        let advice_columns = array_init::array_init(|_| meta.advice_column_in(SecondPhase));
         Self {
-            tx_decode_table: RlpDecoderTable::build_from_columns(&fix_columns),
-            tx_member_switch_table: TxFieldSwitchTable::build_from_columns(&fix_columns),
-            r_mult_pow_table: RMultPowTable::build_from_columns(&fix_columns),
-            byte_range_table: ByteRangeTable::build_from_columns(&fix_columns),
-            fixed_columns: fix_columns,
+            tx_decode_table: RlpDecoderTable::build_from_columns(&fixed_columns),
+            tx_member_switch_table: TxFieldSwitchTable::build_from_columns(&fixed_columns),
+            r_mult_pow_table: RMultPowTable::build_from_columns(&advice_columns, &fixed_columns),
+            byte_range_table: ByteRangeTable::build_from_columns(&fixed_columns),
+            fixed_columns,
+            advice_columns,
         }
     }
 

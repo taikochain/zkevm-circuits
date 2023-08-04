@@ -43,7 +43,8 @@ use mock::MockTransaction;
 
 const NUM_BLINDING_ROWS: usize = 64;
 
-type RlpDecoderFixedTable6Columns = RlpDecoderFixedTable<6>;
+/// fix table with union-ed 6 columns
+pub type RlpDecoderTable1A6FColumns = RlpDecoderFixedTable<1, 6>;
 
 /// RlpDecodeTypeTag is used to index the flag of rlp decoding type
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default)]
@@ -367,7 +368,7 @@ pub struct RlpDecoderCircuitConfig<F: Field> {
 /// Circuit configuration arguments
 pub struct RlpDecoderCircuitConfigArgs<F: Field> {
     /// shared fixed tables
-    pub rlp_fixed_table: RlpDecoderFixedTable6Columns,
+    pub rlp_fixed_table: RlpDecoderTable1A6FColumns,
     /// KeccakTable
     pub keccak_table: KeccakTable,
     /// Challenges
@@ -395,7 +396,7 @@ impl<F: Field> SubCircuitConfig<F> for RlpDecoderCircuitConfig<F> {
         let rlp_typed_tx_remain = nested_rlp_remains[1];
         let rlp_inner_tx_remain = nested_rlp_remains[2];
         let tx_member_bytes_in_row = meta.advice_column();
-        let r_mult = meta.advice_column();
+        let r_mult = meta.advice_column_in(SecondPhase);
         let value = meta.advice_column();
         let acc_rlc_value = meta.advice_column_in(SecondPhase);
         let bytes: [Column<Advice>; MAX_BYTE_COLUMN_NUM] = (0..MAX_BYTE_COLUMN_NUM as usize)
@@ -418,8 +419,8 @@ impl<F: Field> SubCircuitConfig<F> for RlpDecoderCircuitConfig<F> {
         let q_enable = meta.complex_selector();
         let q_first = meta.fixed_column();
         let q_last = meta.fixed_column();
-        let r_mult_comp = meta.advice_column();
-        let rlc_quotient = meta.advice_column();
+        let r_mult_comp = meta.advice_column_in(SecondPhase);
+        let rlc_quotient = meta.advice_column_in(SecondPhase);
 
         // type checking
         let q_rlp_types: [Column<Advice>; RLP_DECODE_TYPE_NUM] = (0..RLP_DECODE_TYPE_NUM)
@@ -630,7 +631,7 @@ impl<F: Field> SubCircuitConfig<F> for RlpDecoderCircuitConfig<F> {
 
             let table = &aux_tables.rlp_fixed_table.r_mult_pow_table;
             let table_tag = meta.query_fixed(table.table_tag, Rotation::cur());
-            let r_mult_in_table = meta.query_fixed(table.r_mult, Rotation::cur());
+            let r_mult_in_table = meta.query_advice(table.r_mult, Rotation::cur());
             let r_pow_in_table = meta.query_fixed(table.length, Rotation::cur());
 
             let q_enable = meta.query_selector(q_enable);
@@ -650,7 +651,7 @@ impl<F: Field> SubCircuitConfig<F> for RlpDecoderCircuitConfig<F> {
 
             let table = &aux_tables.rlp_fixed_table.r_mult_pow_table;
             let table_tag = meta.query_fixed(table.table_tag, Rotation::cur());
-            let r_mult_in_table = meta.query_fixed(table.r_mult, Rotation::cur());
+            let r_mult_in_table = meta.query_advice(table.r_mult, Rotation::cur());
             let r_pow_in_table = meta.query_fixed(table.length, Rotation::cur());
 
             let q_enable = meta.query_selector(q_enable);
@@ -1863,7 +1864,7 @@ impl<F: Field> RlpDecoderCircuit<F> {
     fn calc_min_num_rows(txs_len: usize, call_data_rows: usize) -> usize {
         // add 2 for prev and next rotations.
         let constraint_size = txs_len * TX1559_TX_FIELD_NUM + call_data_rows + 2;
-        let tables_size = RlpDecoderFixedTable6Columns::table_size();
+        let tables_size = RlpDecoderTable1A6FColumns::table_size();
         log::info!(
             "constraint_size: {}, tables_size: {}",
             constraint_size,
@@ -1877,13 +1878,7 @@ impl<F: Field> SubCircuit<F> for RlpDecoderCircuit<F> {
     type Config = RlpDecoderCircuitConfig<F>;
 
     fn new_from_block(block: &witness::Block<F>) -> Self {
-        let txs: Vec<SignedTransaction> = block
-            .eth_block
-            .transactions
-            .iter()
-            .map(|tx| tx.into())
-            .collect::<Vec<_>>();
-        let bytes = rlp::encode_list(&txs).to_vec();
+        let bytes = prepare_eip1559_txlist_rlp_bytes(&block.eth_block.transactions);
         let degree = log2_ceil(Self::min_num_rows(block).0) as usize;
         RlpDecoderCircuit::new(bytes, degree)
     }
@@ -1900,7 +1895,7 @@ impl<F: Field> SubCircuit<F> for RlpDecoderCircuit<F> {
         challenges: &Challenges<Value<F>>,
         layouter: &mut impl Layouter<F>,
     ) -> Result<(), Error> {
-        let mut randomness = F::ZERO;
+        let mut randomness = F::ONE;
         challenges.keccak_input().map(|r| randomness = r);
         log::trace!(
             "randomness: {:?}, rlc_bytes = {:?}",
@@ -1986,9 +1981,9 @@ impl<F: Field> Circuit<F> for RlpDecoderCircuit<F> {
     }
 
     fn configure(meta: &mut ConstraintSystem<F>) -> Self::Config {
-        let rlp_fixed_table = RlpDecoderFixedTable6Columns::construct(meta);
         let keccak_table = KeccakTable::construct(meta);
         let challenges = Challenges::construct(meta);
+        let rlp_fixed_table = RlpDecoderTable1A6FColumns::construct(meta);
 
         let config = {
             // let challenges_expr = challenges.exprs(meta);
@@ -2940,6 +2935,8 @@ pub struct SignedTransaction {
 
 use rlp::{Encodable, RlpStream};
 
+use self::rlp_decode_circuit_test_helper::prepare_eip1559_txlist_rlp_bytes;
+
 impl Encodable for SignedTransaction {
     fn rlp_append(&self, s: &mut RlpStream) {
         s.begin_list(9);
@@ -3097,7 +3094,7 @@ pub mod rlp_decode_circuit_test_helper {
     pub fn run<F: Field>(txs: Vec<Transaction>) -> Result<(), Vec<VerifyFailure>> {
         let k = log2_ceil(RlpDecoderCircuit::<Fr>::min_num_rows_from_tx(&txs).0);
 
-        let rlp_bytes = prepare_eip1559_txlist_rlp_bytes(txs);
+        let rlp_bytes = prepare_eip1559_txlist_rlp_bytes(&txs);
         log::trace!("rlp_bytes = {:?}", hex::encode(&rlp_bytes));
 
         let circuit = RlpDecoderCircuit::<F>::new(rlp_bytes, k as usize);
@@ -3117,7 +3114,7 @@ pub mod rlp_decode_circuit_test_helper {
     // }
 
     /// prepare rlp bytes for a list of eip1559 transactions
-    pub fn prepare_eip1559_txlist_rlp_bytes(txs: Vec<Transaction>) -> Vec<u8> {
+    pub fn prepare_eip1559_txlist_rlp_bytes(txs: &Vec<Transaction>) -> Vec<u8> {
         // note: rlp(txs) = rlp([rlp(rlp(tx1) as bytes), rlp(rlp(tx2) as bytes)]
         let encodable_txs: Vec<SignedDynamicFeeTransaction> =
             txs.iter().map(|tx| tx.into()).collect::<Vec<_>>();
@@ -3621,7 +3618,7 @@ mod test_1559_rlp_circuit {
 
     #[test]
     fn test_mock_txlist() {
-        let rlp_bytes = prepare_eip1559_txlist_rlp_bytes(vec![
+        let rlp_bytes = prepare_eip1559_txlist_rlp_bytes(&vec![
             mock::CORRECT_MOCK_TXS[0].clone().into(),
             mock::CORRECT_MOCK_TXS[1].clone().into(),
             mock::CORRECT_MOCK_TXS[2].clone().into(),
