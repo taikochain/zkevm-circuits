@@ -33,7 +33,6 @@ clone_zkevm-circuits() {
 
 
   cd zkevm-circuits || exit 1
-  git checkout krzysztofpaliga/weekly_bench
   echo "Cloned zkevm-circuits"
 }
 
