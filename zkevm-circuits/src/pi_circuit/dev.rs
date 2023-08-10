@@ -1,3 +1,7 @@
+use halo2_proofs::plonk::Circuit;
+use rand::SeedableRng;
+use rand_chacha::ChaCha20Rng;
+
 use super::*;
 
 /// Public Input Circuit configuration parameters
@@ -28,6 +32,11 @@ impl<F: Field> Circuit<F> for PiCircuit<F> {
     fn configure_with_params(meta: &mut ConstraintSystem<F>, params: Self::Params) -> Self::Config {
         let block_table = BlockTable::construct(meta);
         let tx_table = TxTable::construct(meta);
+        let keccak_table = KeccakTable2::construct(meta);
+        let challenges = Challenges::construct(meta);
+        let challenges_expr = challenges.exprs(meta);
+        let mut rng = ChaCha20Rng::seed_from_u64(2);
+        let randomness = F::random(&mut rng);
         (
             PiCircuitConfig::new(
                 meta,
@@ -36,9 +45,13 @@ impl<F: Field> Circuit<F> for PiCircuit<F> {
                     max_calldata: params.max_calldata,
                     block_table,
                     tx_table,
+                    keccak_table,
+                    // challenges: challenges_expr,
+                    randomness,
+                    // rlp_is_short,
                 },
             ),
-            Challenges::construct(meta),
+            challenges,
         )
     }
 

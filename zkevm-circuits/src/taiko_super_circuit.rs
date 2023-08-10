@@ -6,7 +6,7 @@ pub mod test;
 
 use crate::{
     anchor_tx_circuit::{AnchorTxCircuit, AnchorTxCircuitConfig, AnchorTxCircuitConfigArgs},
-    table::{byte_table::ByteTable, BlockTable, KeccakTable, PiTable, TxTable},
+    table::{byte_table::ByteTable, BlockTable, KeccakTable, PiTable, TxTable, keccak_table::KeccakTable2},
     taiko_pi_circuit::{TaikoPiCircuit, TaikoPiCircuitConfig, TaikoPiCircuitConfigArgs},
     util::{log2_ceil, Challenges, SubCircuit, SubCircuitConfig},
     witness::{block_convert, Block, ProtocolInstance},
@@ -53,6 +53,7 @@ impl<F: Field> SubCircuitConfig<F> for SuperCircuitConfig<F> {
         let tx_table = TxTable::construct(meta);
         let pi_table = PiTable::construct(meta);
         let block_table = BlockTable::construct(meta);
+        let block_table_blockhash = BlockTable::construct(meta);
         let keccak_table = KeccakTable::construct(meta);
         let byte_table = ByteTable::construct(meta);
 
@@ -63,6 +64,7 @@ impl<F: Field> SubCircuitConfig<F> for SuperCircuitConfig<F> {
                 keccak_table: keccak_table.clone(),
                 byte_table: byte_table.clone(),
                 challenges: challenges.clone(),
+                block_table_blockhash: block_table_blockhash.clone(),
             },
         );
 

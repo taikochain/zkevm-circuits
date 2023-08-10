@@ -45,6 +45,24 @@ impl<F: Field, const N_BYTES: usize> LtConfig<F, N_BYTES> {
     pub fn is_lt(&self, meta: &mut VirtualCells<F>, rotation: Option<Rotation>) -> Expression<F> {
         meta.query_advice(self.lt, rotation.unwrap_or_else(Rotation::cur))
     }
+
+    fn annotations(&self) -> Vec<String> {
+        [vec![
+            String::from("lt"),
+            String::from("u8"),
+        ],
+       (0..N_BYTES).map(|i| String::from(format!("diff byte #{}", i))).collect()].concat()
+    }
+    /// Annotates columns of an LtChip embedded within a circuit region.
+    pub fn annotate_columns_in_region(&self, region: &mut Region<F>) {
+        let annotations = self.annotations();
+        region.name_column(|| &annotations[0], self.lt);
+        region.name_column(|| &annotations[1], self.u8);
+        self.diff
+            .iter()
+            .zip(self.annotations().iter().skip(2))
+            .for_each(|(&col, ann)| region.name_column(|| ann, col))
+    }
 }
 
 /// Chip that compares lhs < rhs.

@@ -2,7 +2,7 @@ use super::*;
 
 /// Tag to identify the field in a Block Table row
 // Keep the sequence consistent with OpcodeId for scalar
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BlockContextFieldTag {
     /// Coinbase field
     Coinbase = 1,
@@ -21,6 +21,28 @@ pub enum BlockContextFieldTag {
     /// Chain ID field.  Although this is not a field in the block header, we
     /// add it here for convenience.
     ChainId,
+    /// Beneficiary field
+    Beneficiary,
+    /// StateRoot field
+    StateRoot,
+    /// TX Root field
+    TransactionsRoot,
+    /// Receipts Root field
+    ReceiptsRoot,
+    /// Gas Used field
+    GasUsed,
+    /// Mix Hash field
+    MixHash,
+    /// Withdrawals Root field
+    WithdrawalsRoot,
+    /// Previous Hashes field
+    PreviousHash,
+    /// Previous Hashes hi part
+    PreviousHashHi,
+    /// Previous Hashes lo part
+    PreviousHashLo,
+    /// None for the all zeros row needed in block table
+    None,
 }
 impl_expr!(BlockContextFieldTag);
 
@@ -49,7 +71,7 @@ impl BlockTable {
     pub fn load<F: Field>(
         &self,
         layouter: &mut impl Layouter<F>,
-        block: &BlockContext,
+        block_context: &BlockContext,
         randomness: Value<F>,
     ) -> Result<(), Error> {
         layouter.assign_region(
@@ -67,7 +89,7 @@ impl BlockTable {
                 offset += 1;
 
                 let block_table_columns = <BlockTable as LookupTable<F>>::advice_columns(self);
-                for row in block.table_assignments(randomness) {
+                for row in block_context.table_assignments(randomness) {
                     for (&column, value) in block_table_columns.iter().zip_eq(row) {
                         region.assign_advice(
                             || format!("block table row {}", offset),

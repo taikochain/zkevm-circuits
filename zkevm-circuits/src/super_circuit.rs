@@ -64,7 +64,7 @@ use crate::{
     pi_circuit::{PiCircuit, PiCircuitConfig, PiCircuitConfigArgs},
     state_circuit::{StateCircuit, StateCircuitConfig, StateCircuitConfigArgs},
     table::{
-        BlockTable, BytecodeTable, CopyTable, ExpTable, KeccakTable, MptTable, RwTable, TxTable,
+        BlockTable, BytecodeTable, CopyTable, ExpTable, KeccakTable, MptTable, RwTable, TxTable, keccak_table::KeccakTable2,
     },
     tx_circuit::{TxCircuit, TxCircuitConfig, TxCircuitConfigArgs},
     util::{log2_ceil, Challenges, SubCircuit, SubCircuitConfig},
@@ -128,6 +128,7 @@ impl<F: Field> SubCircuitConfig<F> for SuperCircuitConfig<F> {
         let copy_table = CopyTable::construct(meta, q_copy_table);
         let exp_table = ExpTable::construct(meta);
         let keccak_table = KeccakTable::construct(meta);
+        let keccak_table2 = KeccakTable2::construct(meta);
 
         // Use a mock randomness instead of the randomness derived from the challange
         // (either from mock or real prover) to help debugging assignments.
@@ -155,6 +156,8 @@ impl<F: Field> SubCircuitConfig<F> for SuperCircuitConfig<F> {
                 max_calldata,
                 block_table: block_table.clone(),
                 tx_table: tx_table.clone(),
+                keccak_table: keccak_table2.clone(),
+                randomness: mock_randomness,
             },
         );
         let tx_circuit = TxCircuitConfig::new(

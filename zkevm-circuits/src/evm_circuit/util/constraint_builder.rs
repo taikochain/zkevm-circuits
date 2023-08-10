@@ -13,7 +13,7 @@ use crate::{
 };
 use bus_mapping::{operation::Target, state_db::EMPTY_CODE_HASH_LE};
 use eth_types::Field;
-use gadgets::util::not;
+use gadgets::util::{not, and};
 use halo2_proofs::{
     circuit::Value,
     plonk::{
@@ -180,15 +180,12 @@ pub(crate) trait ConstrainBuilderCommon<F: Field> {
 pub struct BaseConstraintBuilder<F> {
     pub constraints: Vec<(&'static str, Expression<F>)>,
     pub max_degree: usize,
-    pub condition: Option<Expression<F>>,
+    conditions: Vec<Expression<F>>,
 }
 
 impl<F: Field> ConstrainBuilderCommon<F> for BaseConstraintBuilder<F> {
     fn add_constraint(&mut self, name: &'static str, constraint: Expression<F>) {
-        let constraint = match &self.condition {
-            Some(condition) => condition.clone() * constraint,
-            None => constraint,
-        };
+        let constraint = self.get_condition_expr() * constraint;
         self.validate_degree(constraint.degree(), name);
         self.constraints.push((name, constraint));
     }
@@ -199,8 +196,20 @@ impl<F: Field> BaseConstraintBuilder<F> {
         BaseConstraintBuilder {
             constraints: Vec::new(),
             max_degree,
-            condition: None,
+            conditions: Vec::new(),
         }
+    }
+
+    pub(crate) fn get_condition(&self) -> Option<Expression<F>> {
+        if self.conditions.is_empty() {
+            None
+        } else {
+            Some(and::expr(self.conditions.iter()))
+        }
+    }
+
+    fn get_condition_expr(&self) -> Expression<F> {
+        self.get_condition().unwrap_or_else(|| 1.expr())
     }
 
     pub(crate) fn condition<R>(
@@ -208,14 +217,26 @@ impl<F: Field> BaseConstraintBuilder<F> {
         condition: Expression<F>,
         constraint: impl FnOnce(&mut Self) -> R,
     ) -> R {
-        debug_assert!(
-            self.condition.is_none(),
-            "Nested condition is not supported"
-        );
-        self.condition = Some(condition);
+        self.conditions.push(condition);
         let ret = constraint(self);
-        self.condition = None;
+        self.conditions.pop();
         ret
+    }
+
+    fn condition_expr_opt(&self) -> Option<Expression<F>> {
+        let mut iter = self.conditions.iter();
+        let first = match iter.next() {
+            Some(e) => e,
+            None => return None,
+        };
+        Some(iter.fold(first.clone(), |acc, e| acc * e.clone()))
+    }
+
+    fn condition_expr(&self) -> Expression<F> {
+        match self.condition_expr_opt() {
+            Some(condition) => condition,
+            None => 1.expr(),
+        }
     }
 
     pub(crate) fn validate_degree(&self, degree: usize, name: &'static str) {
