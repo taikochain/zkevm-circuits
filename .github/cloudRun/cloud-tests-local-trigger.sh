@@ -28,4 +28,4 @@ prepare_repo() {
 prepare_env
 prepare_repo
 
-ssh -i ~/.ssh/bench.pem -t -o StrictHostKeyChecking=no ubuntu@$PROVER_IP "bash -s" -- "$GITHUB_RUN_ID" <run.sh
+ssh -i ~/.ssh/bench.pem -t -t -o StrictHostKeyChecking=no ubuntu@$PROVER_IP "bash -s" -- "$GITHUB_RUN_ID" <run.sh
