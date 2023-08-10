@@ -1,9 +1,7 @@
-name: Weekly Circuits Benchmark
+name: Tencent Run
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "0 0 * * MON"
 
 env:
   BENCH_RESULTS_PASS: ${{ secrets.BENCH_RESULTS_PASS }}
