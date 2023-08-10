@@ -22,6 +22,6 @@ jobs:
 
       - name: Cleanup
         run: |
-          cd.github/weeklyBenchScripts
+          cd .github/weeklyBenchScripts
           ./github-action-cleanup.sh
         if: always()
