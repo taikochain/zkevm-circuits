@@ -28,7 +28,9 @@ prepare_repo() {
 prepare_env
 prepare_repo
 
-ssh -i ~/.ssh/bench.pem -t -t -o StrictHostKeyChecking=no ubuntu@$PROVER_IP "bash -s" -- "$GITHUB_RUN_ID" <run.sh
+ssh -i ~/.ssh/bench.pem -t -t -o StrictHostKeyChecking=no ubuntu@$PROVER_IP "bash -s" -- "$GITHUB_RUN_ID" << EOF
+$(<run.sh)
 RESULT=$?
-echo "exiting cloud-tests-local-trigger with RESULT=$RESULT"
+echo "exiting cloud-tests-local-trigger with RESULT=$RESULT" >&2
 exit $RESULT
+EOF
