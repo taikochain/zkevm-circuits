@@ -11,7 +11,7 @@ cleanup() {
 }
 
 # Set up the trap to execute the cleanup function on SIGINT (Ctrl+C) and SIGTERM (kill)
-trap cleanup HUP INT TERM QUIT
+trap cleanup HUP INT TERM QUIT EXIT
 
 ensure_git_installed() {
   if ! command -v git &>/dev/null; then
