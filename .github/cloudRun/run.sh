@@ -12,5 +12,8 @@ target_dir="$current_dir/zkevm-circuits"
 cd $target_dir || exit 1
 
 # ENTER YOUR TEST COMMAND BELOW
-#make test-all
-exit 0
+make test-all
+# ENTER YOUR TEST COMMAND ABOVE
+
+RESULT=$?
+echo "exitign run.sh with RESULT $RESULT"
