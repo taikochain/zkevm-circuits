@@ -31,8 +31,8 @@ run_single_benchmark() {
   ./08_processResults.sh "$CIRCUIT" "$DEGREE"
 }
 
-words="exp evm tx bytecode state pi copy super keccak"
-
+#words="exp evm tx bytecode state pi copy super keccak"
+words="exp"
 for word in $words; do
   case "$word" in
   evm)
@@ -85,3 +85,5 @@ for word in $words; do
     ;;
   esac
 done
+echo "Exiting bench-results-local-trigger"
+exit 0
