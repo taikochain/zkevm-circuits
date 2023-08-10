@@ -7,10 +7,12 @@ authors = ["mabbamOG <mariobarbara@protonmail.ch>"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-halo2_proofs = { git = "https://github.com/mabbamOG/halo2.git" } 
-halo2wrong_integer = {package = "integer", git = "https://github.com/mabbamOG/halo2wrong"} 
-halo2wrong_maingate = {package = "maingate", git = "https://github.com/mabbamOG/halo2wrong"}
+halo2_proofs = { git = "https://github.com/mabbamOG/halo2.git" }  # patched version of halo2 that supports the new curve traits (will be merged eventually)
+halo2wrong_integer = {package = "integer", git = "https://github.com/mabbamOG/halo2wrong"} # patched version of halo2wrong that supports the new curve traits (will be merged eventually)
+halo2wrong_maingate = {package = "maingate", git = "https://github.com/mabbamOG/halo2wrong"} # patched version of halo2wrong that supports the new curve traits (will be merged eventually)
 
 [dev-dependencies]
 rand_core = "0.6.4"
 rand = "0.8.5"
+
+[workspace] # empty workspace as a temp fix for the project being separate from zkevm-circuits

@@ -18,7 +18,7 @@ use halo2wrong_maingate::{MainGate, RangeChip, RegionCtx};
 /// in a single commitment on the EVM, which can then be opened using EVM precompiles.
 /// If the same data is also used in the zkEVM circuits, then the two are linked and the ZKP constraints are validated
 /// over the same data. To prove that the same data is used in the zkEVM circuits, we could either do a commitment-equivalency
-/// test over thta data, or just take the witness data directly and make a function evaluation over it, which is what a KZG
+/// test over that data, or just take the witness data directly and make a function evaluation over it, which is what a KZG
 /// commitment or opening does anyway.
 /// Of course, since we skip the commitment-equivalency test, we must also show elsewhere that the constraints of the zkEVM
 /// apply to this data, which is likely done by sharing the txs witness data across the circuits in the zkEVM.
@@ -30,7 +30,10 @@ use halo2wrong_maingate::{MainGate, RangeChip, RegionCtx};
 ///
 /// APPROACH:
 /// We are going to be implementing the above formula to at the same time interpolate and evaluate over many points
-/// of a polynomial. The computations need to be performed in a different field, which is why we make use of Halo2wrong.
+/// of a polynomial. The computations need to be performed in a different, non-native field, which is why we make use of Halo2wrong.
+/// We need to use non-native field constraints because we will use the precompiles for KZG openings embedded in the EVM, which 
+/// are cheapest to use in a smart contract bridge but are defined over the BLS field, which is not what the zkEVM uses 
+/// to verify the constraints of the zkEVM over the same data.
 /// The circuit itself is designed to contain one very long "halo2wrong column" (ie multiple columns that together host
 /// one single halo2wrong integer), and it contains multiple states that get updated over time: the accumulator state for
 /// the final computation (eval), the accumulator for all iterating roots of unity (wis) needed in the summation, the
@@ -44,7 +47,8 @@ pub struct BlobKZGConfig {
     integer_config: IntegerConfig,
 }
 
-/// W is the wrong field, N is the native field
+/// W is the wrong (non-native) field, N is the native field
+/// The circuit is defined over the "native" zkEVM field, but the "wrong" field is used for the KZG precompiles on the actual EVM
 #[derive(Debug)]
 pub struct BlobKZGCircuit<W: PrimeField, N: PrimeField> {
     input_values: InputValues<W>,
@@ -144,11 +148,14 @@ impl<W: PrimeField> WitnessValues<W> {
             }
             x2is
         };
+        // the following is a helper for the square-and-multiply algorithm
+        // we are taking the least significant bits of the exponent first
+        // so that we can pair them with the x2is powers of x
         let nbits: [W; 256] = {
             let mut nbits = [W::ZERO; 256];
             let nbits_bool: [bool; 256] = {
                 let mut nbits_bool = [false; 256];
-                let repr: [u8; 32] = n.to_repr().as_ref().try_into().unwrap();
+                let repr: [u8; 32] = n.to_repr().as_ref().try_into().expect("could not automatically convert Wrong Field vlaue to u8 array. Do this step manually maybe.");
                 for (j, byte) in repr.iter().enumerate() {
                     for i in 0..8 {
                         nbits_bool[j * 8 + i] = ((byte >> i) & 1) == 1;
@@ -167,6 +174,7 @@ impl<W: PrimeField> WitnessValues<W> {
         let xns: [W; 257] = {
             let mut xns = [W::ZERO; 257];
             let mut state = W::ONE;
+            // this iteration only covers the first 256 values of xns, due to the zipping of x2is and nbits
             for (x, (x2i, nbit)) in xns.iter_mut().zip(x2is.iter().zip(nbits.iter())) {
                 *x = state;
                 state *= *x2i * *nbit + (W::ONE - *nbit);
@@ -177,6 +185,7 @@ impl<W: PrimeField> WitnessValues<W> {
         let wis: [W; 4096] = {
             let mut wis = [W::ZERO; 4096];
             let mut state = *w;
+            // let mut state = W::ONE;// TODO: correct but broken
             for x in &mut wis {
                 *x = state;
                 state *= w;
@@ -289,7 +298,7 @@ impl<W: PrimeField, N: PrimeField> Circuit<N> for BlobKZGCircuit<W, N> {
             nbits,
         } = self.witness_values;
 
-        // 0. JUT MAKE SURE X IS NOT IN THE ROOT-OF-UNITY DOMAIN (otherwise formula doesn't work)
+        // 0. JUST MAKE SURE X IS NOT IN THE ROOT-OF-UNITY DOMAIN (otherwise formula doesn't work)
         if xns[xns.len() - 1] == W::ONE {
             return Err(Error::Synthesis);
         }
