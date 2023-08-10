@@ -1,5 +1,6 @@
 #!/bin/bash
-echo "Performing cleanup..."
+GITHUB_RUN_ID=$1
+echo "Performing cleanup... $GITHUB_RUN_ID"
 sleep 60
 PROVER_INSTANCE=$(cat ~/prover_instance_weekly_"$GITHUB_RUN_ID")
 echo "Prover instance at cleanup: $PROVER_INSTANCE"

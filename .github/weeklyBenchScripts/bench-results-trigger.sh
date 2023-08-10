@@ -1,4 +1,6 @@
 #!/bin/bash
+GITHUB_RUN_ID=$1
+
 ensure_git_installed() {
   if ! command -v git &>/dev/null; then
     echo "Git is not installed. Installing..."
