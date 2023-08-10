@@ -18,6 +18,9 @@ clone_zkevm-circuits() {
   echo "Cloned zkevm-circuits"
 }
 
+directory_name="$HOME/CI_Github_Trigger/$GITHUB_RUN_ID"
+cd $directory_name || exit 1
+
 ensure_git_installed
 clone_zkevm-circuits
 
