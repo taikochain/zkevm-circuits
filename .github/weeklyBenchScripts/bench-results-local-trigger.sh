@@ -90,5 +90,3 @@ for word in $words; do
     ;;
   esac
 done
-
-sudo rm -rf "$HOME/CI_Github_Trigger/$GITHUB_RUN_ID"
