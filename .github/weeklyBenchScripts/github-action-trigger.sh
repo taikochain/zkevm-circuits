@@ -24,7 +24,7 @@ ensure_ssh_and_sshpass_installed
 
 sshpass -p $BENCH_RESULTS_PASS ssh -t -t -o StrictHostKeyChecking=no ubuntu@43.130.90.57 <<EOF
 echo "Started executing bench-results-trigger" >&2
-$(<bench-results-trigger.sh $GITHUB_RUN_ID)
+$(<bench-results-trigger.sh "$GITHUB_RUN_ID")
 echo "Finished executing bench-results-trigger" >&2
 exit 0
 EOF
