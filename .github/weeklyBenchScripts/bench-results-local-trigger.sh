@@ -5,7 +5,7 @@ PROVER_INSTANCE=$(tccli cvm RunInstances --InstanceChargeType POSTPAID_BY_HOUR -
 #PROVER_INSTANCE=$(tccli cvm RunInstances --InstanceChargeType POSTPAID_BY_HOUR --InstanceChargePrepaid '{"Period":1,"RenewFlag":"DISABLE_NOTIFY_AND_MANUAL_RENEW"}' --Placement '{"Zone":"eu-frankfurt"}' --InstanceType S5.16XLARGE256 --ImageId img-487zeit5 --SystemDisk '{"DiskType":"CLOUD_BSSD", "DiskSize":80}' --InternetAccessible '{"InternetChargeType":"TRAFFIC_POSTPAID_BY_HOUR","InternetMaxBandwidthOut":10,"PublicIpAssigned":true}' --InstanceCount 1 --InstanceName BENCH-PROVER --LoginSettings '{"KeyIds":[ "skey-au79yarf" ]}' --SecurityGroupIds '["sg-ajrlphkl"]' --HostName BENCH-PROVER | egrep -o ins-[0-9a-zA-Z]*)
 #PROVER_INSTANCE=$(tccli cvm RunInstances --InstanceChargeType POSTPAID_BY_HOUR --InstanceChargePrepaid '{"Period":1,"RenewFlag":"DISABLE_NOTIFY_AND_MANUAL_RENEW"}' --Placement '{"Zone":"na-ashburn-2"}' --InstanceType S3.MEDIUM2 --ImageId img-487zeit5 --SystemDisk '{"DiskType":"CLOUD_BSSD", "DiskSize":50}' --InternetAccessible '{"InternetChargeType":"TRAFFIC_POSTPAID_BY_HOUR","InternetMaxBandwidthOut":10,"PublicIpAssigned":true}' --InstanceCount 1 --InstanceName BENCH-PROVER --LoginSettings '{"KeyIds":[ "skey-au79yarf" ]}' --SecurityGroupIds '["sg-ajrlphkl"]' --HostName BENCH-PROVER | egrep -o ins-[0-9a-zA-Z]*)
 echo "$PROVER_INSTANCE" > ~/prover_instance_weekly
-echo "Prover snstance at trigger: "
+echo "Prover instance at trigger: "
 cat \~/prover_instance_weekly
 sleep 60
 
