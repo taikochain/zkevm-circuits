@@ -19,3 +19,9 @@ jobs:
         run: |
           cd .github/weeklyBenchScripts
           ./github-action-trigger.sh
+
+      - name: Cleanup
+        run: |
+          cd.github/weeklyBenchScripts
+          ./github-action-cleanup.sh
+        if: always()
