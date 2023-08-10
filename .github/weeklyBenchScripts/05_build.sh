@@ -15,6 +15,6 @@ fi
 
 # Clone the repository into the latest temp directory
 echo "Building zkevm-circuits inside: $current_dir"
-cd "$current_dir/zkevm-circuits"
+cd "$current_dir/zkevm-circuits" || exit 1
 ~/.cargo/bin/cargo build -q
 

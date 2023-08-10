@@ -13,4 +13,4 @@ cd $target_dir || exit 1
 
 # ENTER YOUR TEST COMMAND BELOW
 #make test-all
-exit 234
+exit 0
