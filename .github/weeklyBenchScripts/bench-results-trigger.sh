@@ -1,18 +1,4 @@
 #!/bin/bash
-
-cleanup() {
-  echo "Performing cleanup..."
-  PROVER_INSTANCE=$(cat prover_instance)
-  echo "Prover instance: $PROVER_INSTANCE"
-  tccli cvm TerminateInstances --InstanceIds "[\"$PROVER_INSTANCE\"]" --ReleasePrepaidDataDisk True
-  echo "Exiting bench-results-local-trigger"
-  pkill ssh
-  exit 0
-}
-
-# Set up the trap to execute the cleanup function on SIGINT (Ctrl+C) and SIGTERM (kill)
-trap cleanup HUP INT TERM QUIT EXIT
-
 ensure_git_installed() {
   if ! command -v git &>/dev/null; then
     echo "Git is not installed. Installing..."
