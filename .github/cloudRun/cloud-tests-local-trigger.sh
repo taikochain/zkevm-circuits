@@ -20,7 +20,7 @@ prepare_env() {
 
 prepare_repo() {
   ssh -i ~/.ssh/bench.pem -o StrictHostKeyChecking=no ubuntu@$PROVER_IP "bash -s" -- "$GITHUB_RUN_ID" <../weeklyBenchScripts/03_prepareProver.sh
-#  ssh -i ~/.ssh/bench.pem -o StrictHostKeyChecking=no ubuntu@$PROVER_IP "bash -s" -- "$GITHUB_RUN_ID" <../weeklyBenchScripts/04_clone.sh
+  ssh -i ~/.ssh/bench.pem -o StrictHostKeyChecking=no ubuntu@$PROVER_IP "bash -s" -- "$GITHUB_RUN_ID" <../weeklyBenchScripts/04_clone.sh
 #  ssh -i ~/.ssh/bench.pem -o StrictHostKeyChecking=no ubuntu@$PROVER_IP "bash -s" -- "$GITHUB_RUN_ID" <../weeklyBenchScripts/05_build.sh
 
 }
