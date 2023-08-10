@@ -24,8 +24,8 @@ cd $directory_name || exit 1
 ensure_git_installed
 clone_zkevm-circuits
 
-cd .github/weeklyBenchScripts || exit 1
-chmod u+x bench-results-local-trigger.sh
+cd .github/cloudRun || exit 1
+chmod u+x cloud-tests-local-trigger.sh
 ./cloud-tests-local-trigger.sh $GITHUB_RUN_ID
 echo "Exiting cloud-tests-trigger"
 exit 0
