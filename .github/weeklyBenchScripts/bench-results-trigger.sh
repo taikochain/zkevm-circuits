@@ -29,6 +29,7 @@ make_temp_dir() {
 
 clone_zkevm-circuits() {
   git clone https://github.com/krzysztofpaliga/zkevm-circuits.git
+  git checkout benchmarks_weekly
 
 
   cd zkevm-circuits || exit 1
