@@ -1,6 +1,8 @@
 #!/bin/bash
 cd "$(dirname "$0")" || exit 1
 
+GITHUB_RUN_ID=$1
+
 PROVER_INSTANCE=$(cat "$HOME/CI_Github_Trigger/$GITHUB_RUN_ID/prover_instance")
 echo "Prover instance at trigger: $PROVER_INSTANCE"
 
