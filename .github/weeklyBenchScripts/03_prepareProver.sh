@@ -9,7 +9,7 @@ directory_name="CI_Prover_Benches/$GITHUB_RUN_ID"
 directory_path="$HOME/$directory_name"
 
 # Create the directory
-if [ ! "$directory_path" ]; then
+if [ ! -d "$directory_path" ]; then
   mkdir -p "$directory_path"
   echo "Directory '$directory_name' with GITHUB_RUN_ID '$GITHUB_RUN_ID' has been created in the home directory."
 fi
