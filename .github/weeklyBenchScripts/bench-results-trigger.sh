@@ -27,5 +27,6 @@ clone_zkevm-circuits
 cd .github/weeklyBenchScripts || exit 1
 chmod u+x bench-results-local-trigger.sh
 ./bench-results-local-trigger.sh $GITHUB_RUN_ID
-echo "Exiting bench-results-trigger"
-exit 0
+RESULT=$?
+echo "Exiting bench-results-trigger with RESULT $RESULT"
+exit $RESULT

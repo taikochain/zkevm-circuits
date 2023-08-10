@@ -16,6 +16,7 @@ ssh -i ~/.ssh/bench.pem -o StrictHostKeyChecking=no ubuntu@$PROVER_IP "bash -s" 
 ssh -i ~/.ssh/bench.pem -o StrictHostKeyChecking=no ubuntu@$PROVER_IP "bash -s" -- <01_installDeps.sh
 ssh -i ~/.ssh/bench.pem -o StrictHostKeyChecking=no ubuntu@$PROVER_IP "bash -s" -- <02_setup.sh
 
+RESULT=""
 run_single_benchmark() {
   local DEGREE=$1
   local CIRCUIT=$2
@@ -27,6 +28,7 @@ run_single_benchmark() {
   sleep 5
 
   ssh -i ~/.ssh/bench.pem -o StrictHostKeyChecking=no ubuntu@$PROVER_IP "bash -s" -- "$DEGREE" "$CIRCUIT" "$GITHUB_RUN_ID" <07_execBench.sh
+  RESULT=$?
   chmod u+x 08_processResults.sh
   ./08_processResults.sh "$CIRCUIT" "$DEGREE"
 }
@@ -85,5 +87,5 @@ for word in $words; do
     ;;
   esac
 done
-echo "Exiting bench-results-local-trigger"
-exit 0
+echo "Exiting bench-results-local-trigger with RESULT $RESULT"
+exit $RESULT
