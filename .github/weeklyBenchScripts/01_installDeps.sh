@@ -1,4 +1,5 @@
 #!/bin/bash
+sudo apt update
 
 # Check if Git is already installed
 if command -v git &>/dev/null; then
@@ -8,7 +9,6 @@ else
     if [[ -f /etc/os-release ]]; then
         source /etc/os-release
         if [[ $ID == "ubuntu" || $ID == "debian" ]]; then
-            sudo apt update
             sudo apt install -y git
         elif [[ $ID == "centos" || $ID == "rhel" ]]; then
             sudo yum install -y git
@@ -37,7 +37,6 @@ if ! command -v cc &>/dev/null; then
     if [[ -f /etc/os-release ]]; then
         source /etc/os-release
         if [[ $ID == "ubuntu" || $ID == "debian" ]]; then
-            sudo apt update
             sudo apt install -y build-essential
         elif [[ $ID == "centos" || $ID == "rhel" ]]; then
             sudo yum groupinstall -y "Development Tools"
@@ -60,3 +59,4 @@ if ! command -v cc &>/dev/null; then
     fi
 fi
 
+sudo apt install -y pkg-config fontconfig libfontconfig-dev
