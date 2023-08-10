@@ -29,3 +29,6 @@ clone_zkevm-circuits
 cd .github/cloudRun || exit 1
 chmod u+x cloud-tests-local-trigger.sh
 ./cloud-tests-local-trigger.sh $GITHUB_RUN_ID
+RESULT=$?
+echo "exiting cloud-tests-trigger with result $RESULT"
+exit $RESULT

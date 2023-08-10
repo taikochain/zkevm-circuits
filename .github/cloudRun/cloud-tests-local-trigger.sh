@@ -29,3 +29,6 @@ prepare_env
 prepare_repo
 
 ssh -i ~/.ssh/bench.pem -t -t -o StrictHostKeyChecking=no ubuntu@$PROVER_IP "bash -s" -- "$GITHUB_RUN_ID" <run.sh
+RESULT=$?
+echo "exiting cloud-tests-local-trigger with RESULT=$RESULT"
+exit $RESULT
