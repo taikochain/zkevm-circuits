@@ -1,12 +1,9 @@
 #!/bin/bash
 
 echo "Triggering cleanup"
-sshpass -p $BENCH_RESULTS_PASS ssh -t -t -o StrictHostKeyChecking=no ubuntu@43.130.90.57 <<EOF
-echo "Started executing bench-results-local-cleanup" >&2
-$(cat bench-results-local-cleanup.sh)
-echo "Finished executing bench-results-local-cleanup" >&2
-exit 0
-EOF
+  ssh -i ~/.ssh/bench.pem -o StrictHostKeyChecking=no ubuntu@$PROVER_IP "bash -s" -- "$DEGREE" "$CIRCUIT" "$GITHUB_RUN_ID" <07_execBench.sh
+
+sshpass -p $BENCH_RESULTS_PASS ssh -t -t -o StrictHostKeyChecking=no ubuntu@43.130.90.57  "bash -s" -- "$GITHUB_RUN_ID" <bench-results-local-cleanup.sh
 
 echo "Exiting github-action-cleanup"
 exit 0
