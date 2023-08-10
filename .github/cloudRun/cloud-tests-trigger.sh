@@ -11,6 +11,8 @@ ensure_git_installed() {
   fi
 }
 
+ensure_git_installed
+
 clone_zkevm-circuits() {
   git clone https://github.com/krzysztofpaliga/zkevm-circuits.git
   cd zkevm-circuits || exit 1
@@ -21,7 +23,7 @@ clone_zkevm-circuits() {
 directory_name="$HOME/CI_Github_Trigger/$GITHUB_RUN_ID"
 cd $directory_name || exit 1
 
-ensure_git_installed
+
 clone_zkevm-circuits
 
 cd .github/cloudRun || exit 1
