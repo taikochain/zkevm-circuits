@@ -11,6 +11,12 @@ if [ ! -d "$target_dir" ]; then
   echo "Cloning the repository into the latest temp directory: $current_dir"
   git clone https://github.com/taikoxyz/zkevm-circuits.git "$current_dir/zkevm-circuits"
 
+  if [ -n "$BRANCH_NAME" ]; then
+    old_dir=$(pwd)
+    cd "$current_dir/zkevm-circuits" || exit 1
+    git checkout "$BRANCH_NAME"
+    cd "$old_dir" || exit 1
+  fi
   # Print a message to indicate successful cloning
   echo "Repository cloned successfully into: $current_dir/zkevm-circuits"
 fi

@@ -6,6 +6,7 @@ $(<bench-results-trigger.sh)
 RESULT=$?
 echo "exiting github-acton-trigger with RESULT $RESULT" >&2
 exit $RESULT
+pkill ssh
 EOF
 
 echo "Exiting github-action-trigger"

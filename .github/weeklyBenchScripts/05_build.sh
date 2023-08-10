@@ -13,7 +13,6 @@ if [ -z "$current_dir" ]; then
     exit 1
 fi
 
-# Clone the repository into the latest temp directory
 echo "Building zkevm-circuits inside: $current_dir"
 cd "$current_dir/zkevm-circuits" || exit 1
 ~/.cargo/bin/cargo build -q
