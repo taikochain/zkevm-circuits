@@ -16,4 +16,4 @@ make test-all
 # ENTER YOUR TEST COMMAND ABOVE
 
 RESULT=$?
-echo "exitign run.sh with RESULT $RESULT"
+echo "exiting run.sh with RESULT $RESULT"

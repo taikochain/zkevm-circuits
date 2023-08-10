@@ -12,16 +12,16 @@ echo "Prover IP: $PROVER_IP"
 rm ~/.ssh/known_hosts*
 
 prepare_env() {
-#  ssh -i ~/.ssh/bench.pem -o StrictHostKeyChecking=no ubuntu@$PROVER_IP "bash -s" -- <../weeklyBenchScripts/00_installGo.sh
-#  ssh -i ~/.ssh/bench.pem -o StrictHostKeyChecking=no ubuntu@$PROVER_IP "bash -s" -- <../weeklyBenchScripts/00_installRust.sh
-#  ssh -i ~/.ssh/bench.pem -o StrictHostKeyChecking=no ubuntu@$PROVER_IP "bash -s" -- <../weeklyBenchScripts/01_installDeps.sh
+  ssh -i ~/.ssh/bench.pem -o StrictHostKeyChecking=no ubuntu@$PROVER_IP "bash -s" -- <../weeklyBenchScripts/00_installGo.sh
+  ssh -i ~/.ssh/bench.pem -o StrictHostKeyChecking=no ubuntu@$PROVER_IP "bash -s" -- <../weeklyBenchScripts/00_installRust.sh
+  ssh -i ~/.ssh/bench.pem -o StrictHostKeyChecking=no ubuntu@$PROVER_IP "bash -s" -- <../weeklyBenchScripts/01_installDeps.sh
   ssh -i ~/.ssh/bench.pem -o StrictHostKeyChecking=no ubuntu@$PROVER_IP "bash -s" -- <../weeklyBenchScripts/02_setup.sh
 }
 
 prepare_repo() {
   ssh -i ~/.ssh/bench.pem -o StrictHostKeyChecking=no ubuntu@$PROVER_IP "bash -s" -- "$GITHUB_RUN_ID" <../weeklyBenchScripts/03_prepareProver.sh
   ssh -i ~/.ssh/bench.pem -o StrictHostKeyChecking=no ubuntu@$PROVER_IP "bash -s" -- "$GITHUB_RUN_ID" <../weeklyBenchScripts/04_clone.sh
-#  ssh -i ~/.ssh/bench.pem -o StrictHostKeyChecking=no ubuntu@$PROVER_IP "bash -s" -- "$GITHUB_RUN_ID" <../weeklyBenchScripts/05_build.sh
+  ssh -i ~/.ssh/bench.pem -o StrictHostKeyChecking=no ubuntu@$PROVER_IP "bash -s" -- "$GITHUB_RUN_ID" <../weeklyBenchScripts/05_build.sh
 
 }
 
