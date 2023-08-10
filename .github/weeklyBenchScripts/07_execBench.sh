@@ -1,15 +1,15 @@
 #!/bin/bash
 set -e
 #set -x
-
+GITHUB_RUN_ID=$3
 export GOROOT="/usr/local/go"
 export GOPATH="$HOME/go"
 export PATH="$GOROOT/bin:$GOPATH/bin:$PATH"
 
 # Get the latest temp directory in the home directory
-latest_dir=$(ls -td -- "$HOME"/CI_Prover_Benches/* | head -1)
+current_dir="$HOME"/CI_Prover_Benches/"$GITHUB_RUN_ID"
 
-target_dir="$latest_dir/zkevm-circuits"
+target_dir="$current_dir/zkevm-circuits"
 k=$1
 circuit=$(echo $2 | awk '{ print $1 }' | tr '[:upper:]' '[:lower:]')
 printf -v _date '%(%Y-%m-%d_%H:%M:%S)T' -1
