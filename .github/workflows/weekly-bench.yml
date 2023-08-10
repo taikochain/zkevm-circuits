@@ -18,4 +18,5 @@ jobs:
       - name: Trigger
         run: |
           cd .github/weeklyBenchScripts
+          cat ./github-action-trigger.sh
           ./github-action-trigger.sh
