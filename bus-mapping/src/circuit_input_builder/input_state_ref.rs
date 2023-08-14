@@ -475,21 +475,29 @@ impl<'a> CircuitInputStateRef<'a> {
         must_read_caller_balance: bool,
         value: Word,
         fee: Option<Word>,
+        is_anchor_tx: bool,
     ) -> Result<(), Error> {
         let (found, sender_account) = self.sdb.get_account(&sender);
         if !found {
             return Err(Error::AccountNotFound(sender));
         }
         let mut sender_balance_prev = sender_account.balance;
-        debug_assert!(
-            sender_account.balance >= value + fee.unwrap_or_default(),
-            "invalid amount balance {:?} value {:?} fee {:?}",
-            sender_balance_prev,
-            value,
-            fee
-        );
+        if !is_anchor_tx {
+            debug_assert!(
+                sender_account.balance >= value + fee.unwrap_or_default(),
+                "invalid amount balance {:?} value {:?} fee {:?}",
+                sender_balance_prev,
+                value,
+                fee
+            );
+        }
         if let Some(fee) = fee {
-            let sender_balance = sender_balance_prev - fee;
+            let sender_balance = if is_anchor_tx {
+                // anchor tx doesn't need fee
+                sender_balance_prev
+            } else {
+                sender_balance_prev - fee
+            };
             log::trace!(
                 "sender balance update with fee (not reversible): {:?} {:?}->{:?}",
                 sender,
@@ -581,6 +589,7 @@ impl<'a> CircuitInputStateRef<'a> {
             false,
             value,
             None,
+            false,
         )
     }
 
@@ -1144,7 +1153,7 @@ impl<'a> CircuitInputStateRef<'a> {
 
     /// Push a copy event to the state.
     pub fn push_copy(&mut self, step: &mut ExecStep, event: CopyEvent) {
-        step.copy_rw_counter_delta = event.rw_counter_delta();
+        step.copy_rw_counter_delta += event.rw_counter_delta();
         self.block.add_copy_event(event);
     }
 

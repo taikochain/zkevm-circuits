@@ -49,6 +49,7 @@ impl CircuitInputBuilderTx {
                 struct_logs: vec![geth_step.clone()],
             },
             false,
+            false,
         )
         .unwrap();
 

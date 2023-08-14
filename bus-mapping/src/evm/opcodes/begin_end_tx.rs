@@ -126,6 +126,7 @@ fn gen_begin_tx_steps(state: &mut CircuitInputStateRef) -> Result<ExecStep, Erro
         true,
         value,
         fee,
+        state.tx_ctx.is_anchor_tx(),
     )?;
 
     // In case of contract creation we wish to verify the correctness of the
