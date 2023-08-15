@@ -60,7 +60,7 @@ const ZERO_BYTE_GAS_COST: u64 = 4;
 const NONZERO_BYTE_GAS_COST: u64 = 16;
 
 // The total number of previous blocks for which to check the hash chain
-const PREVIOUS_BLOCKS_NUM: usize = 0; //256;
+const PREVIOUS_BLOCKS_NUM: usize = 0; // TODO(George) 256;
 // This is the number of entries each block occupies in the block_table, which
 // is equal to the number of header fields per block (coinbase, timestamp,
 // number, difficulty, gas_limit, base_fee, blockhash, beneficiary, state_root,
@@ -76,7 +76,7 @@ const TOTAL_BLOCK_TABLE_LEN: usize =
     (BLOCK_LEN_IN_TABLE * (PREVIOUS_BLOCKS_NUM + 1)) + BLOCK_TABLE_MISC_LEN;
 
 const OLDEST_BLOCK_NUM: usize = 258; // TODO(George) = 0;
-const CURRENT_BLOCK_NUM: usize = PREVIOUS_BLOCKS_NUM; // TODO(George) = 256;
+const CURRENT_BLOCK_NUM: usize = 256;//PREVIOUS_BLOCKS_NUM; // TODO(George) = 256;
 
 const WORD_SIZE: usize = 32;
 const U64_SIZE: usize = 8;
@@ -1281,7 +1281,6 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
     #[allow(clippy::type_complexity)]
     fn get_block_header_rlp_from_public_data(
         public_data: &PublicData<F>,
-        // challenges: &Challenges<Value<F>>,
         randomness: Value<F>,
     ) -> (Vec<u8>, Vec<u8>, Vec<u8>, Vec<Value<F>>, Value<F>, Value<F>) {
         // RLP encode the block header data
@@ -1403,7 +1402,6 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
             public_data: &PublicData<F>,
             block_number: usize,
             challenges: &Challenges<Value<F>>,
-            // randomness: F,
         ) {
             let randomness = challenges.evm_word();
             // Current block is the exception, it sits on offset zero but hash block number
@@ -1522,6 +1520,7 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
             ]
             .concat();
 
+            println!("block_header_rlp_byte = {:x?}", block_header_rlp_byte);
             for (offset, rlp_byte) in block_header_rlp_byte.iter().enumerate() {
                 let absolute_offset = block_offset + offset;
                 region
@@ -1891,15 +1890,22 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
                     .unwrap();
                 println!("block_table_tag[{}] = {:?}", absolute_offset, tag);
 
+                // let idx2 = if (block_number == CURRENT_BLOCK_NUM) && (*tag == BlockContextFieldTag::PreviousHashLo) {
+                //     255
+                // } else {
+                //     block_number
+                // };
                 region
                     .assign_fixed(
                         || "block_table_index",
                         self.blockhash_cols.block_table_index,
                         absolute_offset,
                         || Value::known(F::from((block_number) as u64)),
+                        // || Value::known(F::from((idx2) as u64)),
                     )
                     .unwrap();
-                println!("block_table_tag[{}] = {:?}", absolute_offset, block_number);
+                // println!("block_table_index[{}] = {:?}", absolute_offset, idx2);
+                println!("block_table_index[{}] = {:?}", absolute_offset, block_number);
             }
 
             // Determines if it is a short RLP value
@@ -2155,8 +2161,8 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
 
         // println!("history_hashes = {:x?}", block_values.history_hashes);
 
+        // The following need to be added only once in block table
         if block_number == CURRENT_BLOCK_NUM {
-            // The following need to be added only once in block table
             block_data.extend_from_slice(
                 block_values
                     .history_hashes
@@ -2268,6 +2274,10 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
                     || Value::known(F::from(idx as u64)),
                 )?;
 
+                println!("block table tag  [{}] = {:?}", absolute_offset, tag);
+                println!("block table index[{}] = {}", absolute_offset, idx);
+                println!("block table value[{}] = {:?}", absolute_offset, val);
+
                 let cell = region.assign_advice(|| name, self.block_table.value, absolute_offset, || val)?;
                 if name == "chain_id" {
                     chain_id_cell.push(cell);
@@ -2328,8 +2338,7 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
                     CURRENT_BLOCK_NUM,
                     challenges,
                 );
-
-                let _chain_id = self.assign_block_table(
+                self.assign_block_table(
                     region,
                     public_data,
                     CURRENT_BLOCK_NUM,
