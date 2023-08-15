@@ -310,6 +310,7 @@ impl<F: Field> PublicData<F> {
 
     /// create PublicData from block and taiko
     pub fn new(block: &witness::Block<F>) -> Self {
+        assert!(block.context.number >= U256::from(0x100));
         let (blockhash_blk_hdr_rlp, blockhash_rlp_hash_hi, blockhash_rlp_hash_lo, block_hash) =
             Self::get_block_header_rlp_from_block(block);
 
@@ -836,7 +837,7 @@ impl<F: Field> SubCircuitConfig<F> for TaikoPiCircuitConfig<F> {
                     // The length is also set to 0 when the RLP encoding is short (single RLP byte
                     // encoding)
                     cb.condition(
-                        and::expr([rlp_is_short_next.clone(), length_is_zero.expr()]),
+                        and::expr([rlp_is_short_next.clone(), length_is_zero.expr(), not::expr(q_field_next.expr())]),
                         |cb| {
                             cb.require_zero(
                                 "Length is set to zero for short values",
@@ -1341,7 +1342,7 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
             (U256::from(block.number.as_u64()), NUMBER_RLP_OFFSET, 32 - 8),
             (block.gas_limit.into(), GAS_LIMIT_RLP_OFFSET, 0),
             (public_data.gas_used.into(), GAS_USED_RLP_OFFSET, 0),
-            (block.timestamp, TIMESTAMP_RLP_OFFSET, 0),
+            (U256::from(block.timestamp), TIMESTAMP_RLP_OFFSET, 0),
             (block.base_fee, BASE_FEE_RLP_OFFSET, 0),
         ]
         .iter()
@@ -1427,7 +1428,7 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
                     || "block_table_index",
                     self.blockhash_cols.block_table_index,
                     block_offset + BLOCKHASH_TOTAL_ROWS - 1,
-                    || Value::known(F::from((block_number) as u64)),
+                    || Value::known(F::from(block_number as u64)),
                 )
                 .unwrap();
 
@@ -1447,7 +1448,7 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
                     || "block_table_index",
                     self.blockhash_cols.block_table_index,
                     block_offset + BLOCKHASH_TOTAL_ROWS - 2,
-                    || Value::known(F::from((block_number) as u64)),
+                    || Value::known(F::from(block_number as u64)),
                 )
                 .unwrap();
 
@@ -1782,7 +1783,7 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
                         {
                             length_calc = F::ZERO;
                         } else {
-                            length_calc = F::from((offset - field_lead_zeros_num as usize + 1) as u64);
+                            length_calc = F::from(offset as u64 - field_lead_zeros_num as u64 + 1);
                         }
 
                         region
@@ -1900,7 +1901,7 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
                         || "block_table_index",
                         self.blockhash_cols.block_table_index,
                         absolute_offset,
-                        || Value::known(F::from((block_number) as u64)),
+                        || Value::known(F::from(block_number as u64)),
                         // || Value::known(F::from((idx2) as u64)),
                     )
                     .unwrap();
@@ -2902,7 +2903,9 @@ mod taiko_pi_circuit_test {
         current_block.eth_block.number = Some(U64::from(0));
         current_block.eth_block.gas_limit = U256::from(0);
         current_block.eth_block.gas_used = U256::from(0);
+        current_block.protocol_instance.gas_used = 0;
         current_block.eth_block.timestamp = U256::from(0);
+        current_block.context.timestamp = U256::from(0);
         current_block.eth_block.extra_data = eth_types::Bytes::from([0; 0]);
         current_block.eth_block.mix_hash = Some(H256::zero());
         current_block.eth_block.nonce = Some(H64::from([0, 0, 0, 0, 0, 0, 0, 0]));
@@ -2936,9 +2939,9 @@ mod taiko_pi_circuit_test {
         let k = 18;
 
         let (mut block, prover, previous_blocks, previous_blocks_rlp) = default_test_block();
-        block.context.number = U256::from(0x75);
+        block.context.number = U256::from(0x100);
         block.context.gas_limit = 0x76;
-        block.eth_block.gas_used = U256::from(0x77);
+        block.protocol_instance.gas_used = 0x77; //U256::from(0x77);
         block.context.timestamp = U256::from(0x78);
         block.context.base_fee = U256::from(0x79);
 
@@ -2959,9 +2962,9 @@ mod taiko_pi_circuit_test {
         let k = 18;
 
         let (mut block, prover, previous_blocks, previous_blocks_rlp) = default_test_block();
-        block.context.number = U256::from(RLP_HDR_NOT_SHORT);
+        block.context.number = U256::from(0x100);
         block.context.gas_limit = RLP_HDR_NOT_SHORT;
-        block.eth_block.gas_used = U256::from(RLP_HDR_NOT_SHORT);
+        block.protocol_instance.gas_used = RLP_HDR_NOT_SHORT as u32; //U256::from(RLP_HDR_NOT_SHORT);
         block.context.timestamp = U256::from(RLP_HDR_NOT_SHORT);
         block.context.base_fee = U256::from(RLP_HDR_NOT_SHORT);
 
@@ -2982,9 +2985,9 @@ mod taiko_pi_circuit_test {
         let k = 18;
 
         let (mut block, prover, previous_blocks, previous_blocks_rlp) = default_test_block();
-        block.context.number = U256::from(0xFF);
+        block.context.number = U256::from(0x100);
         block.context.gas_limit = 0xFF;
-        block.eth_block.gas_used = U256::from(0xFF);
+        block.protocol_instance.gas_used = 0xff; //U256::from(0xFF);
         block.context.timestamp = U256::from(0xFF);
         block.context.base_fee = U256::from(0xFF);
 
@@ -3007,8 +3010,8 @@ mod taiko_pi_circuit_test {
         let (mut block, prover, previous_blocks, previous_blocks_rlp) = default_test_block();
         block.context.number = U256::from(0x0090909090909090_u128);
         block.context.gas_limit = 0x0000919191919191;
-        block.eth_block.gas_used = U256::from(0x92) << (28 * 8);
-        block.context.timestamp = U256::from(0x93) << (27 * 8);
+        block.protocol_instance.gas_used = 0x92 << 2*8; //U256::from(0x92) << (28 * 8);
+        block.context.timestamp = U256::from(0x93) << (7 * 8);
         block.context.base_fee = U256::from(0x94) << (26 * 8);
 
         let mut public_data = PublicData::new(&block);
@@ -3073,7 +3076,7 @@ mod taiko_pi_circuit_test {
         ));
         block.context.number = U256::from(0x9090909090909090_u128);
         block.context.gas_limit = 0x9191919191919191;
-        block.eth_block.gas_used = U256::from(0x92) << (31 * 8);
+        block.protocol_instance.gas_used = 0x92 << (3 * 8);
         block.context.timestamp = U256::from(0x93) << (31 * 8);
         block.context.base_fee = U256::from(0x94) << (31 * 8);
         block.eth_block.withdrawals_root = Some(H256::from_slice(
@@ -3085,7 +3088,8 @@ mod taiko_pi_circuit_test {
         public_data.previous_blocks = previous_blocks;
         public_data.previous_blocks_rlp = previous_blocks_rlp;
 
-        let (test_block, _, test_previous_blocks, previous_blocks_rlp) = default_test_block();
+        let (mut test_block, _, test_previous_blocks, previous_blocks_rlp) = default_test_block();
+        test_block.context.number = U256::from(0x100);
         let test_public_data = PublicData::new(&test_block);
         public_data.previous_blocks = test_previous_blocks;
 
