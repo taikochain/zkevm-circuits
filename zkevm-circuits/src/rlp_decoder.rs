@@ -224,7 +224,10 @@ pub enum RlpTxTypeTag {
 impl_expr!(RlpTxTypeTag);
 
 /// max byte column num which is used to store the rlp raw bytes
-pub const MAX_BYTE_COLUMN_NUM: usize = 33;
+pub const MAX_BYTE_COLUMN_NUM: usize = 17;
+
+/// sign(v, r, s) ends the list, 33 is for checking last item length
+pub const MAX_SIGNS_BYTES: usize = 33;
 
 /// Witness for RlpDecoderCircuit
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -237,14 +240,14 @@ pub struct RlpDecoderCircuitConfigWitness<F: Field> {
     pub tx_member: RlpTxFieldTag,
     /// complete column
     pub complete: bool,
-    /// rlp types: [single, short, long, very_long, fixed(33)]
+    /// rlp types
     pub rlp_type: RlpDecodeTypeTag,
     /// rlp_tag_length, the length of this rlp field
     pub rlp_tx_member_length: u64,
     /// rlp length of nexted levels
     pub nested_rlp_lengths: [usize; MAX_NESTED_LEVEL_NUM],
-    /// remained rows, for n < 33 fields, it is n, for m > 33 fields, it is 33 and next row is
-    /// partial, next_length = m - 33
+    /// remained rows, for n < MAX_BYTES fields, it is n, for m > MAX_BYTES fields, it is MAX_BYTES
+    /// and next row is partial, next_length = m - MAX_BYTES
     pub rlp_bytes_in_row: u8,
     /// r_mult column, (length, r_mult) => @fixed
     pub r_mult: F,
@@ -281,7 +284,7 @@ pub struct RlpDecoderCircuitConfig<F: Field> {
     pub tx_member: Column<Advice>,
     /// complete column
     pub complete: Column<Advice>,
-    /// rlp types: [single, short, long, very_long, fixed(33)]
+    /// rlp types
     pub rlp_type: Column<Advice>,
     /// rlp_type checking gadget
     pub q_rlp_types: [Column<Advice>; RLP_DECODE_TYPE_NUM],
@@ -289,8 +292,8 @@ pub struct RlpDecoderCircuitConfig<F: Field> {
     pub(crate) nested_length_gadget: NestedRemainLengthGadget<F>,
     /// rlp_tag_length, the length of this rlp field
     pub rlp_tx_member_length: Column<Advice>,
-    /// remained rows, for n < 33 fields, it is n, for m > 33 fields, it is 33 and next row is
-    /// partial, next_length = m - 33
+    /// remained rows, for n < MAX_BYTES fields, it is n, for m > MAX_BYTES fields, it is MAX_BYTES
+    /// and next row is partial, next_length = m - MAX_BYTES
     pub rlp_bytes_in_row: Column<Advice>,
     /// r_mult column, (length, r_mult) => @fixed, r_mult == r ^ length
     pub r_mult: Column<Advice>,
@@ -318,11 +321,11 @@ pub struct RlpDecoderCircuitConfig<F: Field> {
     pub v_gt_55: LtConfig<F, 1>,
     /// condition check for > 0
     pub v_gt_0: LtConfig<F, 1>,
-    /// condition check for prev_remain_length > 33
-    pub remain_length_gt_33: LtConfig<F, 4>,
+    /// condition check for prev_remain_length > MAX_BYTES
+    pub remain_length_gt_max_bytes: LtConfig<F, 4>,
     /// condition check for prev_remain_length >= cur_length
     pub remain_length_ge_length: LtConfig<F, 4>,
-    /// divide factor for big endian rlc, r_mult_comp * r_mult = r ^ MAX_BYTE_COLUMN_NUM(33)
+    /// divide factor for big endian rlc, r_mult_comp * r_mult = r ^ MAX_BYTE_COLUMN_NUM
     pub r_mult_comp: Column<Advice>,
     /// quotient value for big endian rlc, rlc_quotient = rlc[0..MAX_BYTE_COLUMN_NUM] / r_mult_comp
     pub rlc_quotient: Column<Advice>,
@@ -378,7 +381,7 @@ impl<F: Field> SubCircuitConfig<F> for RlpDecoderCircuitConfig<F> {
         let rlc_quotient = meta.advice_column_in(SecondPhase);
 
         let nested_length_gadget =
-            NestedRemainLengthGadget::new(meta, &q_enable, rlp_tx_member_length);
+            NestedRemainLengthGadget::new(meta, &q_enable, tx_member_bytes_in_row);
         let rlp_total_remain = nested_length_gadget.nested_rlp_remains[0];
         let rlp_typed_tx_remain = nested_length_gadget.nested_rlp_remains[1];
         let rlp_inner_tx_remain = nested_length_gadget.nested_rlp_remains[2];
@@ -686,7 +689,9 @@ impl<F: Field> SubCircuitConfig<F> for RlpDecoderCircuitConfig<F> {
                 )
             });
 
-            nested_length_gadget.construct(meta, &mut cb);
+            nested_length_gadget
+                .construct(meta, &mut cb)
+                .expect("nested_length_gadget construct ok");
 
             cb.condition(valid_cur.expr(), |cb| {
                 cb.require_equal(
@@ -855,7 +860,8 @@ impl<F: Field> SubCircuitConfig<F> for RlpDecoderCircuitConfig<F> {
                         meta.query_advice(complete, Rotation::prev()),
                     );
 
-                    cb.require_equal("only data has partial rlp", tag, RlpTxFieldTag::Data.expr());
+                    // cb.require_equal("only data has partial rlp", tag,
+                    // RlpTxFieldTag::Data.expr());
                 },
             );
 
@@ -1354,7 +1360,11 @@ impl<F: Field> SubCircuitConfig<F> for RlpDecoderCircuitConfig<F> {
 
             // if prev_remain > 33, then length = 33 else, length = prev_remain
             cb.condition(cmp_max_row_bytes_lt_remains.is_lt(meta, None), |cb| {
-                cb.require_equal("decode_error length = 33", length.expr(), 33.expr());
+                cb.require_equal(
+                    "decode_error length = max",
+                    length.expr(),
+                    MAX_BYTE_COLUMN_NUM.expr(),
+                );
             });
             cb.condition(
                 not::expr(cmp_max_row_bytes_lt_remains.is_lt(meta, None)),
@@ -1410,7 +1420,7 @@ impl<F: Field> SubCircuitConfig<F> for RlpDecoderCircuitConfig<F> {
             aux_tables,
             v_gt_55: cmp_55_lt_byte1,
             v_gt_0: cmp_0_lt_byte1,
-            remain_length_gt_33: cmp_max_row_bytes_lt_remains,
+            remain_length_gt_max_bytes: cmp_max_row_bytes_lt_remains,
             remain_length_ge_length: cmp_length_le_prev_remain,
             r_mult_comp,
             rlc_quotient,
@@ -1434,7 +1444,7 @@ impl<F: Field> RlpDecoderCircuitConfig<F> {
             let gt_55_chip = LtChip::construct(self.v_gt_55);
             let gt_0_chip = LtChip::construct(self.v_gt_0);
 
-            let gt_33_chip = LtChip::construct(self.remain_length_gt_33);
+            let gt_max_bytes_chip = LtChip::construct(self.remain_length_gt_max_bytes);
             let enough_remain_chip = LtChip::construct(self.remain_length_ge_length);
 
             let leading_val = if wit.bytes.len() > 1 { wit.bytes[1] } else { 0 };
@@ -1443,7 +1453,7 @@ impl<F: Field> RlpDecoderCircuitConfig<F> {
 
             let remain_bytes = prev_wit.nested_rlp_lengths[0] as u64;
             let current_member_bytes = wit.rlp_tx_member_length;
-            gt_33_chip.assign(
+            gt_max_bytes_chip.assign(
                 region,
                 offset,
                 F::from(MAX_BYTE_COLUMN_NUM as u64),
@@ -1876,7 +1886,7 @@ impl<F: Field> SubCircuit<F> for RlpDecoderCircuit<F> {
         // load LtChip table, can it be merged into 1 column?
         LtChip::construct(config.v_gt_55).load(layouter)?;
         LtChip::construct(config.v_gt_0).load(layouter)?;
-        LtChip::construct(config.remain_length_gt_33).load(layouter)?;
+        LtChip::construct(config.remain_length_gt_max_bytes).load(layouter)?;
         LtChip::construct(config.remain_length_ge_length).load(layouter)?;
 
         // for nested level lengths
@@ -1884,6 +1894,7 @@ impl<F: Field> SubCircuit<F> for RlpDecoderCircuit<F> {
             .nested_length_gadget
             .zero_cmp_prev_nested_remains
             .iter()
+            .take(1)
             .try_for_each(|zero_lt_prev_remain| {
                 LtChip::construct(*zero_lt_prev_remain).load(layouter)
             })?;
@@ -1891,6 +1902,7 @@ impl<F: Field> SubCircuit<F> for RlpDecoderCircuit<F> {
             .nested_length_gadget
             .row_bytes_cmp_prev_nested_remains
             .iter()
+            .take(1)
             .try_for_each(|bytes_in_row_le_prev_remains| {
                 LtChip::construct(*bytes_in_row_le_prev_remains).load(layouter)
             })?;
@@ -1898,6 +1910,7 @@ impl<F: Field> SubCircuit<F> for RlpDecoderCircuit<F> {
             .nested_length_gadget
             .remain_upper_leq_lower
             .iter()
+            .take(1)
             .try_for_each(|level_high_le_low| {
                 LtChip::construct(*level_high_le_low).load(layouter)
             })?;
@@ -2103,7 +2116,7 @@ impl<F: Field> RlpTxFieldStateWittnessGenerator<F> for RlpTxFieldTag {
             RlpTxFieldTag::SignR => state_switch!(RlpTxFieldTag::SignS),
             RlpTxFieldTag::SignS => {
                 // Tricky: we need to check if the bytes hold SignS only.
-                let next_state = if bytes.len() <= MAX_BYTE_COLUMN_NUM {
+                let next_state = if bytes.len() <= MAX_SIGNS_BYTES {
                     RlpTxFieldTag::Padding
                 } else {
                     RlpTxFieldTag::TypedTxHeader
