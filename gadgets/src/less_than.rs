@@ -54,19 +54,20 @@ pub struct LtChip<F, const N_BYTES: usize> {
 }
 
 impl<F: Field, const N_BYTES: usize> LtChip<F, N_BYTES> {
-    /// Configures the Lt chip.
-    pub fn configure(
+    /// Configures from existed Columns
+    pub fn configure_by_columns(
+        name: &str,
         meta: &mut ConstraintSystem<F>,
         q_enable: impl FnOnce(&mut VirtualCells<'_, F>) -> Expression<F>,
         lhs: impl FnOnce(&mut VirtualCells<F>) -> Expression<F>,
         rhs: impl FnOnce(&mut VirtualCells<F>) -> Expression<F>,
+        lt: Column<Advice>,
+        diff: [Column<Advice>; N_BYTES],
+        u8: Column<Fixed>,
     ) -> LtConfig<F, N_BYTES> {
-        let lt = meta.advice_column();
-        let diff = [(); N_BYTES].map(|_| meta.advice_column());
         let range = pow_of_two(N_BYTES * 8);
-        let u8 = meta.fixed_column();
 
-        meta.create_gate("lt gate", |meta| {
+        meta.create_gate(name, |meta| {
             let q_enable = q_enable(meta);
             let lt = meta.query_advice(lt, Rotation::cur());
 
@@ -101,6 +102,19 @@ impl<F: Field, const N_BYTES: usize> LtChip<F, N_BYTES> {
             range,
             u8,
         }
+    }
+
+    /// Configures the Lt chip.
+    pub fn configure(
+        meta: &mut ConstraintSystem<F>,
+        q_enable: impl FnOnce(&mut VirtualCells<'_, F>) -> Expression<F>,
+        lhs: impl FnOnce(&mut VirtualCells<F>) -> Expression<F>,
+        rhs: impl FnOnce(&mut VirtualCells<F>) -> Expression<F>,
+    ) -> LtConfig<F, N_BYTES> {
+        let lt = meta.advice_column();
+        let diff = [(); N_BYTES].map(|_| meta.advice_column());
+        let u8 = meta.fixed_column();
+        Self::configure_by_columns("original lt gate", meta, q_enable, lhs, rhs, lt, diff, u8)
     }
 
     /// Constructs a Lt chip given a config.

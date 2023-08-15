@@ -41,6 +41,9 @@ pub use halo2_proofs::halo2curves::{
 };
 use mock::MockTransaction;
 
+mod nested_remain_gadget;
+use nested_remain_gadget::{NestedRemainLengthGadget, MAX_NESTED_LEVEL_NUM};
+
 const NUM_BLINDING_ROWS: usize = 64;
 
 /// fix table with union-ed 6 columns
@@ -207,39 +210,6 @@ impl<T> std::ops::Index<RlpTxFieldTag> for Vec<T> {
 const LEGACY_TX_FIELD_NUM: usize = RlpTxFieldTag::Padding as usize + 1;
 const TX1559_TX_FIELD_NUM: usize = RlpTxFieldTag::AccessList as usize + 1;
 
-/// this is for nested txlist rlp length check.
-/// A full txlist rlp is:
-/// [ # level 0 length check column: list of TX header
-///     [ # level 1 length check column: list of TX header
-///         [ # level 2 length check column: tx structure header
-///             nonce: 3,
-///             ...,
-///             access_list:
-///             [ # level 3 length check column: list of AccessList header
-///                 [ # level 4 length check column: AccessList structure header
-///                     address: 1,
-///                     storage_keys:
-///                     [ #level 5 length check column: list of key header
-///                         1,
-///                     ] #end L5
-///                 ], # end L4
-///                 [ # level 3 length check column
-///                     address: 2,
-///                     storage_keys:
-///                     [ # level 4 length check column
-///                         2,
-///                     ] # end L5
-///                 ], # end L4
-///             ], # end L3
-///             ...,
-///         ], # end L2
-///     ], # end L1
-///     ...,
-///     [tx N]
-/// ] # end L0
-/// So, the max nested list num is 6
-const MAX_NESTED_LEVEL_NUM: usize = 6;
-
 // TODO: combine with TxFieldTag in table.rs
 // Marker that defines whether an Operation performs a `READ` or a `WRITE`.
 /// RlpTxTypeTag is used to tell the type of tx
@@ -315,10 +285,10 @@ pub struct RlpDecoderCircuitConfig<F: Field> {
     pub rlp_type: Column<Advice>,
     /// rlp_type checking gadget
     pub q_rlp_types: [Column<Advice>; RLP_DECODE_TYPE_NUM],
+    /// gadgets for nested length checking
+    pub(crate) nested_length_gadget: NestedRemainLengthGadget<F>,
     /// rlp_tag_length, the length of this rlp field
     pub rlp_tx_member_length: Column<Advice>,
-    /// list length checking column
-    pub nested_rlp_remains: [Column<Advice>; MAX_NESTED_LEVEL_NUM],
     /// remained rows, for n < 33 fields, it is n, for m > 33 fields, it is 33 and next row is
     /// partial, next_length = m - 33
     pub rlp_bytes_in_row: Column<Advice>,
@@ -356,12 +326,6 @@ pub struct RlpDecoderCircuitConfig<F: Field> {
     pub r_mult_comp: Column<Advice>,
     /// quotient value for big endian rlc, rlc_quotient = rlc[0..MAX_BYTE_COLUMN_NUM] / r_mult_comp
     pub rlc_quotient: Column<Advice>,
-    /// condition check for prev_remain_length > 0
-    pub zero_cmp_prev_nested_remain: Vec<LtConfig<F, 4>>,
-    /// bytes_in_row <= prev_lv_remain (if exists)
-    pub row_bytes_cmp_prev_nested_remains: Vec<LtConfig<F, 4>>,
-    /// nested[0] >= nested[1] >= ... >= nested[n]
-    pub remain_upper_leq_lower: Vec<LtConfig<F, 4>>,
 }
 
 #[derive(Clone, Debug)]
@@ -386,15 +350,6 @@ impl<F: Field> SubCircuitConfig<F> for RlpDecoderCircuitConfig<F> {
         let complete = meta.advice_column();
         let rlp_type = meta.advice_column();
         let rlp_tx_member_length = meta.advice_column();
-        let nested_rlp_remains: [Column<Advice>; MAX_NESTED_LEVEL_NUM as usize] = (0
-            ..MAX_NESTED_LEVEL_NUM)
-            .map(|_| meta.advice_column())
-            .collect::<Vec<Column<Advice>>>()
-            .try_into()
-            .unwrap();
-        let rlp_total_remain = nested_rlp_remains[0];
-        let rlp_typed_tx_remain = nested_rlp_remains[1];
-        let rlp_inner_tx_remain = nested_rlp_remains[2];
         let tx_member_bytes_in_row = meta.advice_column();
         let r_mult = meta.advice_column_in(SecondPhase);
         let value = meta.advice_column();
@@ -422,6 +377,12 @@ impl<F: Field> SubCircuitConfig<F> for RlpDecoderCircuitConfig<F> {
         let r_mult_comp = meta.advice_column_in(SecondPhase);
         let rlc_quotient = meta.advice_column_in(SecondPhase);
 
+        let nested_length_gadget =
+            NestedRemainLengthGadget::new(meta, &q_enable, rlp_tx_member_length);
+        let rlp_total_remain = nested_length_gadget.nested_rlp_remains[0];
+        let rlp_typed_tx_remain = nested_length_gadget.nested_rlp_remains[1];
+        let rlp_inner_tx_remain = nested_length_gadget.nested_rlp_remains[2];
+
         // type checking
         let q_rlp_types: [Column<Advice>; RLP_DECODE_TYPE_NUM] = (0..RLP_DECODE_TYPE_NUM)
             .map(|_| meta.advice_column())
@@ -434,53 +395,6 @@ impl<F: Field> SubCircuitConfig<F> for RlpDecoderCircuitConfig<F> {
                 $meta.query_advice(q_rlp_types[$rlp_type], Rotation::cur())
             };
         }
-
-        // prev_nested_remain > 0
-        let zero_cmp_prev_nested_remain: Vec<LtConfig<F, 4>> = nested_rlp_remains
-            .iter()
-            .map(|&remain_len| {
-                LtChip::configure(
-                    meta,
-                    |meta| meta.query_selector(q_enable),
-                    |_| 0.expr(),
-                    |meta| meta.query_advice(remain_len, Rotation::prev()),
-                )
-            })
-            .collect::<Vec<_>>()
-            .try_into()
-            .unwrap();
-
-        // bytes_in_row <= prev_lv_remain (if prev_lv_remain > 0)
-        let row_bytes_cmp_prev_nested_remains: Vec<LtConfig<F, 4>> = nested_rlp_remains
-            .iter()
-            .map(|&curr_lv_remain_len| {
-                LtChip::configure(
-                    meta,
-                    |meta| meta.query_selector(q_enable),
-                    |meta| meta.query_advice(tx_member_bytes_in_row, Rotation::cur()),
-                    |meta| meta.query_advice(curr_lv_remain_len, Rotation::prev()) + 1.expr(),
-                )
-            })
-            .collect::<Vec<_>>()
-            .try_into()
-            .unwrap();
-
-        // nested[0] >= nested[1] >= ... >= nested[n]
-        let remain_upper_leq_lower: Vec<LtConfig<F, 4>> = {
-            let mut iter = nested_rlp_remains.iter().peekable();
-            let mut le_gadgets = vec![];
-            while let Some(low_lv_remain) = iter.next() {
-                if let Some(high_lv_remain) = iter.peek() {
-                    le_gadgets.push(LtChip::configure(
-                        meta,
-                        |meta| meta.query_selector(q_enable),
-                        |meta| meta.query_advice(**high_lv_remain, Rotation::cur()),
-                        |meta| meta.query_advice(*low_lv_remain, Rotation::cur()) + 1.expr(),
-                    ));
-                }
-            }
-            le_gadgets.try_into().unwrap()
-        };
 
         // lt gadgets
         let cmp_55_lt_byte1 = LtChip::configure(
@@ -772,32 +686,7 @@ impl<F: Field> SubCircuitConfig<F> for RlpDecoderCircuitConfig<F> {
                 )
             });
 
-            // if prev nested rlp remain > 0, current nested rlp remain = prev nested rlp remain -
-            // bytes_in_row
-            nested_rlp_remains
-                .iter()
-                .enumerate()
-                .for_each(|(i, nested_rlp_remain)| {
-                    let nested_rlp_remain_prev =
-                        meta.query_advice(*nested_rlp_remain, Rotation::prev());
-                    let nested_rlp_remain_cur =
-                        meta.query_advice(*nested_rlp_remain, Rotation::cur());
-                    let bytes_in_row_cur =
-                        meta.query_advice(tx_member_bytes_in_row, Rotation::cur());
-                    cb.condition(zero_cmp_prev_nested_remain[i].is_lt(meta, None), |cb| {
-                        cb.require_equal(
-                            "nested rlp remain",
-                            nested_rlp_remain_cur,
-                            nested_rlp_remain_prev - bytes_in_row_cur,
-                        );
-
-                        cb.require_equal(
-                            "curr bytes in row <= prev remain length",
-                            row_bytes_cmp_prev_nested_remains[i].is_lt(meta, None),
-                            1.expr(),
-                        )
-                    });
-                });
+            nested_length_gadget.construct(meta, &mut cb);
 
             cb.condition(valid_cur.expr(), |cb| {
                 cb.require_equal(
@@ -805,14 +694,6 @@ impl<F: Field> SubCircuitConfig<F> for RlpDecoderCircuitConfig<F> {
                     cmp_length_le_prev_remain.is_lt(meta, None),
                     1.expr(),
                 );
-
-                remain_upper_leq_lower.iter().for_each(|h_le_l| {
-                    cb.require_equal(
-                        "high level remain <= low level remain",
-                        h_le_l.is_lt(meta, None),
-                        1.expr(),
-                    )
-                });
             });
 
             cb.gate(and::expr([
@@ -1120,6 +1001,17 @@ impl<F: Field> SubCircuitConfig<F> for RlpDecoderCircuitConfig<F> {
 
             // handle typed tx rlp header row
             let prev_typed_tx_remain = meta.query_advice(rlp_typed_tx_remain, Rotation::prev());
+            cb.require_equal(
+                "level 1 enabled",
+                meta.query_advice(nested_length_gadget.q_nested_level[1], Rotation::cur()),
+                1.expr(),
+            );
+            cb.require_equal(
+                "valid == level 1 <= leve 0",
+                nested_length_gadget.remain_upper_leq_lower[0].is_lt(meta, None),
+                valid.expr(),
+            );
+
             cb.require_zero("prev typed tx ends above", prev_typed_tx_remain);
             cb.condition(
                 rlp_type_enabled!(meta, RlpDecodeTypeTag::LongString1) * valid.expr(),
@@ -1240,6 +1132,17 @@ impl<F: Field> SubCircuitConfig<F> for RlpDecoderCircuitConfig<F> {
             // handle tx inner rlp byte remain
             let prev_tx_inner_remain = meta.query_advice(rlp_inner_tx_remain, Rotation::prev());
             cb.require_zero("prev tx ends above", prev_tx_inner_remain);
+            cb.require_equal(
+                "level 2 enabled",
+                meta.query_advice(nested_length_gadget.q_nested_level[2], Rotation::cur()),
+                1.expr(),
+            );
+            cb.require_equal(
+                "level 2 <= leve 1",
+                nested_length_gadget.remain_upper_leq_lower[1].is_lt(meta, None),
+                valid.expr(),
+            );
+
             cb.condition(
                 rlp_type_enabled!(meta, RlpDecodeTypeTag::LongList1) * valid.expr(),
                 |cb| {
@@ -1475,6 +1378,15 @@ impl<F: Field> SubCircuitConfig<F> for RlpDecoderCircuitConfig<F> {
             cb.gate(q_error.expr() * meta.query_selector(q_enable))
         });
 
+        log::info!(
+            "after rlp decoder config: meta info (a:{}, f:{}, i:{}, l:{}, d:{}).",
+            meta.num_advice_columns(),
+            meta.num_fixed_columns(),
+            meta.num_instance_columns(),
+            meta.lookups().len(),
+            meta.degree()
+        );
+
         let circuit_config = RlpDecoderCircuitConfig {
             tx_id,
             tx_type,
@@ -1482,8 +1394,8 @@ impl<F: Field> SubCircuitConfig<F> for RlpDecoderCircuitConfig<F> {
             complete,
             rlp_type,
             q_rlp_types,
+            nested_length_gadget,
             rlp_tx_member_length,
-            nested_rlp_remains,
             rlp_bytes_in_row: tx_member_bytes_in_row,
             r_mult,
             value,
@@ -1502,9 +1414,6 @@ impl<F: Field> SubCircuitConfig<F> for RlpDecoderCircuitConfig<F> {
             remain_length_ge_length: cmp_length_le_prev_remain,
             r_mult_comp,
             rlc_quotient,
-            zero_cmp_prev_nested_remain,
-            row_bytes_cmp_prev_nested_remains,
-            remain_upper_leq_lower,
         };
         circuit_config
     }
@@ -1547,48 +1456,77 @@ impl<F: Field> RlpDecoderCircuitConfig<F> {
                 F::from(remain_bytes) + F::ONE,
             )?;
 
+            let enabled_chip_id = {
+                if let Some(idx) = prev_wit.nested_rlp_lengths.iter().rposition(|&l| l > 0) {
+                    idx
+                } else {
+                    0
+                }
+            };
             // cmp nested level remain length with 0
-            self.zero_cmp_prev_nested_remain
-                .iter()
-                .enumerate()
-                .try_for_each(|(i, prev_remain_length_gt_zero)| {
-                    let prev_remain_gt_0_chip = LtChip::construct(*prev_remain_length_gt_zero);
-                    prev_remain_gt_0_chip.assign(
-                        region,
-                        offset,
-                        F::ZERO,
-                        F::from(prev_wit.nested_rlp_lengths[i] as u64),
-                    )
-                })?;
-            // cmp nested level remain length with row bytes
-            self.row_bytes_cmp_prev_nested_remains
-                .iter()
-                .enumerate()
-                .try_for_each(|(i, cmp_remain_length_ge_row_bytes)| {
-                    let prev_remain_ge_row_bytes_chip =
-                        LtChip::construct(*cmp_remain_length_ge_row_bytes);
-                    prev_remain_ge_row_bytes_chip.assign(
-                        region,
-                        offset,
-                        F::from(wit.rlp_bytes_in_row as u64),
-                        F::from(prev_wit.nested_rlp_lengths[i] as u64 + 1),
-                    )
-                })?;
-            // cmp nested level remain length with low level remain length
-            self.remain_upper_leq_lower
-                .iter()
-                .enumerate()
-                .try_for_each(|(i, high_lv_remain_le_low_level)| {
-                    let high_lv_remain_le_low_level_chip =
-                        LtChip::construct(*high_lv_remain_le_low_level);
-                    high_lv_remain_le_low_level_chip.assign(
-                        region,
-                        offset,
-                        F::from(wit.nested_rlp_lengths[i + 1] as u64),
-                        F::from(wit.nested_rlp_lengths[i] as u64 + 1),
-                    )
-                })?;
+            let level_len_gt_0_config = self
+                .nested_length_gadget
+                .zero_cmp_prev_nested_remains
+                .get(enabled_chip_id)
+                .unwrap();
+            let remain_gt_0_chip = LtChip::construct(*level_len_gt_0_config);
+            remain_gt_0_chip.assign(
+                region,
+                offset,
+                F::ZERO,
+                F::from(prev_wit.nested_rlp_lengths[enabled_chip_id] as u64),
+            )?;
 
+            // cmp nested level remain length with row bytes
+            let cmp_remain_length_ge_row_bytes = self
+                .nested_length_gadget
+                .row_bytes_cmp_prev_nested_remains
+                .get(enabled_chip_id)
+                .unwrap();
+            let prev_remain_ge_row_bytes_chip = LtChip::construct(*cmp_remain_length_ge_row_bytes);
+            prev_remain_ge_row_bytes_chip.assign(
+                region,
+                offset,
+                F::from(wit.rlp_bytes_in_row as u64),
+                F::from(prev_wit.nested_rlp_lengths[enabled_chip_id] as u64 + 1),
+            )?;
+
+            // cmp nested level remain length with low level remain length
+            let enabled_chip_level = {
+                if let Some(idx) = wit.nested_rlp_lengths.iter().rposition(|&l| l > 0) {
+                    idx
+                } else {
+                    0
+                }
+            };
+
+            if enabled_chip_level > 0 {
+                let high_lv_remain_le_low_level = self
+                    .nested_length_gadget
+                    .remain_upper_leq_lower
+                    .get(enabled_chip_level - 1)
+                    .unwrap();
+                let high_lv_remain_le_low_level_chip =
+                    LtChip::construct(*high_lv_remain_le_low_level);
+
+                high_lv_remain_le_low_level_chip.assign(
+                    region,
+                    offset,
+                    F::from(wit.nested_rlp_lengths[enabled_chip_level] as u64),
+                    F::from(wit.nested_rlp_lengths[enabled_chip_level - 1] as u64 + 1),
+                )?;
+            } else {
+                let high_lv_remain_le_low_level = self
+                    .nested_length_gadget
+                    .remain_upper_leq_lower
+                    .first()
+                    .unwrap();
+                let high_lv_remain_le_low_level_chip =
+                    LtChip::construct(*high_lv_remain_le_low_level);
+                high_lv_remain_le_low_level_chip.assign(region, offset, F::ZERO, F::ZERO)?;
+            }
+
+            self.nested_length_gadget.assign_rows(region, offset, wit)?;
             self.assign_row(region, offset, wit)?;
             prev_wit = wit;
             offset += 1;
@@ -1603,7 +1541,12 @@ impl<F: Field> RlpDecoderCircuitConfig<F> {
         region.name_column(|| "config.complete", self.complete);
         region.name_column(|| "config.rlp_types", self.rlp_type);
         region.name_column(|| "config.rlp_tag_length", self.rlp_tx_member_length);
-        for (i, rlp_item_remain) in self.nested_rlp_remains.iter().enumerate() {
+        for (i, rlp_item_remain) in self
+            .nested_length_gadget
+            .nested_rlp_remains
+            .iter()
+            .enumerate()
+        {
             region.name_column(
                 || format!("config.rlp_item_remain-[{}]", i),
                 *rlp_item_remain,
@@ -1691,7 +1634,12 @@ impl<F: Field> RlpDecoderCircuitConfig<F> {
             offset,
             || Value::known(w.r_mult),
         )?;
-        for (i, remains) in self.nested_rlp_remains.iter().enumerate() {
+        for (i, remains) in self
+            .nested_length_gadget
+            .nested_rlp_remains
+            .iter()
+            .enumerate()
+        {
             region.assign_advice(
                 || format!("config.nested_remains[{}]", i),
                 *remains,
@@ -1933,18 +1881,21 @@ impl<F: Field> SubCircuit<F> for RlpDecoderCircuit<F> {
 
         // for nested level lengths
         config
-            .zero_cmp_prev_nested_remain
+            .nested_length_gadget
+            .zero_cmp_prev_nested_remains
             .iter()
             .try_for_each(|zero_lt_prev_remain| {
                 LtChip::construct(*zero_lt_prev_remain).load(layouter)
             })?;
         config
+            .nested_length_gadget
             .row_bytes_cmp_prev_nested_remains
             .iter()
             .try_for_each(|bytes_in_row_le_prev_remains| {
                 LtChip::construct(*bytes_in_row_le_prev_remains).load(layouter)
             })?;
         config
+            .nested_length_gadget
             .remain_upper_leq_lower
             .iter()
             .try_for_each(|level_high_le_low| {
@@ -3609,7 +3560,7 @@ mod test_1559_rlp_circuit {
     }
 
     #[test]
-    fn test_const_tx() {
+    fn test_const_txlist() {
         let rlp_bytes = hex::decode(const_1559_hex()).unwrap();
 
         let k = 13;
