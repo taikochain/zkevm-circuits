@@ -55,6 +55,7 @@ impl<F: Field> SubCircuitConfig<F> for SuperCircuitConfig<F> {
         let block_table = BlockTable::construct(meta);
         let block_table_blockhash = BlockTable::construct(meta);
         let keccak_table = KeccakTable::construct(meta);
+        let keccak_table2 = KeccakTable2::construct(meta);
         let byte_table = ByteTable::construct(meta);
 
         let pi_circuit = TaikoPiCircuitConfig::new(
@@ -62,6 +63,7 @@ impl<F: Field> SubCircuitConfig<F> for SuperCircuitConfig<F> {
             TaikoPiCircuitConfigArgs {
                 block_table: block_table.clone(),
                 keccak_table: keccak_table.clone(),
+                keccak_table2: keccak_table2.clone(),
                 byte_table: byte_table.clone(),
                 challenges: challenges.clone(),
                 block_table_blockhash: block_table_blockhash.clone(),

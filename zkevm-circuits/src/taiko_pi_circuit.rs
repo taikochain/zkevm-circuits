@@ -364,6 +364,7 @@ impl<F: Field> PublicData<F> {
 
        /// Returns struct with values for the block table
        pub fn get_block_table_values(&self) -> BlockValues {
+        const PREVIOUS_BLOCKS_NUM:usize = 256; // TODO(George): remove shadow
         let history_hashes = [
             vec![U256::zero(); PREVIOUS_BLOCKS_NUM - self.history_hashes.len()],
             self.history_hashes.to_vec(),]
@@ -410,8 +411,9 @@ impl<F: Field> PublicData<F> {
             .append(&vec![0u8; LOGS_BLOOM_SIZE]) // logs_bloom is all zeros
             .append(&block.context.difficulty)
             .append(&block.context.number.low_u64())
-            .append(&block.context.gas_limit)
-            .append(&block.eth_block.gas_used)
+            // .append(&block.context.gas_limit)
+            .append(&U256::from(block.context.gas_limit))
+            .append(&U256::from(block.protocol_instance.gas_used))
             .append(&block.context.timestamp);
         rlp_opt(&mut stream, &None::<u8>); // extra_data = ""
         stream
@@ -455,6 +457,7 @@ struct BlockhashColumns {
     blk_hdr_do_rlc_acc: Column<Advice>,
     q_lookup_blockhash: Selector,
     blk_hdr_is_leading_zero: Column<Advice>,
+    blk_hdr_blockhash: Column<Advice>,
 }
 
 /// Config for PiCircuit
@@ -473,7 +476,8 @@ pub struct TaikoPiCircuitConfig<F: Field> {
     pi: Column<Instance>, // keccak_hi, keccak_lo
 
     q_keccak: Selector,
-    keccak_table: KeccakTable, // TODO(George): change to KeccakTable2
+    keccak_table: KeccakTable, // TODO(George): merge Keccak Tables
+    keccak_table2: KeccakTable2,
 
     // External tables
     q_block_table: Selector,
@@ -493,13 +497,15 @@ pub struct TaikoPiCircuitConfigArgs<F: Field> {
     /// BlockTable
     pub block_table: BlockTable,
     /// BlockTable for blockhash
-    pub block_table_blockhash: BlockTable, // TODO(George): merge the two block_tables
+    pub block_table_blockhash: BlockTable, // TODO(George): merge the block tables
     /// ByteTable
     pub byte_table: ByteTable,
     /// Challenges
     pub challenges: Challenges<Expression<F>>,
     /// KeccakTable
-    pub keccak_table: KeccakTable, // TODO(George): switch to KeccakTable2
+    pub keccak_table: KeccakTable, // TODO(George): merge the keccak tables
+    /// KeccakTable
+    pub keccak_table2: KeccakTable2
 }
 
 impl<F: Field> SubCircuitConfig<F> for TaikoPiCircuitConfig<F> {
@@ -512,6 +518,7 @@ impl<F: Field> SubCircuitConfig<F> for TaikoPiCircuitConfig<F> {
             block_table,
             block_table_blockhash,
             keccak_table,
+            keccak_table2,
             byte_table,
             challenges,
         }: Self::ConfigArgs,
@@ -560,7 +567,8 @@ impl<F: Field> SubCircuitConfig<F> for TaikoPiCircuitConfig<F> {
         let blk_hdr_do_rlc_acc = meta.advice_column_in(SecondPhase);
         let blk_hdr_rlc_acc = meta.advice_column_in(SecondPhase);
         let q_lookup_blockhash = meta.complex_selector();
-
+        let blk_hdr_blockhash = meta.advice_column();
+        // self.blockhash_cols.block_table_tag
         let blockhash_cols = BlockhashColumns {
             blk_hdr_rlp,
             blk_hdr_rlp_inv,
@@ -585,6 +593,8 @@ impl<F: Field> SubCircuitConfig<F> for TaikoPiCircuitConfig<F> {
             blk_hdr_do_rlc_acc,
             q_lookup_blockhash,
             blk_hdr_is_leading_zero,
+            blk_hdr_blockhash,
+
         };
 
         meta.enable_equality(rpi_field_bytes);
@@ -644,21 +654,22 @@ impl<F: Field> SubCircuitConfig<F> for TaikoPiCircuitConfig<F> {
 
         // TODO(GEORGE): what is this ????
         // in block table
-        // meta.lookup_any("in block table", |meta| {
-        //     let q_block_table = meta.query_selector(q_block_table);
-        //     let block_index = meta.query_advice(block_index, Rotation::cur());
-        //     let block_hash = meta.query_advice(rpi_field_bytes_acc, Rotation::cur());
-        //     [
-        //         BlockContextFieldTag::BlockHash.expr(),
-        //         block_index,
-        //         block_hash,
-        //     ]
-        //     .into_iter()
-        //     .zip(block_table.table_exprs(meta).into_iter())
-        //     .map(|(arg, table)| (q_block_table.expr() * arg, table))
-        //     .collect::<Vec<_>>()
-        // });
-
+        /*
+        meta.lookup_any("in block table", |meta| {
+            let q_block_table = meta.query_selector(q_block_table);
+            let block_index = meta.query_advice(block_index, Rotation::cur());
+            let block_hash = meta.query_advice(rpi_field_bytes_acc, Rotation::cur());
+            [
+                BlockContextFieldTag::BlockHash.expr(),
+                block_index,
+                block_hash,
+            ]
+            .into_iter()
+            .zip(block_table.table_exprs(meta).into_iter())
+            .map(|(arg, table)| (q_block_table.expr() * arg, table))
+            .collect::<Vec<_>>()
+        });
+        */
         // is byte
         meta.lookup_any("is_byte", |meta| {
             let q_field_step = meta.query_selector(q_field_start);
@@ -962,7 +973,7 @@ impl<F: Field> SubCircuitConfig<F> for TaikoPiCircuitConfig<F> {
                 and::expr([q_enabled.expr(), not::expr(q_rlc_end.expr())]),
                 |cb| {
                     // RLC encode the bytes, but skip over leading zeros
-                    let r = select::expr(do_rlc_acc.expr(), challenges.evm_word().expr(), 1.expr());
+                    let r = select::expr(do_rlc_acc.expr(), challenges.keccak_input().expr(), 1.expr());
                     let byte_value = select::expr(do_rlc_acc.expr(), byte_next.expr(), 0.expr());
                     cb.require_equal(
                         "rlc_acc_next = rlc_acc * r + next_byte",
@@ -1002,53 +1013,52 @@ impl<F: Field> SubCircuitConfig<F> for TaikoPiCircuitConfig<F> {
             },
         );
 
-        // TODO(George)
-        /*
         // 3. Check block header hash
         meta.lookup_any("blockhash lookup keccak", |meta| {
             let q_blk_hdr_rlp_end = meta.query_selector(q_blk_hdr_rlp_end);
             let blk_hdr_rlc = meta.query_advice(blk_hdr_rlc_acc, Rotation::cur());
-            // The total RLP length is the RLP list length (0x200 + blk_hdr_rlp[2]) + 3
-            // bytes for the RLP list header
+            // The total RLP length is the RLP list length (0x200 + blk_hdr_rlp[2])
+            //  + 3 bytes for the RLP list header
             let blk_hdr_rlp_num_bytes = 0x200.expr()
                 + meta.query_advice(
                     blk_hdr_rlp,
                     Rotation(-(BLOCKHASH_TOTAL_ROWS as i32) + 1 + 2),
                 )
                 + 3.expr();
-            let blk_hdr_hash_hi = meta.query_advice(rpi_encoding, Rotation::cur());
-            let blk_hdr_hash_lo = meta.query_advice(rpi_encoding, Rotation::prev());
+            let blk_hdr_hash_hi = meta.query_advice(blk_hdr_blockhash, Rotation::cur());
+            let blk_hdr_hash_lo = meta.query_advice(blk_hdr_blockhash, Rotation::prev());
             vec![
                 (
                     q_blk_hdr_rlp_end.expr(),
-                    meta.query_advice(keccak_table.is_enabled, Rotation::cur()),
+                    meta.query_advice(keccak_table2.is_enabled, Rotation::cur()),
                 ),
                 (
                     q_blk_hdr_rlp_end.expr() * blk_hdr_rlc,
-                    meta.query_advice(keccak_table.input_rlc, Rotation::cur()),
+                    meta.query_advice(keccak_table2.input_rlc, Rotation::cur()),
                 ),
                 (
                     q_blk_hdr_rlp_end.expr() * blk_hdr_rlp_num_bytes,
-                    meta.query_advice(keccak_table.input_len, Rotation::cur()),
+                    meta.query_advice(keccak_table2.input_len, Rotation::cur()),
                 ),
                 (
                     q_blk_hdr_rlp_end.expr() * blk_hdr_hash_hi,
-                    meta.query_advice(keccak_table.output_hi, Rotation::cur()),
+                    meta.query_advice(keccak_table2.output_hi, Rotation::cur()),
                 ),
                 (
                     q_blk_hdr_rlp_end * blk_hdr_hash_lo,
-                    meta.query_advice(keccak_table.output_lo, Rotation::cur()),
+                    meta.query_advice(keccak_table2.output_lo, Rotation::cur()),
                 ),
             ]
         });
+
         meta.lookup_any(
             "Block header: Check hi parts of block hashes against previous hashes",
             |meta| {
                 let q_blk_hdr_rlp_end = meta.query_selector(q_blk_hdr_rlp_end);
-                let blk_hdr_hash_hi = meta.query_advice(rpi_encoding, Rotation::cur());
+                let blk_hdr_hash_hi = meta.query_advice(blk_hdr_blockhash, Rotation::cur());
                 let q_lookup_blockhash = meta.query_selector(q_lookup_blockhash);
-                let tag = meta.query_fixed(block_table_tag, Rotation::prev());
-                let index = meta.query_fixed(block_table_index, Rotation::cur());
+                let tag = meta.query_fixed(block_table_tag_blockhash, Rotation::prev());
+                let index = meta.query_fixed(block_table_index_blockhash, Rotation::cur());
                 let q_sel = and::expr([q_blk_hdr_rlp_end, q_lookup_blockhash]);
                 vec![
                     (
@@ -1070,10 +1080,10 @@ impl<F: Field> SubCircuitConfig<F> for TaikoPiCircuitConfig<F> {
             "Block header: Check lo parts of block hashes against previous hashes",
             |meta| {
                 let q_blk_hdr_rlp_end = meta.query_selector(q_blk_hdr_rlp_end);
-                let blk_hdr_hash_lo = meta.query_advice(rpi_encoding, Rotation::prev());
+                let blk_hdr_hash_lo = meta.query_advice(blk_hdr_blockhash, Rotation::prev());
                 let q_lookup_blockhash = meta.query_selector(q_lookup_blockhash);
-                let tag = meta.query_fixed(block_table_tag, Rotation(-2));
-                let index = meta.query_fixed(block_table_index, Rotation::cur());
+                let tag = meta.query_fixed(block_table_tag_blockhash, Rotation(-2));
+                let index = meta.query_fixed(block_table_index_blockhash, Rotation::cur());
                 let q_sel = and::expr([q_blk_hdr_rlp_end, q_lookup_blockhash]);
                 vec![
                     (
@@ -1091,66 +1101,65 @@ impl<F: Field> SubCircuitConfig<F> for TaikoPiCircuitConfig<F> {
                 ]
             },
         );
-        */
 
         // TODO(George)
         // Check all parent_hash fields against previous_hashes in block table
-        // meta.lookup_any("Block header: Check parent hashes hi", |meta| {
-        //     let tag = meta.query_fixed(block_table_tag, Rotation::cur());
-        //     let index = meta.query_fixed(block_table_index, Rotation::cur()) - 1.expr();
-        //     let q_hi = meta.query_fixed(q_hi, Rotation::cur());
-        //     let q_lo_next = meta.query_fixed(q_lo, Rotation::next());
+        meta.lookup_any("Block header: Check parent hashes hi", |meta| {
+            let tag = meta.query_fixed(block_table_tag_blockhash, Rotation::cur());
+            let index = meta.query_fixed(block_table_index_blockhash, Rotation::cur()) - 1.expr();
+            let q_hi = meta.query_fixed(q_hi, Rotation::cur());
+            let q_lo_next = meta.query_fixed(q_lo, Rotation::next());
 
-        //     let q_sel = and::expr([
-        //         // meta.query_fixed(q_reconstruct, Rotation::cur()),
-        //         // not::expr(meta.query_fixed(q_reconstruct, Rotation::next())),
-        //         q_hi,
-        //         q_lo_next,
-        //         meta.query_selector(q_parent_hash),
-        //     ]);
+            let q_sel = and::expr([
+                // meta.query_fixed(q_reconstruct, Rotation::cur()),
+                // not::expr(meta.query_fixed(q_reconstruct, Rotation::next())),
+                q_hi,
+                q_lo_next,
+                meta.query_selector(q_parent_hash),
+            ]);
 
-        //     vec![
-        //         (
-        //             q_sel.expr() * tag,
-        //             meta.query_advice(block_table.tag, Rotation::cur()),
-        //         ),
-        //         (
-        //             q_sel.expr() * index,
-        //             meta.query_advice(block_table.index, Rotation::cur()),
-        //         ),
-        //         (
-        //             q_sel.expr() * meta.query_advice(blk_hdr_reconstruct_value, Rotation::cur()),
-        //             meta.query_advice(block_table.value, Rotation::cur()),
-        //         ),
-        //     ]
-        // });
-        // meta.lookup_any("Block header: Check parent hashes lo", |meta| {
-        //     let tag = meta.query_fixed(block_table_tag, Rotation::cur());
-        //     let index = meta.query_fixed(block_table_index, Rotation::cur()) - 1.expr();
-        //     let q_lo_cur = meta.query_fixed(q_lo, Rotation::cur());
-        //     let q_lo_next = meta.query_fixed(q_lo, Rotation::next());
+            vec![
+                (
+                    q_sel.expr() * tag,
+                    meta.query_advice(block_table.tag, Rotation::cur()),
+                ),
+                // (
+                //     q_sel.expr() * index,
+                //     meta.query_advice(block_table.index, Rotation::cur()),
+                // ),
+                (
+                    q_sel.expr() * meta.query_advice(blk_hdr_reconstruct_value, Rotation::cur()),
+                    meta.query_advice(block_table.value, Rotation::cur()),
+                ),
+            ]
+        });
+        meta.lookup_any("Block header: Check parent hashes lo", |meta| {
+            let tag = meta.query_fixed(block_table_tag_blockhash, Rotation::cur());
+            let index = meta.query_fixed(block_table_index_blockhash, Rotation::cur()) - 1.expr();
+            let q_lo_cur = meta.query_fixed(q_lo, Rotation::cur());
+            let q_lo_next = meta.query_fixed(q_lo, Rotation::next());
 
-        //     let q_sel = and::expr([
-        //         q_lo_cur,
-        //         not::expr(q_lo_next),
-        //         meta.query_selector(q_parent_hash),
-        //     ]);
+            let q_sel = and::expr([
+                q_lo_cur,
+                not::expr(q_lo_next),
+                meta.query_selector(q_parent_hash),
+            ]);
 
-        //     vec![
-        //         (
-        //             q_sel.expr() * tag,
-        //             meta.query_advice(block_table.tag, Rotation::cur()),
-        //         ),
-        //         (
-        //             q_sel.expr() * index,
-        //             meta.query_advice(block_table.index, Rotation::cur()),
-        //         ),
-        //         (
-        //             q_sel.expr() * meta.query_advice(blk_hdr_reconstruct_value, Rotation::cur()),
-        //             meta.query_advice(block_table.value, Rotation::cur()),
-        //         ),
-        //     ]
-        // });
+            vec![
+                (
+                    q_sel.expr() * tag,
+                    meta.query_advice(block_table.tag, Rotation::cur()),
+                ),
+                (
+                    q_sel.expr() * index,
+                    meta.query_advice(block_table.index, Rotation::cur()),
+                ),
+                (
+                    q_sel.expr() * meta.query_advice(blk_hdr_reconstruct_value, Rotation::cur()),
+                    meta.query_advice(block_table.value, Rotation::cur()),
+                ),
+            ]
+        });
 
         Self {
             rpi_field_bytes,
@@ -1167,6 +1176,7 @@ impl<F: Field> SubCircuitConfig<F> for TaikoPiCircuitConfig<F> {
 
             q_keccak,
             keccak_table,
+            keccak_table2,
 
             q_block_table,
             block_index,
@@ -1289,6 +1299,7 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
             .append(&public_data.block_context.difficulty)
             .append(&public_data.block_context.number.as_u64())
             .append(&U256::from(public_data.block_context.gas_limit))
+            // .append(&(public_data.block_context.gas_limit))
             .append(&public_data.gas_used)
             .append(&public_data.block_context.timestamp);
         rlp_opt(&mut stream, &None::<u8>); // extra_data = ""
@@ -1370,9 +1381,10 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
             );
         }
 
-        println!("blk_hdr_rlc_acc = {:?}", blk_hdr_rlc_acc);
-        println!("blk_hdr_do_rlc_acc = {:?}", blk_hdr_do_rlc_acc);
-        println!("randomness = {:?}", randomness);
+        // println!("assign: bytes = {:x?}", bytes);
+        // println!("assign: blk_hdr_rlc_acc = {:?}", blk_hdr_rlc_acc);
+        // println!("assign: blk_hdr_do_rlc_acc = {:?}", blk_hdr_do_rlc_acc);
+        // println!("assign: randomness = {:?}", randomness);
 
         (
             bytes,
@@ -1441,13 +1453,13 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
                 )
                 .unwrap();
 
-            // We need to push `PreviousHashLo` tag up one row since we `PreviousHashHi`
+            // We need to push `PreviousHashLo` tag up one row since `PreviousHashHi`
             // uses the current row
             region
                 .assign_fixed(
                     || "block_table_tag",
                     self.blockhash_cols.block_table_tag,
-                    block_offset + BLOCKHASH_TOTAL_ROWS - 3,
+                    block_offset + BLOCKHASH_TOTAL_ROWS - 3, // TODO(Geoge): was -3 originally
                     || Value::known(F::from(BlockContextFieldTag::PreviousHashLo as u64)),
                 )
                 .unwrap();
@@ -1465,7 +1477,7 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
                 blk_hdr_rlc_acc,
                 blk_hdr_hash_hi,
                 blk_hdr_hash_lo,
-            ) = Self::get_block_header_rlp_from_public_data(public_data, randomness);
+            ) = Self::get_block_header_rlp_from_public_data(public_data, challenges.keccak_input());
             // println!("blk_hdr_rlc_acc = {:?}", blk_hdr_rlc_acc);
             // println!("blk_hdr_do_rlc_acc = {:?}", blk_hdr_do_rlc_acc);
             // println!("leading_zeros = {:?}", leading_zeros);
@@ -1577,7 +1589,7 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
                     .to_be_bytes()
                     .iter(),
                 U256::from(public_data.block_context.gas_limit).to_be_bytes().iter(),
-                public_data.gas_used.to_be_bytes().iter(),
+                U256::from(public_data.gas_used).to_be_bytes().iter(),
                 public_data.block_context.timestamp.to_be_bytes().iter(),
                 public_data.mix_hash.as_fixed_bytes().iter(),
                 public_data.block_context.base_fee.to_be_bytes().iter(),
@@ -1642,7 +1654,6 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
             }
 
             let mut length_calc = F::ZERO;
-            // println!("reconstructed_values = {:?}", reconstructed_values);
             for (field_num, (name, base_offset, is_reconstruct)) in [
                 ("parent_hash hi", PARENT_HASH_RLP_OFFSET, true),
                 (
@@ -1710,6 +1721,7 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
                             || *val,
                         )
                         .unwrap();
+                    // println!("blk_hdr_reconstruct_value[{}] = {:?}", absolute_offset, val);
 
                     if *is_reconstruct && !(is_parent_hash && block_number == OLDEST_BLOCK_NUM) {
                         region
@@ -1732,44 +1744,38 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
                     .contains(base_offset)
                     {
                         let field_size: usize;
-                        let field: &U256;
-                        let gas_limit = &public_data.block_context.gas_limit.into();
-                        let gas_used = &public_data.gas_used.into();
+                        let field_lead_zeros_num: u32;
+                        let gas_limit = &U256::from(public_data.block_context.gas_limit);
+                        let gas_used = &U256::from(public_data.gas_used);
 
+                        // println!("public_data = {:?}", public_data);
                         match *base_offset {
                             GAS_LIMIT_RLP_OFFSET => {
-                                (field_size, field) = (
+                                (field_size, field_lead_zeros_num) = (
                                     GAS_LIMIT_RLP_LEN - 1,
-                                    gas_limit,
+                                    gas_limit.leading_zeros() / 8,
                                 )
                             }
                             GAS_USED_RLP_OFFSET => {
-                                (field_size, field) = (GAS_USED_RLP_LEN - 1, gas_used)
+                                (field_size, field_lead_zeros_num) = (GAS_USED_RLP_LEN - 1, gas_used.leading_zeros() / 8)
                             }
                             TIMESTAMP_RLP_OFFSET => {
-                                (field_size, field) = (
+                                (field_size, field_lead_zeros_num) = (
                                     TIMESTAMP_RLP_LEN - 1,
-                                    &public_data.block_context.timestamp,
+                                    &public_data.block_context.timestamp.leading_zeros() / 8,
                                 )
                             }
                             BASE_FEE_RLP_OFFSET => {
-                                (field_size, field) =
-                                    (BASE_FEE_RLP_LEN - 1, &public_data.block_context.base_fee)
+                                (field_size, field_lead_zeros_num) =
+                                    (BASE_FEE_RLP_LEN - 1, &public_data.block_context.base_fee.leading_zeros() / 8)
                             }
                             _ => {
-                                (field_size, field) =
-                                    (NUMBER_RLP_LEN - 1, &public_data.block_context.base_fee)
-                            } // `field` doesn't matter in this case
+                                (field_size, field_lead_zeros_num) =
+                                    (NUMBER_RLP_LEN - 1, &public_data.block_context.number.as_u64().leading_zeros() / 8)
+                            }
                         }
 
-                        let field_lead_zeros_num = if *base_offset == NUMBER_RLP_OFFSET {
-                            println!("number leading zeros = {}", public_data.block_context.number.as_u64().leading_zeros() / 8);
-                            public_data.block_context.number.as_u64().leading_zeros() / 8
-                        } else {
-                            field.leading_zeros() / 8
-                        } as usize;
-
-                        if (offset < field_lead_zeros_num)
+                        if (offset < field_lead_zeros_num as usize)
                             || // short RLP values have 0 length
                                 (offset == field_size - 1
                                 && length_calc == F::ZERO
@@ -1777,8 +1783,7 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
                         {
                             length_calc = F::ZERO;
                         } else {
-                            length_calc = F::from((offset - field_lead_zeros_num + 1) as u64);
-                            println!("")
+                            length_calc = F::from((offset - field_lead_zeros_num as usize + 1) as u64);
                         }
 
                         region
@@ -1789,7 +1794,7 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
                                 || Value::known(length_calc),
                             )
                             .unwrap();
-                        println!("length[{}] = {:?}", absolute_offset, length_calc);
+                        // println!("length[{}] = {:?}", absolute_offset, length_calc);
                         region
                             .assign_advice(
                                 || "inverse length of ".to_string() + name,
@@ -1884,6 +1889,7 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
                         || Value::known(F::from(*tag as u64)),
                     )
                     .unwrap();
+                println!("block_table_tag[{}] = {:?}", absolute_offset, tag);
 
                 region
                     .assign_fixed(
@@ -1893,6 +1899,7 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
                         || Value::known(F::from((block_number) as u64)),
                     )
                     .unwrap();
+                println!("block_table_tag[{}] = {:?}", absolute_offset, block_number);
             }
 
             // Determines if it is a short RLP value
@@ -1908,13 +1915,12 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
                     .unwrap();
             }
 
-            // TODO(George)
+
             // Set the block header hash parts
-            /*
             region
                 .assign_advice(
                     || "blk_hdr_hash_hi",
-                    self.rpi_encoding,
+                    self.blockhash_cols.blk_hdr_blockhash,
                     block_offset + BLOCKHASH_TOTAL_ROWS - 1,
                     || blk_hdr_hash_hi,
                 )
@@ -1922,12 +1928,12 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
             region
                 .assign_advice(
                     || "blk_hdr_hash_lo",
-                    self.rpi_encoding,
+                    self.blockhash_cols.blk_hdr_blockhash,
                     block_offset + BLOCKHASH_TOTAL_ROWS - 2,
                     || blk_hdr_hash_lo,
                 )
                 .unwrap();
-             */
+
         }
 
     // TODO(George): migrate this to block_table.rs
@@ -2012,6 +2018,8 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
                 randomness.map(|randomness| rlc(block_values.base_fee.to_le_bytes(), randomness)),
                 false,
             ),
+            // TODO(George)
+            /*
             (
                 "blockhash",
                 BlockContextFieldTag::BlockHash,
@@ -2023,6 +2031,7 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
                 .unwrap(), randomness)),
                 false,
             ),
+             */
             (
                 "chain_id",
                 BlockContextFieldTag::ChainId,
@@ -2143,6 +2152,8 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
                 false,
             ),
         ];
+
+        // println!("history_hashes = {:x?}", block_values.history_hashes);
 
         if block_number == CURRENT_BLOCK_NUM {
             // The following need to be added only once in block table
@@ -2295,7 +2306,6 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
                 // Annotate columns
                 self.block_table.annotate_columns_in_region(region);
                 self.rlp_is_short.annotate_columns_in_region(region);
-                // keccak_table
                 region.name_column(|| "rpi_field_bytes", self.rpi_field_bytes);
                 region.name_column(|| "rpi_field_bytes_acc", self.rpi_field_bytes_acc);
                 region.name_column(|| "is_field_rlc", self.is_field_rlc);
@@ -2480,7 +2490,7 @@ impl<F: Field> TaikoPiCircuit<F> {
             .append(&block.context.number.low_u64())
             // .append(&block.context.gas_limit)
             .append(&U256::from(block.context.gas_limit))
-            .append(&block.eth_block.gas_used)
+            .append(&U256::from(block.protocol_instance.gas_used))
             .append(&block.context.timestamp);
         rlp_opt(&mut stream, &None::<u8>); // extra_data = ""
         stream
@@ -2607,7 +2617,8 @@ impl<F: Field> Circuit<F> for TaikoPiTestCircuit<F> {
     fn configure(meta: &mut ConstraintSystem<F>) -> Self::Config {
         let block_table = BlockTable::construct(meta);
         let block_table_blockhash = BlockTable::construct(meta);
-        let keccak_table = KeccakTable::construct(meta); // TODO(George): switch to KeccakTable2
+        let keccak_table = KeccakTable::construct(meta); // TODO(George): merge keccak tables
+        let keccak_table2 = KeccakTable2::construct(meta);
         let byte_table = ByteTable::construct(meta);
         let challenges = Challenges::construct(meta);
         let challenge_exprs = challenges.exprs(meta);
@@ -2618,6 +2629,7 @@ impl<F: Field> Circuit<F> for TaikoPiTestCircuit<F> {
                     block_table,
                     block_table_blockhash,
                     keccak_table,
+                    keccak_table2,
                     byte_table,
                     challenges: challenge_exprs,
                 },
@@ -2643,6 +2655,20 @@ impl<F: Field> Circuit<F> for TaikoPiTestCircuit<F> {
             .keccak_table
             .dev_load(&mut layouter, vec![&public_data.rpi_bytes()], &challenges)?;
         config.byte_table.load(&mut layouter)?;
+
+        // println!("public_data.blockhash_blk_hdr_rlp = {:x?}", public_data.blockhash_blk_hdr_rlp);
+        config.keccak_table2.dev_load(
+            &mut layouter,
+            // previous_blocks_rlp.iter().chain(
+                vec![
+                    // &public_data.txs_rlp.to_vec(),
+                    // &public_data.block_rlp.to_vec(),
+                    &public_data.blockhash_blk_hdr_rlp.to_vec(),
+                ]
+                .into_iter(),
+            // ),
+            &challenges,
+        )?;
 
         self.0.synthesize_sub(&config, &challenges, &mut layouter)
     }
@@ -2808,9 +2834,9 @@ mod taiko_pi_circuit_test {
             .append(&vec![0u8; LOGS_BLOOM_SIZE]) // logs_bloom is all zeros
             .append(&block.context.difficulty)
             .append(&block.context.number.low_u64())
-            // .append(&block.context.gas_limit)
-            .append(&U256::from(block.context.gas_limit))
-            .append(&block.eth_block.gas_used)
+            .append(&block.context.gas_limit)
+            // .append(&U256::from(block.context.gas_limit))
+            .append(&U256::from(block.protocol_instance.gas_used))
             .append(&block.context.timestamp);
         rlp_opt(&mut stream, &None::<u8>); // extra_data = ""
         stream
@@ -2837,13 +2863,14 @@ mod taiko_pi_circuit_test {
 
         let mut current_block = witness::Block::<Fr>::default();
 
+        const PREVIOUS_BLOCKS_NUM:usize = 256; // TODO(George): remove shadow var
         current_block.context.history_hashes = vec![U256::zero(); PREVIOUS_BLOCKS_NUM];
         let mut previous_blocks: Vec<witness::Block<Fr>> =
             vec![witness::Block::<Fr>::default(); PREVIOUS_BLOCKS_NUM];
         let mut previous_blocks_rlp: Vec<Bytes> = vec![Bytes::default(); PREVIOUS_BLOCKS_NUM];
         let mut past_block_hash = H256::zero();
         let mut past_block_rlp: Bytes;
-        for i in 0..PREVIOUS_BLOCKS_NUM {
+        for i in 0..256 { // TODO(George): replace 256 with `PREVIOUS_BLOCKS_NUM`
             let mut past_block = witness::Block::<Fr>::default();
             past_block.eth_block.parent_hash = past_block_hash;
             (past_block_hash, past_block_rlp) = get_block_header_rlp_from_block(&past_block);
@@ -2851,10 +2878,12 @@ mod taiko_pi_circuit_test {
             current_block.context.history_hashes[i] = U256::from(past_block_hash.as_bytes());
             previous_blocks[i] = past_block.clone();
             previous_blocks_rlp[i] = past_block_rlp.clone();
+            // println!("past_block_hash[{}] = {:x?}", i, past_block_hash);
         }
 
         // Populate current block
         current_block.eth_block.parent_hash = past_block_hash;
+        current_block.protocol_instance.parent_hash = past_block_hash;
         current_block.eth_block.author = Some(prover);
         current_block.eth_block.state_root = H256::zero();
         current_block.eth_block.transactions_root = H256::zero();
@@ -2993,7 +3022,7 @@ mod taiko_pi_circuit_test {
 
         block.context.number = U256::from(0x9090909090909090_u128);
         block.context.gas_limit = 0x9191919191919191;
-        block.eth_block.gas_used = U256::from(0x92);// << (31 * 8);
+        block.protocol_instance.gas_used = 0x92;// << (31 * 8);
         block.context.timestamp = U256::from(0x93);// << (31 * 8);
         block.context.base_fee = U256::from(0x94) << (31 * 8);
 

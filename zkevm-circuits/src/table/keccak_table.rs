@@ -215,6 +215,10 @@ impl KeccakTable2 {
         let mut keccak = Keccak::default();
         keccak.update(input);
         let output = keccak.digest();
+
+        // println!("keccak_table2 input = {:x?}", input);
+        // println!("keccak_table2 input len = {:?}", input_len);
+        // println!("keccak_table2 digest = {:x?}", output);
         let output_hi = output.iter().take(16).fold(F::ZERO, |acc, byte| {
             acc * F::from(BYTE_POW_BASE) + F::from(*byte as u64)
         });
@@ -272,6 +276,7 @@ impl KeccakTable2 {
                     for row in Self::assignments(input, challenges) {
                         // let mut column_index = 0;
                         for (column, value) in keccak_table_columns.iter().zip_eq(row) {
+                            // println!("keccak table row {}", offset);
                             region.assign_advice(
                                 || format!("keccak table row {}", offset),
                                 TryInto::<Column<Advice>>::try_into(*column).unwrap(),
