@@ -6,6 +6,10 @@ pub mod test;
 
 use crate::{
     anchor_tx_circuit::{AnchorTxCircuit, AnchorTxCircuitConfig, AnchorTxCircuitConfigArgs},
+    rlp_decoder::{
+        RlpDecoderCircuit, RlpDecoderCircuitConfig, RlpDecoderCircuitConfigArgs,
+        RlpDecoderTable1A6FColumns,
+    },
     table::{byte_table::ByteTable, BlockTable, KeccakTable, PiTable, TxTable},
     taiko_pi_circuit::{TaikoPiCircuit, TaikoPiCircuitConfig, TaikoPiCircuitConfigArgs},
     util::{log2_ceil, Challenges, SubCircuit, SubCircuitConfig},
@@ -34,6 +38,7 @@ pub struct SuperCircuitConfig<F: Field> {
     byte_table: ByteTable,
     pi_circuit: TaikoPiCircuitConfig<F>,
     anchor_tx_circuit: AnchorTxCircuitConfig<F>,
+    rlp_input_circuit: RlpDecoderCircuitConfig<F>,
 }
 
 /// Circuit configuration arguments
@@ -72,7 +77,17 @@ impl<F: Field> SubCircuitConfig<F> for SuperCircuitConfig<F> {
                 tx_table: tx_table.clone(),
                 pi_table: pi_table.clone(),
                 byte_table: byte_table.clone(),
-                challenges,
+                challenges: challenges.clone(),
+            },
+        );
+
+        let rlp_fixed_table = RlpDecoderTable1A6FColumns::construct(meta);
+        let rlp_input_circuit = RlpDecoderCircuitConfig::new(
+            meta,
+            RlpDecoderCircuitConfigArgs {
+                keccak_table: keccak_table.clone(),
+                challenges: challenges.clone(),
+                rlp_fixed_table,
             },
         );
 
@@ -84,6 +99,7 @@ impl<F: Field> SubCircuitConfig<F> for SuperCircuitConfig<F> {
             keccak_table,
             byte_table,
             anchor_tx_circuit,
+            rlp_input_circuit,
         }
     }
 }
@@ -95,6 +111,8 @@ pub struct SuperCircuit<F: Field> {
     pub pi_circuit: TaikoPiCircuit<F>,
     /// Anchor Transaction Circuit
     pub anchor_tx_circuit: AnchorTxCircuit<F>,
+    /// RLP input check circuit
+    pub rlp_input_circuit: RlpDecoderCircuit<F>,
     /// Block witness
     pub block: Block<F>,
 }
@@ -122,10 +140,12 @@ impl<F: Field> SubCircuit<F> for SuperCircuit<F> {
     fn new_from_block(block: &Block<F>) -> Self {
         let pi_circuit = TaikoPiCircuit::new_from_block(block);
         let anchor_tx_circuit = AnchorTxCircuit::new_from_block(block);
+        let rlp_input_circuit = RlpDecoderCircuit::new_from_block(block);
 
         SuperCircuit::<_> {
             pi_circuit,
             anchor_tx_circuit,
+            rlp_input_circuit,
             block: block.clone(),
         }
     }
@@ -142,6 +162,7 @@ impl<F: Field> SubCircuit<F> for SuperCircuit<F> {
         [
             TaikoPiCircuit::min_num_rows_block(block),
             AnchorTxCircuit::min_num_rows_block(block),
+            RlpDecoderCircuit::min_num_rows_block(block),
         ]
         .iter()
         .fold((0, 0), |(x1, y1), (x2, y2)| {
@@ -160,6 +181,8 @@ impl<F: Field> SubCircuit<F> for SuperCircuit<F> {
             .synthesize_sub(&config.pi_circuit, challenges, layouter)?;
         self.anchor_tx_circuit
             .synthesize_sub(&config.anchor_tx_circuit, challenges, layouter)?;
+        self.rlp_input_circuit
+            .synthesize_sub(&config.rlp_input_circuit, challenges, layouter)?;
         Ok(())
     }
 }
