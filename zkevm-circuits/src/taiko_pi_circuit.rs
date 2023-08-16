@@ -60,7 +60,7 @@ const ZERO_BYTE_GAS_COST: u64 = 4;
 const NONZERO_BYTE_GAS_COST: u64 = 16;
 
 // The total number of previous blocks for which to check the hash chain
-const PREVIOUS_BLOCKS_NUM: usize = 0; // TODO(George) 256;
+const PREVIOUS_BLOCKS_NUM: usize = 1; // TODO(George) 256;
 // This is the number of entries each block occupies in the block_table, which
 // is equal to the number of header fields per block (coinbase, timestamp,
 // number, difficulty, gas_limit, base_fee, blockhash, beneficiary, state_root,
@@ -75,8 +75,8 @@ const BLOCK_TABLE_MISC_LEN: usize = PREVIOUS_BLOCKS_NUM * 3 + 1;
 const TOTAL_BLOCK_TABLE_LEN: usize =
     (BLOCK_LEN_IN_TABLE * (PREVIOUS_BLOCKS_NUM + 1)) + BLOCK_TABLE_MISC_LEN;
 
-const OLDEST_BLOCK_NUM: usize = 258; // TODO(George) = 0;
-const CURRENT_BLOCK_NUM: usize = 256;//PREVIOUS_BLOCKS_NUM; // TODO(George) = 256;
+const OLDEST_BLOCK_NUM: usize = 0; // TODO(George) = 0;
+const CURRENT_BLOCK_NUM: usize = PREVIOUS_BLOCKS_NUM; // TODO(George) = 256;
 
 const WORD_SIZE: usize = 32;
 const U64_SIZE: usize = 8;
@@ -653,7 +653,7 @@ impl<F: Field> SubCircuitConfig<F> for TaikoPiCircuitConfig<F> {
                 .collect::<Vec<_>>()
         });
 
-        // TODO(GEORGE): what is this ????
+        // TODO(GEORGE): do we need this, we  already check block hash in another lookup
         // in block table
         /*
         meta.lookup_any("in block table", |meta| {
@@ -1103,7 +1103,6 @@ impl<F: Field> SubCircuitConfig<F> for TaikoPiCircuitConfig<F> {
             },
         );
 
-        // TODO(George)
         // Check all parent_hash fields against previous_hashes in block table
         meta.lookup_any("Block header: Check parent hashes hi", |meta| {
             let tag = meta.query_fixed(block_table_tag_blockhash, Rotation::cur());
@@ -1151,10 +1150,10 @@ impl<F: Field> SubCircuitConfig<F> for TaikoPiCircuitConfig<F> {
                     q_sel.expr() * tag,
                     meta.query_advice(block_table.tag, Rotation::cur()),
                 ),
-                (
-                    q_sel.expr() * index,
-                    meta.query_advice(block_table.index, Rotation::cur()),
-                ),
+                // (
+                //     q_sel.expr() * index,
+                //     meta.query_advice(block_table.index, Rotation::cur()),
+                // ),
                 (
                     q_sel.expr() * meta.query_advice(blk_hdr_reconstruct_value, Rotation::cur()),
                     meta.query_advice(block_table.value, Rotation::cur()),
@@ -2247,6 +2246,7 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
         // Continue computing RLC from where we left off
         // let mut rlc_acc = prev_rlc_acc;
 
+        println!("BLOCK TABLE");
         // let mut cell;
         let mut chain_id_cell = vec![];
         for (offset, (name, tag, idx, val, not_in_table)) in block_data.into_iter().enumerate() {
@@ -2275,6 +2275,7 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
                     || Value::known(F::from(idx as u64)),
                 )?;
 
+                println!("block table name [{}] = {}", absolute_offset, name);
                 println!("block table tag  [{}] = {:?}", absolute_offset, tag);
                 println!("block table index[{}] = {}", absolute_offset, idx);
                 println!("block table value[{}] = {:?}", absolute_offset, val);
@@ -2333,6 +2334,7 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
                 region.name_column(|| "fixed_u8", self.fixed_u8);
 
                 // Assign current block
+                println!("assigning block #{} (CURRENT_BLOCK_NUM)", CURRENT_BLOCK_NUM);
                 self.assign_block_hash_calc(
                     region,
                     public_data,
@@ -2352,6 +2354,7 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
                     .iter()
                     .enumerate()
                 {
+                    println!("assigning block #{}", block_number);
                     let prev_public_data =
                         PublicData::new(prev_block);
                     self.assign_block_hash_calc(
@@ -2667,16 +2670,13 @@ impl<F: Field> Circuit<F> for TaikoPiTestCircuit<F> {
         config.byte_table.load(&mut layouter)?;
 
         // println!("public_data.blockhash_blk_hdr_rlp = {:x?}", public_data.blockhash_blk_hdr_rlp);
+        let pr_bl:Vec<Vec<u8>> = public_data.previous_blocks_rlp.iter().map(|a| a.to_vec()).collect();
+        let cur_bl = public_data.blockhash_blk_hdr_rlp.to_vec();
+        let all = pr_bl.iter().chain(vec![&cur_bl]);
+        println!("all block rlp = {:?}", all);
         config.keccak_table2.dev_load(
             &mut layouter,
-            // previous_blocks_rlp.iter().chain(
-                vec![
-                    // &public_data.txs_rlp.to_vec(),
-                    // &public_data.block_rlp.to_vec(),
-                    &public_data.blockhash_blk_hdr_rlp.to_vec(),
-                ]
-                .into_iter(),
-            // ),
+            all,
             &challenges,
         )?;
 
@@ -2868,9 +2868,6 @@ mod taiko_pi_circuit_test {
         Vec<witness::Block<Fr>>,
         Vec<Bytes>,
     ) {
-        let prover =
-            Address::from_slice(&hex::decode("Df08F82De32B8d460adbE8D72043E3a7e25A3B39").unwrap());
-
         let mut current_block = witness::Block::<Fr>::default();
 
         const PREVIOUS_BLOCKS_NUM:usize = 256; // TODO(George): remove shadow var
@@ -2887,14 +2884,16 @@ mod taiko_pi_circuit_test {
 
             current_block.context.history_hashes[i] = U256::from(past_block_hash.as_bytes());
             previous_blocks[i] = past_block.clone();
+            previous_blocks[i].context.number = U256::from(0x100);
             previous_blocks_rlp[i] = past_block_rlp.clone();
             // println!("past_block_hash[{}] = {:x?}", i, past_block_hash);
         }
 
+        let prover = current_block.protocol_instance.prover;
         // Populate current block
         current_block.eth_block.parent_hash = past_block_hash;
         current_block.protocol_instance.parent_hash = past_block_hash;
-        current_block.eth_block.author = Some(prover);
+        current_block.eth_block.author = Some(prover); //Some(prover);
         current_block.eth_block.state_root = H256::zero();
         current_block.eth_block.transactions_root = H256::zero();
         current_block.eth_block.receipts_root = H256::zero();
