@@ -274,7 +274,7 @@ impl KeccakTable2 {
                 let keccak_table_columns = LookupTable::<F>::columns(self);
                 for input in inputs.clone() {
                     for row in Self::assignments(input, challenges) {
-                        println!("keccak table input = {:?}\nkeccak table row = {:?}", input, row);
+                        println!("keccak table input = {:x?}\nkeccak table row = {:?}", input, row);
                         // let mut column_index = 0;
                         for (column, value) in keccak_table_columns.iter().zip_eq(row) {
                             // println!("keccak table row {}", offset);

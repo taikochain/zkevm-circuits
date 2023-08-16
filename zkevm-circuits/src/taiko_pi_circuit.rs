@@ -1457,7 +1457,7 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
                 .assign_fixed(
                     || "block_table_tag",
                     self.blockhash_cols.block_table_tag,
-                    block_offset + BLOCKHASH_TOTAL_ROWS - 3, // TODO(Geoge): was -3 originally
+                    block_offset + BLOCKHASH_TOTAL_ROWS - 3,
                     || Value::known(F::from(BlockContextFieldTag::PreviousHashLo as u64)),
                 )
                 .unwrap();
@@ -1476,7 +1476,9 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
                 blk_hdr_hash_hi,
                 blk_hdr_hash_lo,
             ) = Self::get_block_header_rlp_from_public_data(public_data, challenges.keccak_input());
-            // println!("blk_hdr_rlc_acc = {:?}", blk_hdr_rlc_acc);
+            println!("blk_hdr_blockhash hi {:?}", blk_hdr_hash_hi);
+            println!("blk_hdr_blockhash lo {:?}", blk_hdr_hash_lo);
+            println!("blk_hdr_rlc_acc = {:?}", blk_hdr_rlc_acc);
             // println!("blk_hdr_do_rlc_acc = {:?}", blk_hdr_do_rlc_acc);
             // println!("leading_zeros = {:?}", leading_zeros);
 
@@ -2879,16 +2881,18 @@ mod taiko_pi_circuit_test {
         let mut past_block_rlp: Bytes;
         for i in 0..256 { // TODO(George): replace 256 with `PREVIOUS_BLOCKS_NUM`
             let mut past_block = witness::Block::<Fr>::default();
+            past_block.context.number = U256::from(0x100);
             past_block.eth_block.parent_hash = past_block_hash;
             (past_block_hash, past_block_rlp) = get_block_header_rlp_from_block(&past_block);
 
             current_block.context.history_hashes[i] = U256::from(past_block_hash.as_bytes());
             previous_blocks[i] = past_block.clone();
-            previous_blocks[i].context.number = U256::from(0x100);
+            // previous_blocks[i]
             previous_blocks_rlp[i] = past_block_rlp.clone();
             // println!("past_block_hash[{}] = {:x?}", i, past_block_hash);
         }
 
+        println!("current_block.context.history_hashes = {:?}", current_block.context.history_hashes);
         let prover = current_block.protocol_instance.prover;
         // Populate current block
         current_block.eth_block.parent_hash = past_block_hash;
