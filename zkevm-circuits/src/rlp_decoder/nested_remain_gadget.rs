@@ -117,6 +117,16 @@ impl<F: Field> NestedRemainLengthGadget<F> {
         // 5a + 1f
         let shared_advices = (0..5 * 3).map(|_| cs.advice_column()).collect::<Vec<_>>();
         let shared_fixes = vec![cs.fixed_column()];
+
+        // make sure all shared col are bytes
+        shared_advices.iter().for_each(|column| {
+            cs.lookup_any("range check for u8", |meta| {
+                let u8_cell = meta.query_advice(*column, Rotation::cur());
+                let u8_range = meta.query_fixed(shared_fixes[0], Rotation::cur());
+                vec![(u8_cell, u8_range)]
+            });
+        });
+
         // prev_nested_remain > 0
         let zero_cmp_prev_nested_remains: Vec<LtConfig<F, 4>> = nested_rlp_remains
             .iter()
@@ -134,6 +144,7 @@ impl<F: Field> NestedRemainLengthGadget<F> {
                     shared_advices[0],
                     shared_advices[1..5].try_into().unwrap(),
                     shared_fixes[0],
+                    true,
                 )
             })
             .collect::<Vec<_>>()
@@ -157,6 +168,7 @@ impl<F: Field> NestedRemainLengthGadget<F> {
                     shared_advices[5],
                     shared_advices[6..10].try_into().unwrap(),
                     shared_fixes[0],
+                    true,
                 )
             })
             .collect::<Vec<_>>()
@@ -183,6 +195,7 @@ impl<F: Field> NestedRemainLengthGadget<F> {
                         shared_advices[10],
                         shared_advices[11..15].try_into().unwrap(),
                         shared_fixes[0],
+                        true,
                     ));
                     idx += 1;
                 }

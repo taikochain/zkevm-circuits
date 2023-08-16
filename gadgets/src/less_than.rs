@@ -64,6 +64,7 @@ impl<F: Field, const N_BYTES: usize> LtChip<F, N_BYTES> {
         lt: Column<Advice>,
         diff: [Column<Advice>; N_BYTES],
         u8: Column<Fixed>,
+        shared_lookup: bool,
     ) -> LtConfig<F, N_BYTES> {
         let range = pow_of_two(N_BYTES * 8);
 
@@ -88,13 +89,15 @@ impl<F: Field, const N_BYTES: usize> LtChip<F, N_BYTES> {
 
         meta.annotate_lookup_any_column(u8, || "LOOKUP_u8");
 
-        diff[0..N_BYTES].iter().for_each(|column| {
-            meta.lookup_any("range check for u8", |meta| {
-                let u8_cell = meta.query_advice(*column, Rotation::cur());
-                let u8_range = meta.query_fixed(u8, Rotation::cur());
-                vec![(u8_cell, u8_range)]
+        if !shared_lookup {
+            diff[0..N_BYTES].iter().for_each(|column| {
+                meta.lookup_any("range check for u8", |meta| {
+                    let u8_cell = meta.query_advice(*column, Rotation::cur());
+                    let u8_range = meta.query_fixed(u8, Rotation::cur());
+                    vec![(u8_cell, u8_range)]
+                });
             });
-        });
+        }
 
         LtConfig {
             lt,
@@ -114,7 +117,17 @@ impl<F: Field, const N_BYTES: usize> LtChip<F, N_BYTES> {
         let lt = meta.advice_column();
         let diff = [(); N_BYTES].map(|_| meta.advice_column());
         let u8 = meta.fixed_column();
-        Self::configure_by_columns("original lt gate", meta, q_enable, lhs, rhs, lt, diff, u8)
+        Self::configure_by_columns(
+            "original lt gate",
+            meta,
+            q_enable,
+            lhs,
+            rhs,
+            lt,
+            diff,
+            u8,
+            true,
+        )
     }
 
     /// Constructs a Lt chip given a config.

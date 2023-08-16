@@ -224,7 +224,7 @@ pub enum RlpTxTypeTag {
 impl_expr!(RlpTxTypeTag);
 
 /// max byte column num which is used to store the rlp raw bytes
-pub const MAX_BYTE_COLUMN_NUM: usize = 17;
+pub const MAX_BYTE_COLUMN_NUM: usize = 8;
 
 /// sign(v, r, s) ends the list, 33 is for checking last item length
 pub const MAX_SIGNS_BYTES: usize = 33;
