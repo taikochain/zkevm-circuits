@@ -1,33 +1,25 @@
-use std::marker::PhantomData;
+
 
 use crate::{
     evm_circuit::util::{
         constraint_builder::{BaseConstraintBuilder, ConstrainBuilderCommon},
-        rlc,
     },
-    impl_expr,
-    rlp_decoder_tables::{
-        RlpDecodeRule, RlpDecoderFixedTable, RlpDecoderFixedTableTag, RLP_TX_FIELD_DECODE_RULES,
-    },
-    table::KeccakTable,
-    util::{log2_ceil, Challenges, SubCircuit, SubCircuitConfig},
-    witness,
+    util::{SubCircuitConfig},
 };
-use eth_types::{AccessList, Field, Transaction, Word};
-use ethers_core::utils::rlp;
+use eth_types::{Field};
+
 use gadgets::{
-    less_than::{LtChip, LtConfig, LtInstruction},
-    util::{and, not, or, sum},
+    less_than::{LtChip, LtConfig},
+    util::{not},
 };
 use halo2_proofs::{
-    circuit::{Layouter, Region, SimpleFloorPlanner, Value},
+    circuit::{Region, Value},
     plonk::{
-        Advice, Circuit, Column, ConstraintSystem, Error, Expression, Fixed, SecondPhase, Selector,
+        Advice, Column, ConstraintSystem, Error, Fixed, Selector,
         VirtualCells,
     },
     poly::Rotation,
 };
-use keccak256::plain::Keccak;
 
 use crate::util::Expr;
 pub use halo2_proofs::halo2curves::{
@@ -38,7 +30,6 @@ pub use halo2_proofs::halo2curves::{
     },
     secp256k1::{self, Secp256k1Affine, Secp256k1Compressed},
 };
-use mock::MockTransaction;
 
 use super::RlpDecoderCircuitConfigWitness;
 

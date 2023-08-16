@@ -711,7 +711,7 @@ impl<F: Field> SubCircuitConfig<F> for RlpDecoderCircuitConfig<F> {
         meta.create_gate("tx members common constraints", |meta| {
             let mut cb = BaseConstraintBuilder::default();
 
-            let tag = meta.query_advice(tx_member, Rotation::cur());
+            let _tag = meta.query_advice(tx_member, Rotation::cur());
             let complete_cur = meta.query_advice(complete, Rotation::cur());
             let rlp_tag_length_cur = meta.query_advice(rlp_tx_member_length, Rotation::cur());
             let bytes_in_row_cur = meta.query_advice(tx_member_bytes_in_row, Rotation::cur());
