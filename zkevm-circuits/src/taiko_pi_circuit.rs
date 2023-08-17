@@ -60,7 +60,7 @@ const ZERO_BYTE_GAS_COST: u64 = 4;
 const NONZERO_BYTE_GAS_COST: u64 = 16;
 
 // The total number of previous blocks for which to check the hash chain
-const PREVIOUS_BLOCKS_NUM: usize = 2; // TODO(George) 256;
+const PREVIOUS_BLOCKS_NUM: usize = 1; // TODO(George) 256;
 // This is the number of entries each block occupies in the block_table, which
 // is equal to the number of header fields per block (coinbase, timestamp,
 // number, difficulty, gas_limit, base_fee, blockhash, beneficiary, state_root,
@@ -1126,10 +1126,10 @@ impl<F: Field> SubCircuitConfig<F> for TaikoPiCircuitConfig<F> {
                     q_sel.expr() * tag,
                     meta.query_advice(block_table_blockhash.tag, Rotation::cur()),
                 ),
-                // (
-                //     q_sel.expr() * index,
-                //     meta.query_advice(block_table_blockhash.index, Rotation::cur()),
-                // ),
+                (
+                    q_sel.expr() * index,
+                    meta.query_advice(block_table_blockhash.index, Rotation::cur()),
+                ),
                 (
                     q_sel.expr() * meta.query_advice(blk_hdr_reconstruct_value, Rotation::cur()),
                     meta.query_advice(block_table_blockhash.value, Rotation::cur()),
