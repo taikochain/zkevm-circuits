@@ -1,23 +1,13 @@
-
-
-use crate::{
-    evm_circuit::util::{
-        constraint_builder::{BaseConstraintBuilder, ConstrainBuilderCommon},
-    },
-    util::{SubCircuitConfig},
-};
-use eth_types::{Field};
+use crate::evm_circuit::util::constraint_builder::{BaseConstraintBuilder, ConstrainBuilderCommon};
+use eth_types::Field;
 
 use gadgets::{
     less_than::{LtChip, LtConfig},
-    util::{not},
+    util::not,
 };
 use halo2_proofs::{
     circuit::{Region, Value},
-    plonk::{
-        Advice, Column, ConstraintSystem, Error, Fixed, Selector,
-        VirtualCells,
-    },
+    plonk::{Advice, Column, ConstraintSystem, Error, Fixed, Selector, VirtualCells},
     poly::Rotation,
 };
 
