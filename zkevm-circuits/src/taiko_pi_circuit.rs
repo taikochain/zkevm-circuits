@@ -60,7 +60,7 @@ const ZERO_BYTE_GAS_COST: u64 = 4;
 const NONZERO_BYTE_GAS_COST: u64 = 16;
 
 // The total number of previous blocks for which to check the hash chain
-const PREVIOUS_BLOCKS_NUM: usize = 1; // TODO(George) 256;
+const PREVIOUS_BLOCKS_NUM: usize = 2; // TODO(George) 256;
 // This is the number of entries each block occupies in the block_table, which
 // is equal to the number of header fields per block (coinbase, timestamp,
 // number, difficulty, gas_limit, base_fee, blockhash, beneficiary, state_root,
@@ -68,12 +68,15 @@ const PREVIOUS_BLOCKS_NUM: usize = 1; // TODO(George) 256;
 const BLOCK_LEN_IN_TABLE: usize = 15;
 // previous hashes in rlc, lo and hi
 // + zero
-const BLOCK_TABLE_MISC_LEN: usize = PREVIOUS_BLOCKS_NUM * 3 + 1;
+const BLOCK_TABLE_MISC_LEN: usize =
+    // PREVIOUS_BLOCKS_NUM * 3 + 1; // TODO(George) this is the correctone
+    256 * 3 + 1;
 // Total number of entries in the block table:
 // + (block fields num) * (total number of blocks)
 // + misc entries
 const TOTAL_BLOCK_TABLE_LEN: usize =
-    (BLOCK_LEN_IN_TABLE * (PREVIOUS_BLOCKS_NUM + 1)) + BLOCK_TABLE_MISC_LEN;
+    // (BLOCK_LEN_IN_TABLE * (PREVIOUS_BLOCKS_NUM + 1)) + BLOCK_TABLE_MISC_LEN; // TODO(George) this is the correctone
+    (BLOCK_LEN_IN_TABLE * (256 + 1)) + BLOCK_TABLE_MISC_LEN;
 
 const OLDEST_BLOCK_NUM: usize = 0; // TODO(George) = 0;
 const CURRENT_BLOCK_NUM: usize = PREVIOUS_BLOCKS_NUM; // TODO(George) = 256;
@@ -446,8 +449,8 @@ struct BlockhashColumns {
     blk_hdr_reconstruct_hi_lo: Column<Advice>,
     q_hi: Column<Fixed>,
     q_lo: Column<Fixed>,
-    block_table_tag: Column<Fixed>,
-    block_table_index: Column<Fixed>,
+    block_table_tag_blockhash: Column<Fixed>,
+    block_table_index_blockhash: Column<Fixed>,
     q_reconstruct: Column<Fixed>,
     q_number: Column<Fixed>,
     q_parent_hash: Selector,
@@ -583,8 +586,8 @@ impl<F: Field> SubCircuitConfig<F> for TaikoPiCircuitConfig<F> {
             q_hi,
             q_lo,
             q_reconstruct,
-            block_table_tag: block_table_tag_blockhash,
-            block_table_index: block_table_index_blockhash,
+            block_table_tag_blockhash,
+            block_table_index_blockhash,
             q_number,
             q_parent_hash,
             q_var_field_256,
@@ -999,16 +1002,16 @@ impl<F: Field> SubCircuitConfig<F> for TaikoPiCircuitConfig<F> {
                 vec![
                     (
                         q_sel.expr() * meta.query_fixed(block_table_tag_blockhash, Rotation::cur()),
-                        meta.query_advice(block_table.tag, Rotation::cur()),
+                        meta.query_advice(block_table_blockhash.tag, Rotation::cur()),
                     ),
                     (
                         q_sel.expr() * meta.query_fixed(block_table_index_blockhash, Rotation::cur()),
-                        meta.query_advice(block_table.index, Rotation::cur()),
+                        meta.query_advice(block_table_blockhash.index, Rotation::cur()),
                     ),
                     (
                         q_sel.expr()
                             * meta.query_advice(blk_hdr_reconstruct_value, Rotation::cur()),
-                        meta.query_advice(block_table.value, Rotation::cur()),
+                        meta.query_advice(block_table_blockhash.value, Rotation::cur()),
                     ),
                 ]
             },
@@ -1064,15 +1067,15 @@ impl<F: Field> SubCircuitConfig<F> for TaikoPiCircuitConfig<F> {
                 vec![
                     (
                         q_sel.expr() * tag,
-                        meta.query_advice(block_table.tag, Rotation::cur()),
+                        meta.query_advice(block_table_blockhash.tag, Rotation::cur()),
                     ),
                     (
                         q_sel.expr() * index,
-                        meta.query_advice(block_table.index, Rotation::cur()),
+                        meta.query_advice(block_table_blockhash.index, Rotation::cur()),
                     ),
                     (
                         q_sel.expr() * blk_hdr_hash_hi,
-                        meta.query_advice(block_table.value, Rotation::cur()),
+                        meta.query_advice(block_table_blockhash.value, Rotation::cur()),
                     ),
                 ]
             },
@@ -1089,15 +1092,15 @@ impl<F: Field> SubCircuitConfig<F> for TaikoPiCircuitConfig<F> {
                 vec![
                     (
                         q_sel.expr() * tag,
-                        meta.query_advice(block_table.tag, Rotation::cur()),
+                        meta.query_advice(block_table_blockhash.tag, Rotation::cur()),
                     ),
                     (
                         q_sel.expr() * index,
-                        meta.query_advice(block_table.index, Rotation::cur()),
+                        meta.query_advice(block_table_blockhash.index, Rotation::cur()),
                     ),
                     (
                         q_sel.expr() * blk_hdr_hash_lo,
-                        meta.query_advice(block_table.value, Rotation::cur()),
+                        meta.query_advice(block_table_blockhash.value, Rotation::cur()),
                     ),
                 ]
             },
@@ -1121,15 +1124,15 @@ impl<F: Field> SubCircuitConfig<F> for TaikoPiCircuitConfig<F> {
             vec![
                 (
                     q_sel.expr() * tag,
-                    meta.query_advice(block_table.tag, Rotation::cur()),
+                    meta.query_advice(block_table_blockhash.tag, Rotation::cur()),
                 ),
                 // (
                 //     q_sel.expr() * index,
-                //     meta.query_advice(block_table.index, Rotation::cur()),
+                //     meta.query_advice(block_table_blockhash.index, Rotation::cur()),
                 // ),
                 (
                     q_sel.expr() * meta.query_advice(blk_hdr_reconstruct_value, Rotation::cur()),
-                    meta.query_advice(block_table.value, Rotation::cur()),
+                    meta.query_advice(block_table_blockhash.value, Rotation::cur()),
                 ),
             ]
         });
@@ -1148,15 +1151,15 @@ impl<F: Field> SubCircuitConfig<F> for TaikoPiCircuitConfig<F> {
             vec![
                 (
                     q_sel.expr() * tag,
-                    meta.query_advice(block_table.tag, Rotation::cur()),
+                    meta.query_advice(block_table_blockhash.tag, Rotation::cur()),
                 ),
                 // (
                 //     q_sel.expr() * index,
-                //     meta.query_advice(block_table.index, Rotation::cur()),
+                //     meta.query_advice(block_table_blockhash.index, Rotation::cur()),
                 // ),
                 (
                     q_sel.expr() * meta.query_advice(blk_hdr_reconstruct_value, Rotation::cur()),
-                    meta.query_advice(block_table.value, Rotation::cur()),
+                    meta.query_advice(block_table_blockhash.value, Rotation::cur()),
                 ),
             ]
         });
@@ -1424,8 +1427,8 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
 
             region
                 .assign_fixed(
-                    || "block_table_index",
-                    self.blockhash_cols.block_table_index,
+                    || "block_table_index_blockhash",
+                    self.blockhash_cols.block_table_index_blockhash,
                     block_offset + BLOCKHASH_TOTAL_ROWS - 1,
                     || Value::known(F::from(block_number as u64)),
                 )
@@ -1435,8 +1438,8 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
             // `WithdrawalRoot` is set too
             region
                 .assign_fixed(
-                    || "block_table_tag",
-                    self.blockhash_cols.block_table_tag,
+                    || "block_table_tag_blockhash",
+                    self.blockhash_cols.block_table_tag_blockhash,
                     block_offset + BLOCKHASH_TOTAL_ROWS - 2,
                     || Value::known(F::from(BlockContextFieldTag::PreviousHashHi as u64)),
                 )
@@ -1444,8 +1447,8 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
 
             region
                 .assign_fixed(
-                    || "block_table_index",
-                    self.blockhash_cols.block_table_index,
+                    || "block_table_index_blockhash",
+                    self.blockhash_cols.block_table_index_blockhash,
                     block_offset + BLOCKHASH_TOTAL_ROWS - 2,
                     || Value::known(F::from(block_number as u64)),
                 )
@@ -1455,8 +1458,8 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
             // uses the current row
             region
                 .assign_fixed(
-                    || "block_table_tag",
-                    self.blockhash_cols.block_table_tag,
+                    || "block_table_tag_blockhash",
+                    self.blockhash_cols.block_table_tag_blockhash,
                     block_offset + BLOCKHASH_TOTAL_ROWS - 3,
                     || Value::known(F::from(BlockContextFieldTag::PreviousHashLo as u64)),
                 )
@@ -1722,7 +1725,7 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
                             || *val,
                         )
                         .unwrap();
-                    // println!("blk_hdr_reconstruct_value[{}] = {:?}", absolute_offset, val);
+                    println!("blk_hdr_reconstruct_value[name={}, offset={}] = {:?}", name, absolute_offset, val);
 
                     if *is_reconstruct && !(is_parent_hash && block_number == OLDEST_BLOCK_NUM) {
                         region
@@ -1884,30 +1887,30 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
                 let absolute_offset = block_offset + offset - 1;
                 region
                     .assign_fixed(
-                        || "block_table_tag",
-                        self.blockhash_cols.block_table_tag,
+                        || "block_table_tag_blockhash",
+                        self.blockhash_cols.block_table_tag_blockhash,
                         absolute_offset,
                         || Value::known(F::from(*tag as u64)),
                     )
                     .unwrap();
-                println!("block_table_tag[{}] = {:?}", absolute_offset, tag);
+                println!("Column: block_table_tag_blockhash[{}] = {:?}", absolute_offset, tag);
 
-                // let idx2 = if (block_number == CURRENT_BLOCK_NUM) && (*tag == BlockContextFieldTag::PreviousHashLo) {
-                //     255
-                // } else {
-                //     block_number
-                // };
+                let idx2 = if (block_number == CURRENT_BLOCK_NUM) && (*tag == BlockContextFieldTag::PreviousHashLo || *tag == BlockContextFieldTag::PreviousHashHi) {
+                    0 // TODO(George)
+                } else {
+                    block_number
+                };
                 region
                     .assign_fixed(
-                        || "block_table_index",
-                        self.blockhash_cols.block_table_index,
+                        || "block_table_index_blockhash",
+                        self.blockhash_cols.block_table_index_blockhash,
                         absolute_offset,
                         || Value::known(F::from(block_number as u64)),
                         // || Value::known(F::from((idx2) as u64)),
                     )
                     .unwrap();
-                // println!("block_table_index[{}] = {:?}", absolute_offset, idx2);
-                println!("block_table_index[{}] = {:?}", absolute_offset, block_number);
+                // println!("Column: block_table_index_blockhash[{}] = {:?}", absolute_offset, idx2);
+                println!("block_table_index_blockhash[{}] = {:?}", absolute_offset, block_number);
             }
 
             // Determines if it is a short RLP value
@@ -1964,7 +1967,7 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
         let base_offset = if block_number == CURRENT_BLOCK_NUM {
             0
         } else {
-            BLOCK_LEN_IN_TABLE * (block_number + 1) + BLOCK_TABLE_MISC_LEN
+            BLOCK_LEN_IN_TABLE * (block_number + 1) + BLOCK_TABLE_MISC_LEN // 256 * 3 + 1
         };
 
         let mut block_data: Vec<(&str, BlockContextFieldTag, usize, Value<F>, bool)> = vec![
@@ -2266,23 +2269,24 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
                 self.q_block_table.enable(region, absolute_offset)?;
                 region.assign_advice(
                     || name,
-                    self.block_table.tag,
+                    self.block_table_blockhash.tag,
                     absolute_offset,
                     || Value::known(F::from(tag as u64)),
                 )?;
                 region.assign_advice(
                     || name,
-                    self.block_table.index,
+                    self.block_table_blockhash.index,
                     absolute_offset,
                     || Value::known(F::from(idx as u64)),
                 )?;
 
-                println!("block table name [{}] = {}", absolute_offset, name);
-                println!("block table tag  [{}] = {:?}", absolute_offset, tag);
-                println!("block table index[{}] = {}", absolute_offset, idx);
-                println!("block table value[{}] = {:?}", absolute_offset, val);
+                println!("block_number = {}", block_number);
+                println!("block_table: block table name [{}] = {}", absolute_offset, name);
+                println!("block_table: block table tag  [{}] = {:?}", absolute_offset, tag);
+                println!("block_table: block table index[{}] = {}", absolute_offset, idx);
+                println!("block_table: block table value[{}] = {:?}", absolute_offset, val);
 
-                let cell = region.assign_advice(|| name, self.block_table.value, absolute_offset, || val)?;
+                let cell = region.assign_advice(|| name, self.block_table_blockhash.value, absolute_offset, || val)?;
                 if name == "chain_id" {
                     chain_id_cell.push(cell);
                 }
@@ -2319,6 +2323,7 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
             |ref mut region| {
                 // Annotate columns
                 self.block_table.annotate_columns_in_region(region);
+                self.block_table_blockhash.annotate_columns_in_region(region);
                 self.rlp_is_short.annotate_columns_in_region(region);
                 region.name_column(|| "rpi_field_bytes", self.rpi_field_bytes);
                 region.name_column(|| "rpi_field_bytes_acc", self.rpi_field_bytes_acc);
