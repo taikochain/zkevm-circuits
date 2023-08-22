@@ -81,13 +81,13 @@ impl<F: Field> SubCircuitConfig<F> for SuperCircuitConfig<F> {
             },
         );
 
-        let rlp_fixed_table = RlpDecoderTable1A6FColumns::construct(meta);
+        let rlp_decoder_table = RlpDecoderTable1A6FColumns::construct(meta);
         let rlp_input_circuit = RlpDecoderCircuitConfig::new(
             meta,
             RlpDecoderCircuitConfigArgs {
                 keccak_table: keccak_table.clone(),
                 challenges: challenges.clone(),
-                rlp_fixed_table,
+                rlp_decoder_table,
             },
         );
 

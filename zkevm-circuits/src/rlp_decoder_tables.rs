@@ -775,9 +775,9 @@ pub struct RlpDecoderFixedTable<const NA: usize, const NF: usize> {
     pub byte_range_table: ByteRangeTable,
     // TODO: range table, invalid byte table
     /// shared columns for all fix tables
-    fixed_columns: [Column<Fixed>; NF],
+    pub fixed_columns: [Column<Fixed>; NF],
     /// shared columns for all fix tables
-    advice_columns: [Column<Advice>; NA],
+    pub advice_columns: [Column<Advice>; NA],
 }
 
 impl<const NA: usize, const NF: usize> RlpDecoderFixedTable<NA, NF> {

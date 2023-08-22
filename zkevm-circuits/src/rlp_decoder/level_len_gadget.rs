@@ -56,6 +56,7 @@ use super::RlpDecoderCircuitConfigWitness;
 /// So, the max nested list num is 6
 pub(crate) const MAX_NESTED_LEVEL_NUM: usize = 6;
 
+// the length stack of RLP using shared column gate
 #[derive(Debug, Clone)]
 pub(crate) struct NestedRemainLengthGadget<F: Field> {
     /// list length checking column
