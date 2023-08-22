@@ -1016,17 +1016,27 @@ impl<F: Field> RLCChainable2<F> for Expression<F> {
 pub trait RLCableValue<F> {
     /// Returns the RLC of itself
     fn rlc_value(&self, r: F) -> F;
+    /// Returns the RLC of itself
+    fn rlc_rev_value(&self, r: F) -> F;
 }
 
 impl<F: Field> RLCableValue<F> for Vec<u8> {
     fn rlc_value(&self, r: F) -> F {
         rlc::value(self, r)
     }
+
+    fn rlc_rev_value(&self, r: F) -> F {
+        rlc::value(self.iter().rev(), r)
+    }
 }
 
 impl<F: Field> RLCableValue<F> for [u8] {
     fn rlc_value(&self, r: F) -> F {
         rlc::value(self, r)
+    }
+
+    fn rlc_rev_value(&self, r: F) -> F {
+        rlc::value(self.iter().rev(), r)
     }
 }
 

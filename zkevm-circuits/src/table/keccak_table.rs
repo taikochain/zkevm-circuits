@@ -52,6 +52,8 @@ impl KeccakTable {
         let input_rlc = challenges
             .keccak_input()
             .map(|challenge| rlc::value(input.iter().rev(), challenge));
+        // r = keccak_input
+        // = input[0] * r^319 + input[1] * r^318 + ... + input[319] * r^0 
 
         let input_len = F::from(input.len() as u64);
         let mut keccak = Keccak::default();
@@ -63,6 +65,17 @@ impl KeccakTable {
                 challenge,
             )
         });
+        // r = evm_word
+        // = output[0] * r^31 + ... + output[31] * r^0
+
+
+        // [0,     15         31]
+        // a0 ... a15 00000
+        // 0000   a16 .. a31 
+        
+        
+        // a0 ... a15 0 .. 0 -> a0 * r31 + ... + a15 * r16
+        // 0 .. 0 a16 .. a31 -> a16 * r15 + ... + a31 * r0
         println!("assignments input {:?} - keccak_input {:?}| output {:?} - evm_word {:?}", input.len(), input_rlc, output.len(), output_rlc);
 
         vec![[
