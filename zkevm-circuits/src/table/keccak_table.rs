@@ -1,3 +1,5 @@
+use eth_types::ToBigEndian;
+
 use super::*;
 
 /// Keccak Table, used to verify keccak hashing from RLC'ed input.
@@ -58,12 +60,16 @@ impl KeccakTable {
         let input_len = F::from(input.len() as u64);
         let mut keccak = Keccak::default();
         keccak.update(input);
+        // BE
         let output = keccak.digest();
+        let tmp = Word::from_big_endian(output.as_slice()).to_be_bytes();
+        println!("keccak.digest {:?} => {:?}", output, tmp);
         let output_rlc = challenges.evm_word().map(|challenge| {
             rlc::value(
-                &Word::from_big_endian(output.as_slice()).to_le_bytes(),
+                &Word::from_big_endian(output.as_slice()).to_le_bytes(), // rev to LE 
                 challenge,
-            )
+            )  // rev to BE
+
         });
         // r = evm_word
         // = output[0] * r^31 + ... + output[31] * r^0

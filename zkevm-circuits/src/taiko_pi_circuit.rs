@@ -352,6 +352,9 @@ impl<F: Field> SubCircuitConfig<F> for TaikoPiCircuitConfig<F> {
             None
         );
 
+        meta.pinned().print_layout_states();
+        meta.pinned().print_config_states();
+
         Self {
             rpi_field_bytes,
             rpi_field_bytes_acc,
@@ -376,6 +379,7 @@ impl<F: Field> SubCircuitConfig<F> for TaikoPiCircuitConfig<F> {
         }
     }
 }
+
 
 // input -> kecceck, output -> evm
 impl<F: Field> TaikoPiCircuitConfig<F> {

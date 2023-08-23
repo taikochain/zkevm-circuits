@@ -188,6 +188,7 @@ impl BlockContext {
                     Value::known(self.number.to_scalar().unwrap()),
                     randomness
                         .map(|randomness| rlc::value(&self.block_hash.to_le_bytes(), randomness)),
+                    // b0 * r^31 + ... + b31 * r^0
                 ],
             ],
             {
