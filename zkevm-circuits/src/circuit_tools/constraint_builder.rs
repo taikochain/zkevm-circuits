@@ -352,9 +352,6 @@ impl<F: Field, C: CellType> ConstraintBuilder<F, C> {
 
     pub(crate) fn query_one(&mut self, cell_type: C) -> Cell<F> {
         let res = self.query_cells_dyn(cell_type, 1).first().unwrap().clone();
-        if res.column().index() == 45 {
-            println!("\n found 45 {:?}", cell_type);
-        }
         res
     }
 
@@ -409,7 +406,6 @@ impl<F: Field, C: CellType> ConstraintBuilder<F, C> {
         self.equalities
             .iter()
             .for_each(|c| {
-                println!("Enable equality for {:?}", c.index());
                 meta.enable_equality(c.clone())});
     }
 

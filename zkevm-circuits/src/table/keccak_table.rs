@@ -54,36 +54,17 @@ impl KeccakTable {
         let input_rlc = challenges
             .keccak_input()
             .map(|challenge| rlc::value(input.iter().rev(), challenge));
-        // r = keccak_input
-        // = input[0] * r^319 + input[1] * r^318 + ... + input[319] * r^0 
 
         let input_len = F::from(input.len() as u64);
         let mut keccak = Keccak::default();
         keccak.update(input);
-        // BE
         let output = keccak.digest();
-        let tmp = Word::from_big_endian(output.as_slice()).to_be_bytes();
-        println!("keccak.digest {:?} => {:?}", output, tmp);
         let output_rlc = challenges.evm_word().map(|challenge| {
             rlc::value(
-                &Word::from_big_endian(output.as_slice()).to_le_bytes(), // rev to LE 
+                &Word::from_big_endian(output.as_slice()).to_le_bytes(),
                 challenge,
-            )  // rev to BE
-
+            )
         });
-        // r = evm_word
-        // = output[0] * r^31 + ... + output[31] * r^0
-
-
-        // [0,     15         31]
-        // a0 ... a15 00000
-        // 0000   a16 .. a31 
-        
-        
-        // a0 ... a15 0 .. 0 -> a0 * r31 + ... + a15 * r16
-        // 0 .. 0 a16 .. a31 -> a16 * r15 + ... + a31 * r0
-        println!("assignments input {:?} - keccak_input {:?}| output {:?} - evm_word {:?}", input.len(), input_rlc, output.len(), output_rlc);
-
         vec![[
             Value::known(F::ONE),
             input_rlc,
@@ -132,7 +113,6 @@ impl KeccakTable {
 
                 let keccak_table_columns = <KeccakTable as LookupTable<F>>::advice_columns(self);
                 for input in inputs.clone() {
-                    println!("dev_load offset={:?} input: {:?}", offset, input);
                     for row in Self::assignments(input, challenges) {
                         // let mut column_index = 0;
                         for (&column, value) in keccak_table_columns.iter().zip_eq(row) {
