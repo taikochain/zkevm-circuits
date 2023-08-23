@@ -1,7 +1,7 @@
 //! Cell manager
 use crate::{
     circuit_tools::cached_region::CachedRegion,
-    util::{query_expression, Expr}, evm_circuit::util::rlc,
+    util::{query_expression, Expr},
 };
 
 use crate::table::LookupTable;

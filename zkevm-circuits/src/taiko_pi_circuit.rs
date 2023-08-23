@@ -3,31 +3,30 @@
 use crate::{
     assign,
     evm_circuit::table::Table::*,
-    evm_circuit::{util::{constraint_builder::{BaseConstraintBuilder, ConstrainBuilderCommon}, rlc}, table::Table},
+    evm_circuit::{util::{constraint_builder::{ConstrainBuilderCommon}}, table::Table},
     table::{byte_table::ByteTable, BlockContextFieldTag, BlockTable, KeccakTable, LookupTable},
     util::{Challenges, SubCircuitConfig, SubCircuit},
     circuit_tools::{
-        constraint_builder::{ConstraintBuilder, RLCable, RLCChainable, TO_FIX, COMPRESS, REDUCE, RLCableValue},
-        cell_manager::{CellManager, CellType, Cell, CellConfig, CellColumn}, gadgets::{IsEqualGadget, IsZeroGadget}, cached_region::{CachedRegion, self},
+        constraint_builder::{ConstraintBuilder, RLCable, TO_FIX, RLCableValue},
+        cell_manager::{CellManager, CellType, Cell, CellColumn}, gadgets::{IsEqualGadget}, cached_region::{CachedRegion},
     },
     
-    witness::{self, BlockContext}, circuit, assignf,
+    witness::{self, BlockContext}, circuit,
 };
-use bus_mapping::{evm, operation::Op};
+
 use gadgets::util::{Scalar, not};
 use eth_types::{Address, Field, ToBigEndian, ToWord, Word, H256};
 use ethers_core::utils::keccak256;
-use gadgets::{util::{or, select, Expr, and}, impl_expr};
+use gadgets::{util::{Expr}};
 use halo2_proofs::{
-    circuit::{AssignedCell, Layouter, Region, SimpleFloorPlanner, Value},
+    circuit::{Layouter, SimpleFloorPlanner, Value},
     plonk::{
-        Advice, Circuit, Column, ConstraintSystem, Error, Expression, Fixed, Instance, SecondPhase,
-        Selector, VirtualCells,
+        Circuit, Column, ConstraintSystem, Error, Expression, Instance,
+        Selector,
     },
-    poly::{Rotation},
 };
-use rand_chacha::rand_core::block;
-use std::{marker::PhantomData, ops::Range, usize, default, vec};
+
+use std::{marker::PhantomData, usize, vec};
 
 const BYTE_POW_BASE: u64 = 1 << 8;
 const N: usize = 32;
@@ -348,7 +347,7 @@ impl<F: Field> SubCircuitConfig<F> for TaikoPiCircuitConfig<F> {
             // meta.pinned().print_config_states();
             // meta.pinned().print_layout_states();
 
-            let mut col_configs = cm.columns().to_vec();
+            let col_configs = cm.columns().to_vec();
             Self {
                 q_enable,
                 public_input,
@@ -394,7 +393,7 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
                 let mut offset = 0;
                 let mut state = 0;
                 let mut pi_cells = Vec::new();
-                for (annotation, block_number, bytes) in assignments {
+                for (_annotation, block_number, bytes) in assignments {
                     self.state.assign(&mut region, offset, state)?;
                     if state != KECCAK_OUTPUT {
                         let next = block_acc * keccak_mult 
