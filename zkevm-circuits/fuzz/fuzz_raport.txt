@@ -1,0 +1,2160 @@
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-01792392a1341425d8f9c293da8f10da056507ae
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[3, 0, 122, 138]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-02a9b4d79953c25b1ddbe8042fedf75d2a361329
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[3, 0, 103, 138]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-06b80dd89afd4bd363e891be4cadcd411ececd2b
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[126, 8, 35, 91]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-0b208ccca331fd9a37eacbd9d6dcfec068ceecb9
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[225, 117, 251, 123]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-0d03c8b3e6325fd66ea24f876ff2f42a729f8dda
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[31, 0, 118, 124]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-0de085e6c276f7f5f2a94e8df1fd4d07f153a53d
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[8, 104, 91]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-1065c26d3e3ca44b4c25624cbeb26004f93e7b20
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[193, 218, 255, 125]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-109626f30691e9e69ae1170751129b4cd1d0461b
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[112, 31, 0, 170]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-116d165ee649225c512a91abbaf15f1209ff4f2f
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[174, 31, 122, 170]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-1280f7bd5f20b2ce33d96e152cb226341fa6c2bb
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[31, 98, 0, 135]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-1810a64be125bfdfb9e59191818fe0d8bd99aa61
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[122, 91]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-1c747eec27e7824b17347263b7a99ed49344cddf
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[63, 37, 0, 102]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-1d0a0348b3bba18c96e126069c03d54d70359a8a
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[31, 3, 118, 138]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-1dd50fdcbf8c65c7ed35e082e3a39785308bf982
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[126, 31, 138, 0]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-21548e2e1134573db067101c9cd4c52d93f20b37
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[31, 122, 255, 43]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-228a770c73fcf3b337987491740cb41a722bd47e
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[63, 122]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-2362aeef80b12a3d49111eca494ac2c98328a2c3
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[63, 5, 63, 109]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-2a8c1f96ee916380597e9074d673a937415bd7e7
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[174, 0, 31, 110]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-2ea24a9d0f5a0abc74bffa153998161b636e7647
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[63, 118, 0, 138]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-2f819db0f499f775687c400dd0b0e1586e879729
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[112, 224, 0, 43]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-31c2979502de53c08e09b03e448b27308d56dcb4
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[3, 113, 0, 138]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-329b815df6d0976b0119ff10c8c55f0f2727648b
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[21, 108, 130, 138]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-3a710d2a84f856bc4e1c0bbb93ca517893c48691
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[122, 10]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-3c363836cf4e16666669a25da280a1865c2d2874
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[100]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-3dc8e02cf9acf71926aca31c7ba1df12284f49fa
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[108, 224, 209, 255]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-3ec716e0e710b1904cdfdc560405671964e62ae2
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[8, 104, 8, 15]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-3f83a2083e10938f83ba379eba96fb6f06d97781
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[31, 104, 0, 138]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-3fff333d9022b133e67e7fe49585417faf09ee9f
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[171, 116, 31]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-44dd3b279a1c0b998a1664ebae7a5462bee6c6ec
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[3, 122]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-47b47b9701c071f46ddcbfd1f5839b19aa2b6562
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[45, 37, 0, 120]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-49d3e33ac644cc9bda81d13b61230e111d96083d
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[225, 117, 255, 217]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-4a2d35a1e69ada224c40baa53a84eab3670e4cb2
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[175, 31, 122, 170]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-4ab7d6349a6f27a15ea4e8b526c7822dee3b503f
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[126, 138, 66, 138]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-4e45030917234f658670b5669b9b86a390c99bc8
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[235, 116, 253, 117]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-53ef23cc97f0ddc27f5d14f847f172698273f29e
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[21, 119, 253, 138]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-55517c43190c1397df4930acdf94631bc29f8eb8
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[98, 8]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-58c3877bc10b14389b004750a511c88ed84940ca
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[175, 31, 0, 115]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-5b8e76da1bbb6fe0343707234757808f14a907d4
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[31, 138, 126, 139]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-60ba4b2daa4ed4d070fec06687e249e0e6f9ee45
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[123]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-617325396143920bb566f5acedebc1ca9fa7417f
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[63, 0, 116]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-62911879d28713cf28420a0e768683217c6dff96
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[3, 0, 121, 138]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-64180c9d7dfb4cfd9ca043098f4ee9f3271b3212
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[1, 0, 118, 117]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-65268b3f1b2ee803049e1b38f745c8fa9a0ae699
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[21, 138, 2, 118]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-6a7594a09546a262143bb54a25c810c6beddecf2
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[31, 118, 254, 136]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-6f8513c6cbb94c1aaa6401787295c0a77083c141
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[63, 5, 0, 109]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-6fa39a99084de00da92912f5e4462cbc4ad100de
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[31, 126, 0, 170]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-7061f55bc7d8251f5af639e5eb524a38c815ae6f
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[31, 0, 117]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-7181d676236877afb9ded956899aa4fc4335b43f
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[126, 138, 2, 138]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-744bde097b7aed1356c4967d2fd2536bc4034264
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[126, 50, 138]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-7886cf2a2e5c6bc7f5bace94f1497a88de9d0756
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[174, 0, 119, 179]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-78dc1cee2ac7710425925d5866491e2d4aeaad83
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[138, 122, 138]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-7e15bb5c01e7dd56499e37c634cf791d3a519aee
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[96]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-84cee9d321dad6e44579d6cf717fa24dfc4299d5
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[243, 125]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-84ef7ecce8a0eb9844d340fc1c5257437aed14ac
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[31, 121, 255, 129]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-892e003c46eb96d36e142d088b921b40e6d2c4f1
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[118, 228, 220, 123]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-8a2b79d2a2413bea96597d8664d394edfa1c7ca6
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[31, 138, 255, 116]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-8cb44a73fcceedbbae7731769aef4f438a6b231b
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[31, 0, 98, 0]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-8d1f54e66e98963bcd5d92c75699808c49fd9859
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[193, 218, 255, 117]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-906c2ed948871c4baa05a7ca4c1cf5315e91602e
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[63, 0, 101]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-90d3f991c0644721c9258ab7e8377aadb2af3579
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[70, 99]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-97d4653ebce17294f71025fa2a556d76a452da0e
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[4, 112, 96, 139]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-98e4b432345e2e8db19584434a736d3a303be685
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[4, 113, 0, 139]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-9a62699f92b41fe54a874cc76ef14b0fb40e348b
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[114, 138, 2, 138]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-9b0b6a23bf75f8c82e08e5c9113eded78c6d18e1
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[127, 0, 138]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-9c81164e10bf612c352dca3ecabf57743b451d42
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[10, 122]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-9d50e25dd7dfcb9ab437eb0d2cff3fcb568ecc93
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[234, 117, 0, 129]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-9d95d2de3a37b840ce5f4c8ca406820df5bf53ba
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[8, 40, 122]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-9f5297d21d46eacf9e967a88106fbb1c2cae8152
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[15, 100]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-a134e63f1855b3af7e5fd6f17cf334e13559152e
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[175, 108, 0, 166]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-a5e5f013258b14a8d1dd81403275d2fc2b36a798
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[63, 37, 0, 101]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-a863da82ab10fe6903972dd179a69bef5af7f4b5
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[8, 115, 40]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-a9fcd54b25e7e863d72cd47c08af46e61b74b561
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[102, 10]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-ab4977a9d5880dc7b4a1928de84fb23471b4378a
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[63, 63, 9, 117]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-ae9fdb3f5656c577073aa2f124ce56b3c06b629e
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[91, 8, 104, 91]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-af01cae31b6c8ee7eac37d3f8b5199372f5a8d4a
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[21, 113, 122, 138]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-b03893ad4cfb6d39d1833bdd355c283b0d456f32
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[31, 138, 0, 120]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-b38fd2756872dd7bc76080dc92466106108fd533
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[220, 117, 0, 138]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-b4fd4dd6cffd5558941a01b9731d0410a28fe7de
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[171, 122, 0, 170]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-b50a05ed35948fbd7792d28e2707b058b3d45f3a
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[31, 0, 118]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-b9a5383bdcf277d5ee3e91a1e38526ca8d1349e2
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[8, 123, 8, 40]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-ba9cce10dd30dcd969a67ddcb5f1c2863626d983
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[124, 31, 0, 170]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-bb1e7182d7262ddafc61eee7ca61b416cda20c3c
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[102, 132, 37, 138]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-bbf2e3a3184941f4f849b201e73a641e18d075da
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[126, 10, 10]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-bd811f21956aa72bb5a9114bdf4dc61e1710ad44
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[8, 123]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-c0c92a7454f2453a26cbe47dbd79c2fadbef9a23
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[138, 31, 0, 107]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-c2a47ce2cd9e24eff561069143e410f36ba2cac5
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[135, 138, 0, 96]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-c3aa4dbf19c62c1c158dbc543330da8f72d7f34b
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[175, 175, 0, 122]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-c41bed4f71b5c239eee90c46058c8bb79ea108b7
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[183, 218, 255, 117]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-c65dae855b5c13bf20fca3ff155b3be1a2fd955a
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[225, 118, 0, 129]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-c7d29eb4931aa46d66d2fa412749798030f3be19
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[31, 0, 118, 117]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-c80c10eeb9f0b2a2cf9d6ca486afdf1f051b569c
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[31, 0, 138, 126]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-c973326d8169b536f14f915a46e0300d5b46b752
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[233, 110]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-ca435d7fae193c0d3fb42805e7827d84a7313350
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[21, 139, 126, 114]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-cac2cde3697d2317bde88dd11ad7703b7fecef87
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[10, 126]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-cafe960a00d753e6a1ec1b3cc4c99edf6f461a24
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[62, 126]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-cf9f0b605f0567a0480a63d41eda17bb4f261973
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[31, 2, 120, 138]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-d5d86d7c769512f07192ecca6cf5eeb88bc4b9af
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[165, 255, 117, 117]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-d98b0f258db78eca964d43f03e35c74f465e9815
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[10, 110]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-d9ecb58a9ec43d451fe8898fd2d377fec06bb95a
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[63, 122, 0, 138]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-dd6d749450f1dee920dc0320f62c9dbde507d02e
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[138, 124]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-e16707221e9bd8557f65bd28dd8120470d332db5
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[31, 118, 248]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-e80b1643e58cbede773d6743b9325b5503aaadea
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[8, 40, 98]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-e9cda679ea1a4edb4e6a7f037c00a133efca4e0e
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[127, 5, 0, 138]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-ef0e7cb8a9ff45e85fb2d316749a7a2803153c54
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[118, 224, 255, 212]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-f060ec7fbeec5d13283407b0e01b978a5eef5c2e
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[58, 123, 31]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-f0812ea79af7ac1d47cbd2c0113ee22cf73707fc
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[31, 36, 126, 170]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-f11b8ddd36b9d6c58b7f099ea19fd2bc774ca54b
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[21, 139, 225, 96]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-f419b0667d6fea1e999873c24c9cf1c35819ac3a
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[233, 126]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-f6a5ebfb499aa15b1465d0fe94c3fe6d28b7c692
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[31, 118, 243, 135]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-f6f0a4369114ed31df143089645f62042cf961be
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[103, 31]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-f808fc116aea92a5665b0bf5fdba179019dccc44
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[229, 117, 4, 135]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-f9394762d520f19d93b8ae38f327054790ae2e40
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[233, 104]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-f95963e442a6ca18e549c24db7e645a6fe98a0a0
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[225, 117, 255, 116]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-fb3c6e4de85bd9eae26fdc63e75f10a7f39e850e
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[126]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/crash-fcefac99890239c22e3db99b54c3cb9319617524
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[175, 115]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/minimized-from-1bdee06f11dd233ca7d34a25a0a61f6a4204a609
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[0, 107]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/minimized-from-1c545f0c74383b41881b4c129e7f50eaa35b1a2f
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[107]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/minimized-from-a59bce4bd2f22d20eb65d05020e772458932dec3
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[138, 107]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/minimized-from-c0c92a7454f2453a26cbe47dbd79c2fadbef9a23
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[138, 0, 107]
+
+############################################
+
+Processing file: /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/fuzz/artifacts/fuzz_target_1/minimized-from-fcfb52b6c1474dc86797bc4b8e625d3fcfe3e58a
+
+###
+
+Found invalid bytecode
+thread '<unnamed>' panicked at 'assertion failed: `(left == right)`
+  left: `true`,
+ right: `false`: proof must be invalid', /home/krzychu/Develop/Taiko/github/zkevm-circuits/zkevm-circuits/src/bytecode_circuit/test.rs:57:5
+
+###
+
+
+Output of `std::fmt::Debug`:
+
+[107]

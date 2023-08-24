@@ -381,6 +381,7 @@ dependencies = [
  "pretty_assertions",
  "rand",
  "revm-precompile",
+ "secp256k1-sys 0.8.1",
  "serde",
  "serde_json",
  "strum",

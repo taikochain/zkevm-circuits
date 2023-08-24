@@ -8,6 +8,7 @@ edition = "2021"
 cargo-fuzz = true
 
 [dependencies]
+evm-disassembler = { git = "https://github.com/krzysztofpaliga/evm-disassembler.git" }
 halo2_proofs = { git = "https://github.com/privacy-scaling-explorations/halo2.git", features = ["circuit-params"], tag = "v2023_04_20" }
 halo2curves = "0.4.0"
 libfuzzer-sys = "0.4"
