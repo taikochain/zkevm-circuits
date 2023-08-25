@@ -52,7 +52,7 @@ const BYTE_POW_BASE: u64 = 1 << 8;
 // anchor(bytes32,bytes32,uint64,uint64) =
 // method_signature(4B)+l1Hash(32B)+l1SignalRoot(32B)+l1Height(32B)+parentGasUsed(32B)
 const ANCHOR_CALL_DATA_LEN: usize = 132;
-
+const ANCHOR_TX_VALUES_LEN: usize = 7;
 ///
 #[derive(Clone, Debug)]
 pub struct AnchorData<F> {
@@ -239,7 +239,7 @@ impl<F: Field> SubCircuitConfig<F> for AnchorTxCircuitConfig<F> {
                 (AnchorCellType::LookupPi, 1, 2, false),
             ],
             0,
-            139,
+            ANCHOR_TX_VALUES_LEN + ANCHOR_CALL_DATA_LEN,
         );
         let mut cb: ConstraintBuilder<F, AnchorCellType> = ConstraintBuilder::new(4,  Some(cm.clone()), Some(challenges.evm_word()));
         cb.preload_tables(meta,
@@ -428,7 +428,7 @@ impl<F: Field> SubCircuit<F> for AnchorTxCircuit<F> {
     fn unusable_rows() -> usize {
         // No column queried at more than 7 distinct rotations, so returns 10 as
         // minimum unusable row.
-        10
+        139
     }
 
     fn new_from_block(block: &witness::Block<F>) -> Self {
