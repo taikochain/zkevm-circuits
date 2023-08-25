@@ -1,3 +1,4 @@
+use super::AnchorData;
 pub use super::AnchorTxCircuit;
 use crate::{
     anchor_tx_circuit_::{AnchorTxCircuitConfig, AnchorTxCircuitConfigArgs},
@@ -37,7 +38,7 @@ impl<F: Field> TestAnchorTxCircuit<F> {
 impl<F: Field> Circuit<F> for TestAnchorTxCircuit<F> {
     type Config = (AnchorTxCircuitConfig<F>, Challenges);
     type FloorPlanner = SimpleFloorPlanner;
-    type Params = ();
+    type Params = AnchorData<F>;
 
     fn without_witnesses(&self) -> Self {
         Self::default()
@@ -58,6 +59,33 @@ impl<F: Field> Circuit<F> for TestAnchorTxCircuit<F> {
                     pi_table,
                     byte_table,
                     challenges,
+                    anchor_data: AnchorData::default(),
+                },
+            )
+        };
+
+        (config, challenges)
+    }
+
+    fn configure_with_params(
+        meta: &mut ConstraintSystem<F>,
+        params: Self::Params,
+    ) -> Self::Config {
+        let tx_table = TxTable::construct(meta);
+        let pi_table = PiTable::construct(meta);
+        let byte_table = ByteTable::construct(meta);
+        let challenges = Challenges::construct(meta);
+
+        let config = {
+            let challenges = challenges.exprs(meta);
+            AnchorTxCircuitConfig::new(
+                meta,
+                AnchorTxCircuitConfigArgs {
+                    tx_table,
+                    pi_table,
+                    byte_table,
+                    challenges,
+                    anchor_data: params,
                 },
             )
         };

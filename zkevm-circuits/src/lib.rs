@@ -27,14 +27,13 @@ pub mod root_circuit;
 pub mod state_circuit;
 pub mod super_circuit;
 pub mod table;
-#[macro_use]
 pub mod taiko_pi_circuit;
 pub mod taiko_super_circuit;
 
 #[cfg(any(feature = "test", test))]
 pub mod test_util;
-pub mod circuit_tools;
 
+#[macro_use]
 pub mod anchor_tx_circuit_;
 pub mod anchor_tx_circuit;
 pub mod tx_circuit;
@@ -42,3 +41,4 @@ pub mod util;
 pub mod witness;
 
 pub use gadgets::impl_expr;
+pub mod circuit_tools;

@@ -7,15 +7,21 @@ pub use dev::TestAnchorTxCircuit;
 pub(crate) mod sign_verify;
 #[cfg(any(feature = "test", test))]
 mod test;
+use ethers_core::types::Res;
 #[cfg(any(feature = "test", test))]
 pub(crate) use test::{add_anchor_accounts, add_anchor_tx, sign_tx};
 
 use crate::{
-    evm_circuit::util::constraint_builder::{BaseConstraintBuilder, ConstrainBuilderCommon},
+    assign,
+    evm_circuit::table::Table::*,
     table::{byte_table::ByteTable, LookupTable, PiFieldTag, PiTable, TxFieldTag, TxTable},
     tx_circuit::TX_LEN,
     util::{Challenges, SubCircuit, SubCircuitConfig},
-    witness::{self, ProtocolInstance, Transaction},
+    witness::{self, ProtocolInstance, Transaction}, 
+    circuit_tools::{
+        cell_manager::{Cell, CellType, CellManager}, 
+        constraint_builder::{ConstraintBuilder, COMPRESS, TO_FIX, RLCable}, cached_region::CachedRegion
+    }, evm_circuit::{table::Table, util::rlc}, circuit,
 };
 use eth_types::{Field, ToScalar};
 use gadgets::util::{select, Expr};
@@ -47,10 +53,141 @@ const BYTE_POW_BASE: u64 = 1 << 8;
 // method_signature(4B)+l1Hash(32B)+l1SignalRoot(32B)+l1Height(32B)+parentGasUsed(32B)
 const ANCHOR_CALL_DATA_LEN: usize = 132;
 
-struct CallData {
-    start: usize,
-    end: usize,
+///
+#[derive(Clone, Debug)]
+pub struct AnchorData<F> {
+    tx_values: Vec<(TxFieldTag, F)>,
+    call_data: Vec<(PiFieldTag, Vec<u8>)>,
 }
+
+impl<F: Field> Default for AnchorData<F> {
+    fn default() -> Self {
+        AnchorData {
+            tx_values: vec![
+                (TxFieldTag::Gas, F::from(0)),
+                (TxFieldTag::GasPrice, F::from(0)),
+                (TxFieldTag::CallerAddress, F::from(0)),
+                (TxFieldTag::CalleeAddress, F::from(0)),
+                (TxFieldTag::IsCreate, F::from(0)),
+                (TxFieldTag::Value, F::from(0)),
+                (TxFieldTag::CallDataLength, F::from(0)),
+            ],
+            call_data: vec![
+                (PiFieldTag::MethodSign, vec![0; 4]),
+                (PiFieldTag::L1Hash, vec![0; 32]),
+                (PiFieldTag::L1SignalRoot, vec![0; 32]),
+                (PiFieldTag::L1Height, vec![0; 32]),
+                (PiFieldTag::ParentGasUsed, vec![0; 32]),
+            ],
+        }
+    }
+}
+
+impl<F: Field> AnchorData<F> {
+    fn new(protocol_instance: &ProtocolInstance, anchor_tx: &Transaction) -> Self {
+        AnchorData { 
+            tx_values: [
+                (TxFieldTag::Gas, F::from(protocol_instance.anchor_gas_limit)),
+                (TxFieldTag::GasPrice, F::from(ANCHOR_TX_GAS_PRICE)),
+                (TxFieldTag::CallerAddress, 
+                    GOLDEN_TOUCH_ADDRESS.to_scalar()
+                    .expect("anchor_tx.from too big")
+                ),
+                (TxFieldTag::CalleeAddress,
+                    protocol_instance
+                        .l2_contract
+                        .to_scalar()
+                        .expect("anchor_tx.to too big"),
+                ),
+                (TxFieldTag::IsCreate, F::from(ANCHOR_TX_IS_CREATE as u64)),
+                (TxFieldTag::Value, F::from(ANCHOR_TX_VALUE)),
+                (TxFieldTag::CallDataLength, F::from(ANCHOR_CALL_DATA_LEN as u64))
+            ].to_vec(), 
+            call_data: [
+                (
+                    PiFieldTag::MethodSign,
+                    anchor_tx.call_data[..4].to_vec(),
+                ),
+                (PiFieldTag::L1Hash, anchor_tx.call_data[4..36].to_vec()),
+                (
+                    PiFieldTag::L1SignalRoot,
+                    anchor_tx.call_data[36..68].to_vec(),
+                ),
+                (
+                    PiFieldTag::L1Height,
+                    anchor_tx.call_data[68..100].to_vec(),
+                ),
+                (
+                    PiFieldTag::ParentGasUsed,
+                    anchor_tx.call_data[100..132].to_vec(),
+                )
+            ].to_vec() 
+        }
+    }
+
+    fn config(
+        &self, cb: &mut ConstraintBuilder<F, AnchorCellType>
+    ) -> (Vec<FieldGadget<F>>, Vec<FieldGadget<F>>) {
+        let tx_values = self.tx_values
+            .iter()
+            .map(|(tag, value)| FieldGadget::config(cb, 1))
+            .collect::<Vec<_>>();
+        let call_data = self.call_data
+            .iter()
+            .map(|(tag, value)| FieldGadget::config(cb, value.len()))
+            .collect::<Vec<_>>();
+        (tx_values, call_data)
+    }
+
+    fn assign(
+        &self,
+        region: &mut CachedRegion<'_, '_, F>,
+        offset: usize,
+        tx_values: &[FieldGadget<F>],
+        call_data: &[FieldGadget<F>],
+    )-> Result<(), Error> {
+        self.tx_values
+            .iter()
+            .zip(tx_values.iter())
+            .for_each(|((tag, value), gadget)| {
+                gadget.assign(region, offset, &[*value]).unwrap();
+            });
+        self.call_data
+            .iter()
+            .zip(call_data.iter())
+            .for_each(|((tag, value), gadget)| {
+                let value = value.iter().map(|v| F::from(*v as u64)).collect::<Vec<_>>();
+                gadget.assign(region, offset, value.as_slice()).unwrap();
+            });
+        Ok(())
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+enum AnchorCellType {
+    Storage1,
+    Byte,
+    LookupPi,
+    Lookup(Table),
+
+}
+impl CellType for AnchorCellType {
+    fn byte_type() -> Option<Self> {
+        Some(Self::Byte)
+    }
+    fn storage_for_phase(phase: u8) -> Self {
+        match phase {
+            1 => AnchorCellType::Storage1,
+            _ => unimplemented!()
+        }
+    }
+}
+impl Default for AnchorCellType {
+    fn default() -> Self {
+        Self::Storage1
+    }
+}
+
 
 /// Config for AnchorTxCircuit
 #[derive(Clone, Debug)]
@@ -59,11 +196,17 @@ pub struct AnchorTxCircuitConfig<F: Field> {
     pi_table: PiTable,
     byte_table: ByteTable,
 
+    q_enable: Selector,
+    tx_values: Vec<FieldGadget<F>>,
+    call_data: Vec<FieldGadget<F>>,
+
     sign_verify: SignVerifyConfig<F>,
 }
 
 /// Circuit configuration arguments
 pub struct AnchorTxCircuitConfigArgs<F: Field> {
+    /// AnchorData
+    pub anchor_data: AnchorData<F>,
     /// TxTable
     pub tx_table: TxTable,
     /// PiTable
@@ -81,127 +224,99 @@ impl<F: Field> SubCircuitConfig<F> for AnchorTxCircuitConfig<F> {
     fn new(
         meta: &mut ConstraintSystem<F>,
         Self::ConfigArgs {
+            anchor_data,
             tx_table,
             pi_table,
             byte_table,
             challenges,
         }: Self::ConfigArgs,
     ) -> Self {
-
+        let cm = CellManager::new(
+            meta,
+            vec![
+                (AnchorCellType::Byte, 1, 1, false),
+                (AnchorCellType::Lookup(Tx), 1, 2, false),
+                (AnchorCellType::LookupPi, 1, 2, false),
+            ],
+            0,
+            139,
+        );
+        let mut cb: ConstraintBuilder<F, AnchorCellType> = ConstraintBuilder::new(4,  Some(cm.clone()), Some(challenges.evm_word()));
+        cb.preload_tables(meta,
+            &[
+                    (AnchorCellType::Lookup(Tx), &tx_table), 
+                    (AnchorCellType::Lookup(Bytecode), &byte_table), 
+                    (AnchorCellType::LookupPi, &pi_table)
+               ]
+           );
+        let q_enable = meta.complex_selector();
+        let (tx_values, call_data) = anchor_data.config(&mut cb);
         let sign_verify =
-            SignVerifyConfig::configure(meta, tx_table.clone(), byte_table.clone(), &challenges);
+                SignVerifyConfig::configure(meta, tx_table.clone(), byte_table.clone(), &challenges);
+        circuit!([meta, cb], {
+            tx_values
+                .iter()
+                .zip(anchor_data.tx_values.iter())
+                .for_each(|(value, (tag, _))| {
+                    require!(
+                        (1.expr(), value.acc(1.expr()), 0.expr(), tag.expr()) =>> @AnchorCellType::Lookup(Tx)
+                    )
+                });
+            call_data
+                .iter()
+                .zip(anchor_data.call_data.iter())
+                .for_each(|(value, (tag, _))| {
+                    let r = if value.len * 8 > F::CAPACITY as usize {
+                        challenges.evm_word().expr()
+                    } else {
+                        BYTE_POW_BASE.expr()
+                    };
+                    require!(
+                        (1.expr(), value.acc(r), 0.expr(), tag.expr()) =>> @AnchorCellType::LookupPi 
+                    )
+                });
+            cb.build_constraints(Some(q_enable.expr()));         
+        });
+        cb.build_lookups(
+            meta, 
+            &[cm.clone()],
+            &[
+                (AnchorCellType::Byte, AnchorCellType::Lookup(Bytecode)),
+                (AnchorCellType::Lookup(Tx), AnchorCellType::Lookup(Tx)),
+                (AnchorCellType::LookupPi, AnchorCellType::LookupPi),
+            ],
+            Some(q_enable)
+        );
 
+        meta.pinned().print_layout_states();
+        meta.pinned().print_config_states();
 
         Self {
             tx_table,
             pi_table,
             byte_table,
-
+            q_enable,
+            tx_values,
+            call_data,
             sign_verify,
         }
     }
 }
 
 impl<F: Field> AnchorTxCircuitConfig<F> {
-    fn assign_anchor_tx_values(
-        &self,
-        region: &mut Region<'_, F>,
-        _anchor_tx: &Transaction,
-        protocol_instance: &ProtocolInstance,
-        _challenges: &Challenges<Value<F>>,
-    ) -> Result<(), Error> {
-        // Gas, GasPrice, CallerAddress, CalleeAddress, IsCreate, Value, CallDataLength,
-        let mut offset = 0;
-        for (tag, value) in [
-            (
-                TxFieldTag::Gas,
-                Value::known(F::from(protocol_instance.anchor_gas_limit)),
-            ),
-            (
-                TxFieldTag::GasPrice,
-                Value::known(F::from(ANCHOR_TX_GAS_PRICE)),
-            ),
-            (
-                TxFieldTag::CallerAddress,
-                Value::known(
-                    GOLDEN_TOUCH_ADDRESS
-                        .to_scalar()
-                        .expect("anchor_tx.from too big"),
-                ),
-            ),
-            (
-                TxFieldTag::CalleeAddress,
-                Value::known(
-                    protocol_instance
-                        .l2_contract
-                        .to_scalar()
-                        .expect("anchor_tx.to too big"),
-                ),
-            ),
-            (
-                TxFieldTag::IsCreate,
-                Value::known(F::from(ANCHOR_TX_IS_CREATE as u64)),
-            ),
-            (TxFieldTag::Value, Value::known(F::from(ANCHOR_TX_VALUE))),
-            (
-                TxFieldTag::CallDataLength,
-                Value::known(F::from(ANCHOR_CALL_DATA_LEN as u64)),
-            ),
-        ] {
-
-        Ok(())
-    }
-
-    fn assign_call_data(
-        &self,
-        region: &mut Region<'_, F>,
-        anchor_tx: &Transaction,
-        call_data: &CallData,
-        challenges: &Challenges<Value<F>>,
-    ) -> Result<(), Error> {
-        let mut offset = call_data.start;
-        for (annotation, value, tag) in [
-            (
-                "method_signature",
-                &anchor_tx.call_data[..4],
-                PiFieldTag::MethodSign,
-            ),
-            ("l1_hash", &anchor_tx.call_data[4..36], PiFieldTag::L1Hash),
-            (
-                "l1_signal_root",
-                &anchor_tx.call_data[36..68],
-                PiFieldTag::L1SignalRoot,
-            ),
-            (
-                "l1_height",
-                &anchor_tx.call_data[68..100],
-                PiFieldTag::L1Height,
-            ),
-            (
-                "parent_gas_used",
-                &anchor_tx.call_data[100..132],
-                PiFieldTag::ParentGasUsed,
-            ),
-        ] {
-            let mut rlc_acc = Value::known(F::ZERO);
-
-            offset += value.len();
-        }
-        Ok(())
-    }
 
     #[allow(clippy::too_many_arguments)]
     fn assign(
         &self,
         layouter: &mut impl Layouter<F>,
+        protocol_instance: &ProtocolInstance,
         anchor_tx: &Transaction,
         txs: &[Transaction],
         max_txs: usize,
         max_calldata: usize,
-        protocol_instance: &ProtocolInstance,
-        call_data: &CallData,
         challenges: &Challenges<Value<F>>,
     ) -> Result<(), Error> {
+        let anchor_data: AnchorData<F> = AnchorData::new(protocol_instance, anchor_tx);
         layouter.assign_region(
             || "anchor transaction",
             |ref mut region| {
@@ -210,14 +325,56 @@ impl<F: Field> AnchorTxCircuitConfig<F> {
                 // gate with TxTable's column
                 self.tx_table
                     .load_with_region(region, txs, max_txs, max_calldata, challenges)?;
-                self.assign_anchor_tx_values(region, anchor_tx, protocol_instance, challenges)?;
-                self.assign_call_data(region, anchor_tx, call_data, challenges)?;
+                let mut region = CachedRegion::new(region);
+                anchor_data.assign(&mut region, 0, &self.tx_values, &self.call_data)?;
                 Ok(())
             },
         )?;
         self.sign_verify.assign(layouter, anchor_tx, challenges)
     }
+
 }
+
+///
+#[derive(Debug, Clone)]
+pub struct FieldGadget<F> {
+    field: Vec<Cell<F>>,
+    len: usize,
+}
+
+impl<F: Field> FieldGadget<F> {
+    fn config(cb: &mut ConstraintBuilder<F, AnchorCellType>, len: usize) -> Self {
+        Self {
+            field: cb.query_cells_dyn(AnchorCellType::Byte, len),
+            len
+        }
+    }
+
+    fn bytes_expr(&self) -> Vec<Expression<F>> {
+        self.field.iter().map(|f| f.expr()).collect()
+    }
+
+    fn acc(&self, r: Expression<F>) -> Expression<F> {
+        self.bytes_expr().rlc_rev(&r)
+    }
+
+    fn assign(
+        &self, 
+        region: &mut CachedRegion<'_, '_, F>,
+        offset: usize,
+        bytes: &[F],
+    ) -> Result<(), Error> {
+        assert!(bytes.len() == self.len);
+        self.field
+            .iter()
+            .zip(bytes.iter())
+            .for_each(|(cell, byte)| {
+                assign!(region, cell, offset => *byte);
+            });
+        Ok(())
+    }
+}
+
 
 /// Anchor Transaction Circuit for verifying anchor transaction
 #[derive(Clone, Default, Debug)]
@@ -291,19 +448,18 @@ impl<F: Field> SubCircuit<F> for AnchorTxCircuit<F> {
         challenges: &Challenges<Value<F>>,
         layouter: &mut impl Layouter<F>,
     ) -> Result<(), Error> {
-        let call_data = CallData {
-            start: Self::call_data_start(self.max_txs),
-            end: Self::call_data_end(self.max_txs),
-        };
+        // let call_data = CallData {
+        //     start: Self::call_data_start(self.max_txs),
+        //     end: Self::call_data_end(self.max_txs),
+        // };
         // the first transaction is the anchor transaction
         config.assign(
             layouter,
+            &self.protocol_instance,
             &self.anchor_tx,
             &self.txs,
             self.max_txs,
             self.max_calldata,
-            &self.protocol_instance,
-            &call_data,
             challenges,
         )
     }

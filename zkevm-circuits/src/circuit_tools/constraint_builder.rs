@@ -422,6 +422,7 @@ impl<F: Field, C: CellType> ConstraintBuilder<F, C> {
             let table_expr = rlc::expr(&table, challenge.expr());
             for cm in cell_managers {
                 for col in cm.get_typed_columns(*data_tag) {
+                    println!("{:?}{:?} => {:?}", col.cell_type, col.index, table_tag);
                     meta.lookup_any(format!("{:?}", data_tag), |meta| {
                         let s = selector.map_or_else(
                             || 1.expr(),
