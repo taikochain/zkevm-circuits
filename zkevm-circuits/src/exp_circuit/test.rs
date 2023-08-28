@@ -30,7 +30,7 @@ pub fn test_exp_circuit<F: Field>(k: u32, block: Block<F>) {
         block.circuits_params.max_exp_steps,
     );
     let prover = MockProver::<F>::run(k, &circuit, vec![]).unwrap();
-    prover.assert_satisfied_par()
+    prover.assert_satisfied_par();
 }
 
 fn gen_code_single(base: Word, exponent: Word) -> Bytecode {
@@ -42,7 +42,7 @@ fn gen_code_single(base: Word, exponent: Word) -> Bytecode {
     }
 }
 
-fn gen_code_multiple(args: Vec<(Word, Word)>) -> Bytecode {
+pub fn gen_code_multiple(args: Vec<(Word, Word)>) -> Bytecode {
     let mut code = Bytecode::default();
     for (base, exponent) in args.into_iter() {
         code.op_exp(base, exponent);
@@ -51,7 +51,7 @@ fn gen_code_multiple(args: Vec<(Word, Word)>) -> Bytecode {
     code
 }
 
-fn gen_data(code: Bytecode) -> CircuitInputBuilder {
+pub fn gen_data(code: Bytecode) -> CircuitInputBuilder {
     let test_ctx = TestContext::<2, 1>::simple_ctx_with_bytecode(code).unwrap();
     let block: GethData = test_ctx.into();
     let mut builder = BlockData::new_from_geth_data(block.clone()).new_circuit_input_builder();
@@ -61,14 +61,15 @@ fn gen_data(code: Bytecode) -> CircuitInputBuilder {
     builder
 }
 
-fn test_ok(base: Word, exponent: Word, k: Option<u32>) {
+#[allow(missing_docs)]
+pub fn test_ok(base: Word, exponent: Word, k: Option<u32>) {
     let code = gen_code_single(base, exponent);
     let builder = gen_data(code);
     let block = block_convert::<Fr>(&builder.block, &builder.code_db).unwrap();
     test_exp_circuit(k.unwrap_or(18), block);
 }
 
-fn test_ok_multiple(args: Vec<(Word, Word)>) {
+pub fn test_ok_multiple(args: Vec<(Word, Word)>) {
     let code = gen_code_multiple(args);
     let builder = gen_data(code);
     let block = block_convert::<Fr>(&builder.block, &builder.code_db).unwrap();
