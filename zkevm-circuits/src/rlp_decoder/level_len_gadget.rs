@@ -104,8 +104,12 @@ impl<F: Field> NestedRemainLengthGadget<F> {
         shared_advices.iter().for_each(|column| {
             cs.lookup_any("range check for u8", |meta| {
                 let u8_cell = meta.query_advice(*column, Rotation::cur());
-                let u8_range = meta.query_fixed(shared_fixes[0], Rotation::cur());
-                vec![(u8_cell, u8_range)]
+                let table_tag = meta.query_fixed(shared_fixes[0], Rotation::cur());
+                let u8_range = meta.query_fixed(shared_fixes[1], Rotation::cur());
+                vec![
+                    (RlpDecoderFixedTableTag::Range256, table_tag),
+                    (u8_cell, u8_range),
+                ]
             });
         });
 

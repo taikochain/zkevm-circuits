@@ -4,11 +4,12 @@ use crate::{
         cached_region::CachedRegion, cell_manager::CellManager,
         constraint_builder::ConstraintBuilder, gadgets::LtGadget,
     },
-    evm_circuit::table::Table,
+    rlp_decoder_tables::RlpDecoderFixedTableTag,
     util::Challenges,
 };
 use eth_types::Field;
 
+use gadgets::util::Expr;
 use halo2_proofs::{
     circuit::Value,
     plonk::{Advice, Column, ConstraintSystem, Error, Expression, Selector},
@@ -109,11 +110,6 @@ impl<F: Field> RemainLengthStackGadget<F> {
         let mut cb: ConstraintBuilder<F, RLPCellType> =
             ConstraintBuilder::new(4, Some(cm), Some(challenges.evm_word()));
 
-        cb.preload_tables(
-            cs,
-            &[(RLPCellType::LookupByte, &lookup_tables.fixed_columns)],
-        );
-
         let nested_rlp_remains: [_; MAX_NESTED_LEVEL_NUM] = (0..MAX_NESTED_LEVEL_NUM)
             .map(|_| cs.advice_column())
             .collect::<Vec<_>>()
@@ -191,12 +187,55 @@ impl<F: Field> RemainLengthStackGadget<F> {
             cb.build_constraints(Some(enable))
         });
 
-        cb.build_lookups(
-            cs,
-            &[cb.cell_manager.clone().unwrap()],
-            &[(RLPCellType::LookupByte, RLPCellType::Lookup(Table::Fixed))],
-            Some(*q_enable),
-        );
+        // make sure in byte range
+        // TODO: refactory after tool ready
+        row_bytes_cmp_prev_remain.iter().for_each(|gadget| {
+            let cells = gadget.diff_bytes();
+            cells.iter().for_each(|c| {
+                cs.lookup_any("range check for u8", |meta| {
+                    let table_tag =
+                        meta.query_fixed(lookup_tables.byte_range_table.table_tag, Rotation::cur());
+                    let u8_range =
+                        meta.query_fixed(lookup_tables.byte_range_table.value, Rotation::cur());
+                    vec![
+                        (RlpDecoderFixedTableTag::Range256.expr(), table_tag),
+                        (c.expr(), u8_range),
+                    ]
+                });
+            });
+        });
+
+        z_cmp_prev_remain.iter().for_each(|gadget| {
+            let cells = gadget.diff_bytes();
+            cells.iter().for_each(|c| {
+                cs.lookup_any("range check for u8", |meta| {
+                    let table_tag =
+                        meta.query_fixed(lookup_tables.byte_range_table.table_tag, Rotation::cur());
+                    let u8_range =
+                        meta.query_fixed(lookup_tables.byte_range_table.value, Rotation::cur());
+                    vec![
+                        (RlpDecoderFixedTableTag::Range256.expr(), table_tag),
+                        (c.expr(), u8_range),
+                    ]
+                });
+            });
+        });
+
+        remain_upper_leq_lower.iter().for_each(|gadget| {
+            let cells = gadget.diff_bytes();
+            cells.iter().for_each(|c| {
+                cs.lookup_any("range check for u8", |meta| {
+                    let table_tag =
+                        meta.query_fixed(lookup_tables.byte_range_table.table_tag, Rotation::cur());
+                    let u8_range =
+                        meta.query_fixed(lookup_tables.byte_range_table.value, Rotation::cur());
+                    vec![
+                        (RlpDecoderFixedTableTag::Range256.expr(), table_tag),
+                        (c.expr(), u8_range),
+                    ]
+                });
+            });
+        });
 
         Self {
             nested_rlp_remains,
