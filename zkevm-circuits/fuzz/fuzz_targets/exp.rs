@@ -39,12 +39,14 @@ fuzz_target!(|expInputCollection: ExpInputCollection| {
     if expInputCollection.inputs.len() == 0 {
         return;
     }
+
     let code = gen_code_multiple(expInputCollection.to_word_pairs());
     let mut builder = gen_data(code);
 
     let mut rng = rand::thread_rng();
     let introduce_error: bool = rng.gen();
     if introduce_error {
+        println!("Introducing error");
         builder.block.exp_events[0].exponentiation = U256::from(10);
         builder.block.exp_events[0].steps.push(ExpStep::from((Word::from(1), Word::from(2), Word::from(3))));
     }
