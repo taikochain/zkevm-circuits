@@ -1,11 +1,12 @@
 //! Exponentiation verification circuit.
 
-#[cfg(any(feature = "test", test, feature = "test-circuits"))]
+// #[cfg(any(feature = "test", test, feature = "test-circuits"))]
 mod dev;
 pub(crate) mod param;
-#[cfg(any(feature = "test", test))]
-mod test;
-#[cfg(any(feature = "test", test, feature = "test-circuits"))]
+// #[cfg(any(feature = "test", test))]
+#[allow(missing_docs)]
+pub mod test;
+// #[cfg(any(feature = "test", test, feature = "test-circuits"))]
 pub use dev::ExpCircuit as TestExpCircuit;
 
 use crate::{

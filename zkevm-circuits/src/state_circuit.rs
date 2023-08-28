@@ -6,12 +6,12 @@ mod multiple_precision_integer;
 mod param;
 mod random_linear_combination;
 
-#[cfg(any(feature = "test", test, feature = "test-circuits"))]
+// #[cfg(any(feature = "test", test, feature = "test-circuits"))]
 mod dev;
-#[cfg(any(feature = "test", test))]
-mod test;
+// #[cfg(any(feature = "test", test))]
+pub mod test;
 use bus_mapping::operation::Target;
-#[cfg(any(feature = "test", test, feature = "test-circuits"))]
+// #[cfg(any(feature = "test", test, feature = "test-circuits"))]
 pub use dev::StateCircuit as TestStateCircuit;
 
 use self::{
@@ -44,7 +44,7 @@ use param::*;
 use random_linear_combination::{Chip as RlcChip, Config as RlcConfig, Queries as RlcQueries};
 use std::marker::PhantomData;
 
-#[cfg(any(feature = "test", test, feature = "test-circuits"))]
+// #[cfg(any(feature = "test", test, feature = "test-circuits"))]
 use std::collections::HashMap;
 
 /// Config for StateCircuit
@@ -423,7 +423,7 @@ pub struct StateCircuit<F> {
     pub rows: Vec<Rw>,
     updates: MptUpdates,
     pub(crate) n_rows: usize,
-    #[cfg(any(feature = "test", test, feature = "test-circuits"))]
+    // #[cfg(any(feature = "test", test, feature = "test-circuits"))]
     overrides: HashMap<(dev::AdviceColumn, isize), F>,
     _marker: PhantomData<F>,
 }
@@ -437,7 +437,7 @@ impl<F: Field> StateCircuit<F> {
             rows,
             updates,
             n_rows,
-            #[cfg(any(feature = "test", test, feature = "test-circuits"))]
+            // #[cfg(any(feature = "test", test, feature = "test-circuits"))]
             overrides: HashMap::new(),
             _marker: PhantomData::default(),
         }
