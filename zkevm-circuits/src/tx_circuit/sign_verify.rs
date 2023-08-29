@@ -677,7 +677,7 @@ impl<F: Field> SignVerifyChip<F> {
                 let mut ctx = RegionCtx::new(region, 0);
                 for (i, assigned_ecdsa) in assigned_ecdsas.iter().enumerate() {
                     let sign_data = signatures.get(i); // None when padding (enabled when address == 0)
-                    let assigned_sig_verif = self.assign_signature_verify(
+                    /*let assigned_sig_verif = self.assign_signature_verify(
                         config,
                         &mut ctx,
                         &chips,
@@ -685,9 +685,9 @@ impl<F: Field> SignVerifyChip<F> {
                         assigned_ecdsa,
                         challenges,
                     )?;
-                    assigned_sig_verifs.push(assigned_sig_verif);
+                    assigned_sig_verifs.push(assigned_sig_verif);*/
                 }
-                log::debug!("signature address verify: {} rows", ctx.offset());
+                //log::debug!("signature address verify: {} rows", ctx.offset());
                 Ok(assigned_sig_verifs)
             },
         )

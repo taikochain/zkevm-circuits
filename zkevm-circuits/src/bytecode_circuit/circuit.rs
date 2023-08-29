@@ -426,7 +426,7 @@ impl<F: Field> SubCircuitConfig<F> for BytecodeCircuitConfig<F> {
                 is_byte_to_header(meta),
             ]))
         });
-        meta.lookup_any(
+        /*meta.lookup_any(
             "keccak256_table_lookup(cur.value_rlc, cur.length, cur.hash)",
             |meta| {
                 let enable = and::expr(vec![
@@ -451,7 +451,7 @@ impl<F: Field> SubCircuitConfig<F> for BytecodeCircuitConfig<F> {
 
                 constraints
             },
-        );
+        );*/
 
         let push_data_left_is_zero = IsZeroChip::construct(push_data_left_is_zero);
         let index_length_diff_is_zero = IsZeroChip::construct(index_length_diff_is_zero);

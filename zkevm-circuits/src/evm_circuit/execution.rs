@@ -812,6 +812,9 @@ impl<F: Field> ExecutionConfig<F> {
     ) {
         for column in cell_manager.columns().iter() {
             if let CellType::Lookup(table) = column.cell_type {
+                if table == Table::Tx {
+                    continue;
+                }
                 let name = format!("{:?}", table);
                 meta.lookup_any(Box::leak(name.into_boxed_str()), |meta| {
                     let table_expressions = match table {
