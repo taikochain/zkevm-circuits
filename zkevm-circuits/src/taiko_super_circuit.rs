@@ -66,10 +66,10 @@ impl<F: Field> SubCircuitConfig<F> for SuperCircuitConfig<F> {
             TaikoPiCircuitConfigArgs {
                 block_table: block_table.clone(),
                 keccak_table: keccak_table.clone(),
-                keccak_table2: keccak_table2.clone(),
+                keccak_table2,
                 byte_table: byte_table.clone(),
                 challenges: challenges.clone(),
-                block_table_blockhash: block_table_blockhash.clone(),
+                block_table_blockhash,
             },
         );
 

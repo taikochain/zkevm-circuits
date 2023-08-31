@@ -1345,7 +1345,7 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
             (U256::from(block.number.as_u64()), NUMBER_RLP_OFFSET, 32 - 8),
             (block.gas_limit.into(), GAS_LIMIT_RLP_OFFSET, 0),
             (public_data.gas_used.into(), GAS_USED_RLP_OFFSET, 0),
-            (U256::from(block.timestamp), TIMESTAMP_RLP_OFFSET, 0),
+            (block.timestamp, TIMESTAMP_RLP_OFFSET, 0),
             (block.base_fee, BASE_FEE_RLP_OFFSET, 0),
         ]
         .iter()

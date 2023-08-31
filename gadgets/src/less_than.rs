@@ -50,7 +50,7 @@ impl<F: Field, const N_BYTES: usize> LtConfig<F, N_BYTES> {
         [
             vec![String::from("lt"), String::from("u8")],
             (0..N_BYTES)
-                .map(|i| String::from(format!("diff byte #{}", i)))
+                .map(|i| format!("diff byte #{}", i))
                 .collect(),
         ]
         .concat()
