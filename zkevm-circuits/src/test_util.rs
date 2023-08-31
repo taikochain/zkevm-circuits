@@ -6,10 +6,7 @@ use crate::{
     witness::{Block, Rw},
 };
 use bus_mapping::{circuit_input_builder::CircuitsParams, mock::BlockData};
-use eth_types::geth_types::{GethData, Transaction};
-use ethers_core::types::{NameOrAddress, TransactionRequest};
-use ethers_signers::LocalWallet;
-use rand::{CryptoRng, Rng};
+use eth_types::geth_types::GethData;
 use std::cmp;
 
 use crate::util::log2_ceil;

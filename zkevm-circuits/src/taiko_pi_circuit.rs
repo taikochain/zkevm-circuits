@@ -685,8 +685,6 @@ impl<F: Field> SubCircuitConfig<F> for TaikoPiCircuitConfig<F> {
                 .collect::<Vec<_>>()
         });
 
-        let offset = TOTAL_BLOCK_TABLE_LEN + EXTRA_LEN;
-
         // Block hash checks in three parts:
         // 1. RLP checks
         // 2. RLC calculation
@@ -3015,7 +3013,7 @@ mod taiko_pi_circuit_test {
         const MAX_CALLDATA: usize = 200;
         let k = 18;
 
-        let (mut block, prover, previous_blocks, previous_blocks_rlp) = default_test_block();
+        let (mut block, _, previous_blocks, previous_blocks_rlp) = default_test_block();
         block.context.number = U256::from(0x100);
 
         let mut public_data = PublicData::new(&block);
@@ -3031,7 +3029,7 @@ mod taiko_pi_circuit_test {
         const MAX_CALLDATA: usize = 200;
         let k = 18;
 
-        let (mut block, prover, previous_blocks, previous_blocks_rlp) = default_test_block();
+        let (mut block, _, previous_blocks, previous_blocks_rlp) = default_test_block();
         block.context.number = U256::from(0x100);
         block.context.gas_limit = 0x76;
         block.protocol_instance.gas_used = 0x77;
@@ -3051,7 +3049,7 @@ mod taiko_pi_circuit_test {
         const MAX_CALLDATA: usize = 200;
         let k = 18;
 
-        let (mut block, prover, previous_blocks, previous_blocks_rlp) = default_test_block();
+        let (mut block, _, previous_blocks, previous_blocks_rlp) = default_test_block();
         block.context.number = U256::from(0x100);
         block.context.gas_limit = RLP_HDR_NOT_SHORT;
         block.protocol_instance.gas_used = RLP_HDR_NOT_SHORT as u32;
@@ -3071,7 +3069,7 @@ mod taiko_pi_circuit_test {
         const MAX_CALLDATA: usize = 200;
         let k = 18;
 
-        let (mut block, prover, previous_blocks, previous_blocks_rlp) = default_test_block();
+        let (mut block, _, previous_blocks, previous_blocks_rlp) = default_test_block();
         block.context.number = U256::from(0x100);
         block.context.gas_limit = 0xFF;
         block.protocol_instance.gas_used = 0xff;
@@ -3091,7 +3089,7 @@ mod taiko_pi_circuit_test {
         const MAX_CALLDATA: usize = 200;
         let k = 18;
 
-        let (mut block, prover, previous_blocks, previous_blocks_rlp) = default_test_block();
+        let (mut block, _, previous_blocks, previous_blocks_rlp) = default_test_block();
         block.context.number = U256::from(0x100);
         block.context.gas_limit = 0x0000919191919191;
         block.protocol_instance.gas_used = 0x92 << 2 * 8;
@@ -3111,7 +3109,7 @@ mod taiko_pi_circuit_test {
         const MAX_CALLDATA: usize = 200;
         let k = 18;
 
-        let (mut block, prover, previous_blocks, previous_blocks_rlp) = default_test_block();
+        let (mut block, _, previous_blocks, previous_blocks_rlp) = default_test_block();
 
         block.context.number = U256::from(0x100);
         block.context.gas_limit = 0x9191919191919191;
