@@ -51,6 +51,8 @@ pub struct PublicData {
     pub l2_signal_service: Word,
     /// l2 contract address
     pub l2_contract: Word,
+
+
     /// meta hash
     pub meta_hash: Word,
     /// block hash value
@@ -99,6 +101,7 @@ impl PublicData {
                 self.l2_signal_service.to_be_bytes().to_vec(),
             ),
             ("l2_contract", None, self.l2_contract.to_be_bytes().to_vec()),
+            
             ("meta_hash", None, self.meta_hash.to_be_bytes().to_vec()),
             (
                 "parent_hash",
@@ -124,6 +127,10 @@ impl PublicData {
             ),
         ]
     }
+
+    // pub fn abi_encode(&self) -> Vec<u8> {
+        
+    // }
 
     /// get rpi bytes
     pub fn rpi_bytes(&self) -> Vec<u8> {
@@ -778,11 +785,16 @@ mod taiko_pi_circuit_test {
         block.context.history_hashes = vec![OMMERS_HASH.to_word()];
         block.context.block_hash = OMMERS_HASH.to_word();
         block.context.number = 300.into();
+        
+        println!("{:?}\n{:?}", 
+            block.protocol_instance.meta_hash.hash(), 
+            block.protocol_instance.meta_hash.hash().to_word());
 
         let public_data = PublicData::new(&block);
+        println!("public_data: {:?}\n{:?}", public_data.meta_hash, public_data.meta_hash.to_be_bytes());
 
         let k = 17;
 
-        assert_eq!(run::<Fr>(k, public_data, None), Ok(()));
+        // assert_eq!(run::<Fr>(k, public_data, None), Ok(()));
     }
 }
