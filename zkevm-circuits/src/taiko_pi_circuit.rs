@@ -20,7 +20,7 @@ use halo2_proofs::{
     },
     poly::Rotation,
 };
-use std::marker::PhantomData;
+use std::{marker::PhantomData};
 use ethers_core::{types::U256, utils::rlp::{RlpStream, Encodable}};
 use itertools::Itertools;
 
@@ -51,16 +51,15 @@ const RPI_RLC_ACC_CELL_IDX: usize = 1;
 const BYTE_POW_BASE: u64 = 1 << 8;
 const RPI_BYTES_LEN: usize = 32 * 10;
 // 10 fields * 32B + lo(16B) + hi(16B) + keccak(32B)
-const USED_ROWS: usize = RPI_BYTES_LEN + 64; // TODO(George)
+const USED_ROWS: usize = RPI_BYTES_LEN + 64;
 
 /// Fixed by the spec
-// pub(super) const BLOCK_LEN: usize = 7 + 256;
-const EXTRA_LEN: usize = 2; // TODO(George) is this needed?
+const EXTRA_LEN: usize = 2;
 const ZERO_BYTE_GAS_COST: u64 = 4;
 const NONZERO_BYTE_GAS_COST: u64 = 16;
 
 // The total number of previous blocks for which to check the hash chain
-const PREVIOUS_BLOCKS_NUM: usize = 1; // TODO(George) 256;
+const PREVIOUS_BLOCKS_NUM: usize = 256;
 // This is the number of entries each block occupies in the block_table, which
 // is equal to the number of header fields per block (coinbase, timestamp,
 // number, difficulty, gas_limit, base_fee, blockhash, beneficiary, state_root,
@@ -69,17 +68,15 @@ const BLOCK_LEN_IN_TABLE: usize = 15;
 // previous hashes in rlc, lo and hi
 // + zero
 const BLOCK_TABLE_MISC_LEN: usize =
-    // PREVIOUS_BLOCKS_NUM * 3 + 1; // TODO(George) this is the correctone
-    256 * 3 + 1;
+    PREVIOUS_BLOCKS_NUM * 3 + 1;
 // Total number of entries in the block table:
 // + (block fields num) * (total number of blocks)
 // + misc entries
 const TOTAL_BLOCK_TABLE_LEN: usize =
-    // (BLOCK_LEN_IN_TABLE * (PREVIOUS_BLOCKS_NUM + 1)) + BLOCK_TABLE_MISC_LEN; // TODO(George) this is the correctone
-    (BLOCK_LEN_IN_TABLE * (256 + 1)) + BLOCK_TABLE_MISC_LEN;
+    (BLOCK_LEN_IN_TABLE * (PREVIOUS_BLOCKS_NUM + 1)) + BLOCK_TABLE_MISC_LEN;
 
-const OLDEST_BLOCK_NUM: usize = 0; // TODO(George) = 0;
-const CURRENT_BLOCK_NUM: usize = PREVIOUS_BLOCKS_NUM; // TODO(George) = 256;
+const OLDEST_BLOCK_NUM: usize = 0;
+const CURRENT_BLOCK_NUM: usize = PREVIOUS_BLOCKS_NUM;
 
 const WORD_SIZE: usize = 32;
 const U64_SIZE: usize = 8;
@@ -314,7 +311,7 @@ impl<F: Field> PublicData<F> {
     /// create PublicData from block and taiko
     pub fn new(block: &witness::Block<F>) -> Self {
         assert!(block.context.number >= U256::from(0x100));
-        let (blockhash_blk_hdr_rlp, blockhash_rlp_hash_hi, blockhash_rlp_hash_lo, block_hash) =
+        let (blockhash_blk_hdr_rlp, blockhash_rlp_hash_hi, blockhash_rlp_hash_lo, _) =
             Self::get_block_header_rlp_from_block(block);
 
         // Only initializing `previous_blocks` and `previous_blocks_rlp` here
@@ -335,8 +332,8 @@ impl<F: Field> PublicData<F> {
             l2_signal_service: block.protocol_instance.l2_signal_service.to_word(),
             l2_contract: block.protocol_instance.l2_contract.to_word(),
             meta_hash: block.protocol_instance.meta_hash.hash().to_word(),
-            block_hash: block.protocol_instance.block_hash,//.to_word(),
-            parent_hash: block.protocol_instance.parent_hash,//.to_word(),
+            block_hash: block.protocol_instance.block_hash,
+            parent_hash: block.protocol_instance.parent_hash,
             signal_root: block.protocol_instance.signal_root.to_word(),
             graffiti: block.protocol_instance.graffiti.to_word(),
             prover: block.protocol_instance.prover,
@@ -349,11 +346,9 @@ impl<F: Field> PublicData<F> {
             field10,
             block_context: block.context.clone(),
             chain_id: block.context.chain_id,
-            // parent_hash: block.eth_block.parent_hash,
             beneficiary: block.eth_block.author.unwrap_or_else(H160::zero),
             transactions_root: block.eth_block.transactions_root,
             receipts_root: block.eth_block.receipts_root,
-            // gas_used: block.eth_block.gas_used,
             mix_hash: block.eth_block.mix_hash.unwrap_or_else(H256::zero),
             withdrawals_root: block.eth_block.withdrawals_root.unwrap_or_else(H256::zero),
             previous_blocks,
@@ -368,7 +363,6 @@ impl<F: Field> PublicData<F> {
 
        /// Returns struct with values for the block table
        pub fn get_block_table_values(&self) -> BlockValues {
-        const PREVIOUS_BLOCKS_NUM:usize = 256; // TODO(George): remove shadow
         let history_hashes = [
             vec![U256::zero(); PREVIOUS_BLOCKS_NUM - self.history_hashes.len()],
             self.history_hashes.to_vec(),]
@@ -415,7 +409,6 @@ impl<F: Field> PublicData<F> {
             .append(&vec![0u8; LOGS_BLOOM_SIZE]) // logs_bloom is all zeros
             .append(&block.context.difficulty)
             .append(&block.context.number.low_u64())
-            // .append(&block.context.gas_limit)
             .append(&U256::from(block.context.gas_limit))
             .append(&U256::from(block.protocol_instance.gas_used))
             .append(&block.context.timestamp);
@@ -480,7 +473,7 @@ pub struct TaikoPiCircuitConfig<F: Field> {
     pi: Column<Instance>, // keccak_hi, keccak_lo
 
     q_keccak: Selector,
-    keccak_table: KeccakTable, // TODO(George): merge Keccak Tables
+    keccak_table: KeccakTable,
     keccak_table2: KeccakTable2,
 
     // External tables
@@ -501,13 +494,13 @@ pub struct TaikoPiCircuitConfigArgs<F: Field> {
     /// BlockTable
     pub block_table: BlockTable,
     /// BlockTable for blockhash
-    pub block_table_blockhash: BlockTable, // TODO(George): merge the block tables
+    pub block_table_blockhash: BlockTable, // TODO: merge the block tables
     /// ByteTable
     pub byte_table: ByteTable,
     /// Challenges
     pub challenges: Challenges<Expression<F>>,
     /// KeccakTable
-    pub keccak_table: KeccakTable, // TODO(George): merge the keccak tables
+    pub keccak_table: KeccakTable, // TODO: merge the keccak tables
     /// KeccakTable
     pub keccak_table2: KeccakTable2
 }
@@ -656,7 +649,7 @@ impl<F: Field> SubCircuitConfig<F> for TaikoPiCircuitConfig<F> {
                 .collect::<Vec<_>>()
         });
 
-        // TODO(GEORGE): do we need this, we  already check block hash in another lookup
+        // TODO: do we need this, we  already check block hash in another lookup
         // in block table
         /*
         meta.lookup_any("in block table", |meta| {
@@ -1109,13 +1102,11 @@ impl<F: Field> SubCircuitConfig<F> for TaikoPiCircuitConfig<F> {
         // Check all parent_hash fields against previous_hashes in block table
         meta.lookup_any("Block header: Check parent hashes hi", |meta| {
             let tag = meta.query_fixed(block_table_tag_blockhash, Rotation::cur());
-            let index = meta.query_fixed(block_table_index_blockhash, Rotation::cur()) - 1.expr();
+            let index = meta.query_fixed(block_table_index_blockhash, Rotation::cur())- 1.expr();
             let q_hi = meta.query_fixed(q_hi, Rotation::cur());
             let q_lo_next = meta.query_fixed(q_lo, Rotation::next());
 
             let q_sel = and::expr([
-                // meta.query_fixed(q_reconstruct, Rotation::cur()),
-                // not::expr(meta.query_fixed(q_reconstruct, Rotation::next())),
                 q_hi,
                 q_lo_next,
                 meta.query_selector(q_parent_hash),
@@ -1138,7 +1129,7 @@ impl<F: Field> SubCircuitConfig<F> for TaikoPiCircuitConfig<F> {
         });
         meta.lookup_any("Block header: Check parent hashes lo", |meta| {
             let tag = meta.query_fixed(block_table_tag_blockhash, Rotation::cur());
-            let index = meta.query_fixed(block_table_index_blockhash, Rotation::cur()) - 1.expr();
+            let index = meta.query_fixed(block_table_index_blockhash, Rotation::cur())- 1.expr();
             let q_lo_cur = meta.query_fixed(q_lo, Rotation::cur());
             let q_lo_next = meta.query_fixed(q_lo, Rotation::next());
 
@@ -1153,10 +1144,10 @@ impl<F: Field> SubCircuitConfig<F> for TaikoPiCircuitConfig<F> {
                     q_sel.expr() * tag,
                     meta.query_advice(block_table_blockhash.tag, Rotation::cur()),
                 ),
-                // (
-                //     q_sel.expr() * index,
-                //     meta.query_advice(block_table_blockhash.index, Rotation::cur()),
-                // ),
+                (
+                    q_sel.expr() * index,
+                    meta.query_advice(block_table_blockhash.index, Rotation::cur()),
+                ),
                 (
                     q_sel.expr() * meta.query_advice(blk_hdr_reconstruct_value, Rotation::cur()),
                     meta.query_advice(block_table_blockhash.value, Rotation::cur()),
@@ -1289,7 +1280,6 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
         // RLP encode the block header data
         let mut stream = RlpStream::new();
         stream.begin_unbounded_list();
-        // println!("public data = {:?}", public_data);
         stream
             .append(&public_data.parent_hash)
             .append(&*OMMERS_HASH)
@@ -1331,7 +1321,6 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
             Value::known(F::ZERO),
             |mut rlc_acc, byte| {
                 rlc_acc = rlc_acc * randomness + byte;
-                // println!("rlc_acc = {:?}\nrandomness = {:?}\nbyte = {:?}", rlc_acc, randomness, byte);
                 blk_hdr_rlc_acc.push(rlc_acc);
                 rlc_acc
             },
@@ -1382,11 +1371,6 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
                 vec![blk_hdr_rlc_acc[*offset - 1]; num_leading_zeros],
             );
         }
-
-        // println!("assign: bytes = {:x?}", bytes);
-        // println!("assign: blk_hdr_rlc_acc = {:?}", blk_hdr_rlc_acc);
-        // println!("assign: blk_hdr_do_rlc_acc = {:?}", blk_hdr_do_rlc_acc);
-        // println!("assign: randomness = {:?}", randomness);
 
         (
             bytes,
@@ -1454,6 +1438,7 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
                 )
                 .unwrap();
 
+
             // We need to push `PreviousHashLo` tag up one row since `PreviousHashHi`
             // uses the current row
             region
@@ -1464,6 +1449,16 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
                     || Value::known(F::from(BlockContextFieldTag::PreviousHashLo as u64)),
                 )
                 .unwrap();
+
+            region
+            .assign_fixed(
+                || "block_table_index_blockhash",
+                self.blockhash_cols.block_table_index_blockhash,
+                block_offset + BLOCKHASH_TOTAL_ROWS - 3,
+                || Value::known(F::from(block_number as u64)),
+            )
+            .unwrap();
+
             if block_number != CURRENT_BLOCK_NUM {
                 self.blockhash_cols
                     .q_lookup_blockhash
@@ -1479,11 +1474,6 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
                 blk_hdr_hash_hi,
                 blk_hdr_hash_lo,
             ) = Self::get_block_header_rlp_from_public_data(public_data, challenges.keccak_input());
-            println!("blk_hdr_blockhash hi {:?}", blk_hdr_hash_hi);
-            println!("blk_hdr_blockhash lo {:?}", blk_hdr_hash_lo);
-            println!("blk_hdr_rlc_acc = {:?}", blk_hdr_rlc_acc);
-            // println!("blk_hdr_do_rlc_acc = {:?}", blk_hdr_do_rlc_acc);
-            // println!("leading_zeros = {:?}", leading_zeros);
 
             // Construct all the constant values of the block header.
             // `c()` is for constant values, `v()` is for variable values.
@@ -1525,7 +1515,6 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
             ]
             .concat();
 
-            println!("block_header_rlp_byte = {:x?}", block_header_rlp_byte);
             for (offset, rlp_byte) in block_header_rlp_byte.iter().enumerate() {
                 let absolute_offset = block_offset + offset;
                 region
@@ -1602,24 +1591,6 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
             .iter()
             .enumerate()
             {
-                // reconstructed_values.push(
-                //     value
-                //         .clone()
-                //         .scan(Value::known(F::ZERO), |acc, &x| {
-                //             *acc = if index <= 1 {
-                //                 let mut acc_shifted = *acc;
-                //                 for _ in 0..8 {
-                //                     acc_shifted = acc_shifted * Value::known(F::from(2));
-                //                 }
-                //                 acc_shifted
-                //             } else {
-                //                 *acc * Value::known(randomness)
-                //             } + Value::known(F::from(x as u64));
-                //             Some(*acc)
-                //         })
-                //         .collect::<Vec<Value<F>>>(),
-                // );
-
                 reconstructed_values.push(
                     value
                         .clone()
@@ -1725,7 +1696,6 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
                             || *val,
                         )
                         .unwrap();
-                    println!("blk_hdr_reconstruct_value[name={}, offset={}] = {:?}", name, absolute_offset, val);
 
                     if *is_reconstruct && !(is_parent_hash && block_number == OLDEST_BLOCK_NUM) {
                         region
@@ -1752,7 +1722,6 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
                         let gas_limit = &U256::from(public_data.block_context.gas_limit);
                         let gas_used = &U256::from(public_data.gas_used);
 
-                        // println!("public_data = {:?}", public_data);
                         match *base_offset {
                             GAS_LIMIT_RLP_OFFSET => {
                                 (field_size, field_lead_zeros_num) = (
@@ -1798,7 +1767,7 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
                                 || Value::known(length_calc),
                             )
                             .unwrap();
-                        // println!("length[{}] = {:?}", absolute_offset, length_calc);
+
                         region
                             .assign_advice(
                                 || "inverse length of ".to_string() + name,
@@ -1809,10 +1778,8 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
                             .unwrap();
 
                         let selector = if *base_offset == NUMBER_RLP_OFFSET {
-                            // println!("q_number[{}] = 1", absolute_offset);
                             self.blockhash_cols.q_number
                         } else {
-                            // println!("q_var_field_256[{}] = 1", absolute_offset);
                             self.blockhash_cols.q_var_field_256
                         };
                         region
@@ -1893,24 +1860,15 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
                         || Value::known(F::from(*tag as u64)),
                     )
                     .unwrap();
-                println!("Column: block_table_tag_blockhash[{}] = {:?}", absolute_offset, tag);
 
-                let idx2 = if (block_number == CURRENT_BLOCK_NUM) && (*tag == BlockContextFieldTag::PreviousHashLo || *tag == BlockContextFieldTag::PreviousHashHi) {
-                    0 // TODO(George)
-                } else {
-                    block_number
-                };
                 region
                     .assign_fixed(
                         || "block_table_index_blockhash",
                         self.blockhash_cols.block_table_index_blockhash,
                         absolute_offset,
                         || Value::known(F::from(block_number as u64)),
-                        // || Value::known(F::from((idx2) as u64)),
                     )
                     .unwrap();
-                // println!("Column: block_table_index_blockhash[{}] = {:?}", absolute_offset, idx2);
-                println!("block_table_index_blockhash[{}] = {:?}", absolute_offset, block_number);
             }
 
             // Determines if it is a short RLP value
@@ -1947,7 +1905,6 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
 
         }
 
-    // TODO(George): migrate this to block_table.rs
     #[allow(clippy::type_complexity)]
     fn assign_block_table(
         &self,
@@ -1967,10 +1924,10 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
         let base_offset = if block_number == CURRENT_BLOCK_NUM {
             0
         } else {
-            BLOCK_LEN_IN_TABLE * (block_number + 1) + BLOCK_TABLE_MISC_LEN // 256 * 3 + 1
+            BLOCK_LEN_IN_TABLE * (block_number + 1) + BLOCK_TABLE_MISC_LEN
         };
 
-        let mut block_data: Vec<(&str, BlockContextFieldTag, usize, Value<F>, bool)> = vec![
+        let mut block_data: Vec<(&str, BlockContextFieldTag, usize, Value<F>)> = vec![
             (
                 "coinbase",
                 BlockContextFieldTag::Coinbase,
@@ -1979,14 +1936,12 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
                     block_values.coinbase.to_scalar().unwrap()
                 )
                 ,
-                false,
             ),
             (
                 "timestamp",
                 BlockContextFieldTag::Timestamp,
                 block_number,
                 Value::known(F::from(block_values.timestamp)),
-                false,
             ),
             (
                 "number",
@@ -2003,14 +1958,12 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
                             .unwrap(),
                         randomness,)
                     ),
-                false,
             ),
             (
                 "difficulty",
                 BlockContextFieldTag::Difficulty,
                 block_number,
                 randomness.map(|randomness| rlc(block_values.difficulty.to_le_bytes(), randomness)),
-                false,
             ),
             (
                 "gas_limit",
@@ -2020,16 +1973,14 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
                     F::from(block_values.gas_limit)
                 )
                 ,
-                false,
             ),
             (
                 "base_fee",
                 BlockContextFieldTag::BaseFee,
                 block_number,
                 randomness.map(|randomness| rlc(block_values.base_fee.to_le_bytes(), randomness)),
-                false,
             ),
-            // TODO(George)
+            // TODO
             /*
             (
                 "blockhash",
@@ -2040,7 +1991,6 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
                 .collect::<Vec<u8>>()
                 .try_into()
                 .unwrap(), randomness)),
-                false,
             ),
              */
             (
@@ -2051,7 +2001,6 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
                     F::from(block_values.chain_id)
                 )
                 ,
-                false,
             ),
             (
                 "beneficiary",
@@ -2066,7 +2015,6 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
                             .try_into()
                             .unwrap(),
                     randomness)),
-                false,
             ),
             (
                 "state_root",
@@ -2083,7 +2031,6 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
                             .unwrap(),
                         randomness)
                     ),
-                false,
             ),
             (
                 "transactions_root",
@@ -2100,7 +2047,6 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
                             .unwrap(),
                         randomness,)
                     ),
-                false,
             ),
             (
                 "receipts_root",
@@ -2117,7 +2063,6 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
                             .unwrap(),
                         randomness,)
                     ),
-                false,
             ),
             (
                 "gas_used",
@@ -2126,7 +2071,6 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
                 Value::known(
                     F::from(pb.gas_used as u64),
                 ),
-                false,
             ),
             (
                 "mix_hash",
@@ -2143,7 +2087,6 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
                             .unwrap(),
                         randomness,)
                     ),
-                false,
             ),
             (
                 "withdrawals_root",
@@ -2160,11 +2103,8 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
                             .unwrap(),
                         randomness,)
                     ),
-                false,
             ),
         ];
-
-        // println!("history_hashes = {:x?}", block_values.history_hashes);
 
         // The following need to be added only once in block table
         if block_number == CURRENT_BLOCK_NUM {
@@ -2179,7 +2119,6 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
                             BlockContextFieldTag::PreviousHash,
                             i,
                             randomness.map(|randomness| rlc(h.to_le_bytes(), randomness),),
-                            false,
                         )
                     })
                     .collect_vec()
@@ -2203,7 +2142,6 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
                                         acc * F::from(BYTE_POW_BASE) + F::from(*byte as u64)
                                     }),
                             ),
-                            false,
                         )
                     })
                     .collect_vec()
@@ -2227,7 +2165,6 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
                                         acc * F::from(BYTE_POW_BASE) + F::from(*byte as u64)
                                     }),
                             ),
-                            false,
                         )
                     })
                     .collect_vec()
@@ -2242,30 +2179,13 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
                         F::ZERO
                     )
                     ,
-                    false,
                 ),
             ]);
         }
 
-        // let mut cells = vec![];
-        // Continue computing RLC from where we left off
-        // let mut rlc_acc = prev_rlc_acc;
-
-        println!("BLOCK TABLE");
-        // let mut cell;
         let mut chain_id_cell = vec![];
-        for (offset, (name, tag, idx, val, not_in_table)) in block_data.into_iter().enumerate() {
+        for (offset, (name, tag, idx, val)) in block_data.into_iter().enumerate() {
             let absolute_offset = base_offset + offset;
-            // if absolute_offset < TOTAL_BLOCK_TABLE_LEN - 1 {
-            //     self.q_not_end.enable(region, absolute_offset)?;
-            // }
-            // let val_cell = region.assign_advice(|| name, self.raw_public_inputs, absolute_offset, || Value::known(val))?;
-            // rlc_acc = rlc_acc * randomness + val;
-            // region.assign_advice(|| name, self.rpi_rlc_acc, absolute_offset, || rlc_acc)?;
-            // raw_pi_vals[absolute_offset] = val;
-            if not_in_table {
-                // cells.push(val_cell);
-            } else {
                 self.q_block_table.enable(region, absolute_offset)?;
                 region.assign_advice(
                     || name,
@@ -2280,31 +2200,12 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
                     || Value::known(F::from(idx as u64)),
                 )?;
 
-                println!("block_number = {}", block_number);
-                println!("block_table: block table name [{}] = {}", absolute_offset, name);
-                println!("block_table: block table tag  [{}] = {:?}", absolute_offset, tag);
-                println!("block_table: block table index[{}] = {}", absolute_offset, idx);
-                println!("block_table: block table value[{}] = {:?}", absolute_offset, val);
-
                 let cell = region.assign_advice(|| name, self.block_table_blockhash.value, absolute_offset, || val)?;
                 if name == "chain_id" {
                     chain_id_cell.push(cell);
                 }
-            }
         }
 
-        // let txs_hash_hi;
-        // let txs_hash_lo;
-
-        // if cells.is_empty() {
-        //     txs_hash_hi = None;
-        //     txs_hash_lo = None;
-        // } else {
-        //     txs_hash_hi = Some(cells[1].clone());
-        //     txs_hash_lo = Some(cells[2].clone());
-        // };
-
-        // Ok((txs_hash_hi, txs_hash_lo, rlc_acc))
         Ok(chain_id_cell.pop().unwrap())
     }
 
@@ -2321,6 +2222,37 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
         let pi = layouter.assign_region(
             || "region 0",
             |ref mut region| {
+                // avoid the humongous amount of rubbish halo2 errors produced when circuit is failing
+                for i in 0..BLOCKHASH_TOTAL_ROWS*(PREVIOUS_BLOCKS_NUM+1) {
+                    region.assign_advice(|| "0", self.blockhash_cols.blk_hdr_reconstruct_value, i, || Value::known(F::ZERO)).unwrap();
+                    region.assign_advice(|| "0", self.blockhash_cols.blk_hdr_is_leading_zero, i, || Value::known(F::ZERO)).unwrap();
+                    region.assign_advice(|| "0", self.blockhash_cols.blk_hdr_rlp_inv, i, || Value::known(F::ZERO)).unwrap();
+                    region.assign_fixed( || "0", self.blockhash_cols.blk_hdr_rlp_const, i, || Value::known(F::ZERO)).unwrap();
+                    region.assign_advice(|| "0", self.blockhash_cols.blk_hdr_rlp_len_calc, i, || Value::known(F::ZERO)).unwrap();
+                    region.assign_advice(|| "0", self.blockhash_cols.blk_hdr_rlp_len_calc_inv, i, || Value::known(F::ZERO)).unwrap();
+                    region.assign_advice(|| "0", self.blockhash_cols.blk_hdr_reconstruct_value, i, || Value::known(F::ZERO)).unwrap();
+                    region.assign_advice(|| "0", self.blockhash_cols.blk_hdr_reconstruct_hi_lo, i, || Value::known(F::ZERO)).unwrap();
+                    region.assign_fixed( || "0", self.blockhash_cols.q_hi, i, || Value::known(F::ZERO)).unwrap();
+                    region.assign_fixed( || "0", self.blockhash_cols.q_lo, i, || Value::known(F::ZERO)).unwrap();
+                    region.assign_fixed( || "0", self.blockhash_cols.block_table_tag_blockhash, i, || Value::known(F::ZERO)).unwrap();
+                    region.assign_fixed( || "0", self.blockhash_cols.block_table_index_blockhash, i, || Value::known(F::ZERO)).unwrap();
+                    region.assign_fixed( || "0", self.blockhash_cols.q_reconstruct, i, || Value::known(F::ZERO)).unwrap();
+                    region.assign_fixed( || "0", self.blockhash_cols.q_number, i, || Value::known(F::ZERO)).unwrap();
+                    region.assign_fixed( || "0", self.blockhash_cols.q_var_field_256, i, || Value::known(F::ZERO)).unwrap();
+                    region.assign_advice(|| "0", self.blockhash_cols.blk_hdr_rlc_acc, i, || Value::known(F::ZERO)).unwrap();
+                    region.assign_advice(|| "0", self.blockhash_cols.blk_hdr_do_rlc_acc, i, || Value::known(F::ZERO)).unwrap();
+                    region.assign_advice(|| "0", self.blockhash_cols.blk_hdr_blockhash, i, || Value::known(F::ZERO)).unwrap();
+                    region.assign_advice(|| "0", self.block_index, i, || Value::known(F::ZERO)).unwrap();
+                    region.assign_advice(|| "0", self.rpi_field_bytes, i, || Value::known(F::ZERO)).unwrap();
+                    region.assign_advice(|| "0", self.rpi_field_bytes_acc, i, || Value::known(F::ZERO)).unwrap();
+                    region.assign_advice(|| "0", self.rpi_rlc_acc, i, || Value::known(F::ZERO)).unwrap();
+                    region.assign_advice(|| "0", self.block_index, i, || Value::known(F::ZERO)).unwrap();
+                    region.assign_advice(|| "0", self.rpi_field_bytes, i, || Value::known(F::ZERO)).unwrap();
+                    region.assign_advice(|| "0", self.rpi_field_bytes_acc, i, || Value::known(F::ZERO)).unwrap();
+                    region.assign_advice(|| "0", self.rpi_rlc_acc, i, || Value::known(F::ZERO)).unwrap();
+                    region.assign_fixed( || "0", self.is_field_rlc, i, || Value::known(F::ZERO)).unwrap();
+                }
+
                 // Annotate columns
                 self.block_table.annotate_columns_in_region(region);
                 self.block_table_blockhash.annotate_columns_in_region(region);
@@ -2341,7 +2273,6 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
                 region.name_column(|| "fixed_u8", self.fixed_u8);
 
                 // Assign current block
-                println!("assigning block #{} (CURRENT_BLOCK_NUM)", CURRENT_BLOCK_NUM);
                 self.assign_block_hash_calc(
                     region,
                     public_data,
@@ -2361,7 +2292,6 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
                     .iter()
                     .enumerate()
                 {
-                    println!("assigning block #{}", block_number);
                     let prev_public_data =
                         PublicData::new(prev_block);
                     self.assign_block_hash_calc(
@@ -2390,7 +2320,7 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
                         &field_bytes,
                         &mut rpi_rlc_acc,
                         challenges,
-                        false, // TODO(George): keccak_hi_lo option
+                        false,
                         block_number,
                     )?;
                     rpi_rlc_acc_cell = Some(cells[RPI_RLC_ACC_CELL_IDX].clone());
@@ -2508,7 +2438,6 @@ impl<F: Field> TaikoPiCircuit<F> {
             .append(&vec![0u8; LOGS_BLOOM_SIZE]) // logs_bloom is all zeros
             .append(&block.context.difficulty)
             .append(&block.context.number.low_u64())
-            // .append(&block.context.gas_limit)
             .append(&U256::from(block.context.gas_limit))
             .append(&U256::from(block.protocol_instance.gas_used))
             .append(&block.context.timestamp);
@@ -2523,7 +2452,6 @@ impl<F: Field> TaikoPiCircuit<F> {
         let out: bytes::Bytes = stream.out().into();
         let rlp_bytes: Bytes = out.into();
         let hash = keccak256(&rlp_bytes);
-        // let (hi, lo) = Self::split_hash(hash);
         let (hi, lo) = Self::split_hash(hash);
         let hash_res = H256::from(hash);
         (rlp_bytes, hi, lo, hash_res)
@@ -2542,21 +2470,6 @@ impl<F: Field> SubCircuit<F> for TaikoPiCircuit<F> {
     fn min_num_rows_block(_block: &witness::Block<F>) -> (usize, usize) {
         (USED_ROWS, USED_ROWS)
     }
-
-    /// TODO(George)
-    // fn min_num_rows_block(block: &witness::Block<F>) -> (usize, usize) {
-    //     let row_num = |tx_num, calldata_len| {
-    //         TOTAL_BLOCK_TABLE_LEN + EXTRA_LEN + 3 * (TX_LEN * tx_num + 1) + calldata_len
-    //     };
-    //     let calldata_len = block.txs.iter().map(|tx| tx.call_data.len()).sum();
-    //     (
-    //         row_num(block.txs.len(), calldata_len),
-    //         row_num(
-    //             block.circuits_params.max_txs,
-    //             block.circuits_params.max_calldata,
-    //         ),
-    //     )
-    // }
 
     fn new_from_block(block: &witness::Block<F>) -> Self {
         TaikoPiCircuit::new(PublicData::new(block), None)
@@ -2637,7 +2550,7 @@ impl<F: Field> Circuit<F> for TaikoPiTestCircuit<F> {
     fn configure(meta: &mut ConstraintSystem<F>) -> Self::Config {
         let block_table = BlockTable::construct(meta);
         let block_table_blockhash = BlockTable::construct(meta);
-        let keccak_table = KeccakTable::construct(meta); // TODO(George): merge keccak tables
+        let keccak_table = KeccakTable::construct(meta);
         let keccak_table2 = KeccakTable2::construct(meta);
         let byte_table = ByteTable::construct(meta);
         let challenges = Challenges::construct(meta);
@@ -2676,11 +2589,9 @@ impl<F: Field> Circuit<F> for TaikoPiTestCircuit<F> {
             .dev_load(&mut layouter, vec![&public_data.rpi_bytes()], &challenges)?;
         config.byte_table.load(&mut layouter)?;
 
-        // println!("public_data.blockhash_blk_hdr_rlp = {:x?}", public_data.blockhash_blk_hdr_rlp);
         let pr_bl:Vec<Vec<u8>> = public_data.previous_blocks_rlp.iter().map(|a| a.to_vec()).collect();
         let cur_bl = public_data.blockhash_blk_hdr_rlp.to_vec();
         let all = pr_bl.iter().chain(vec![&cur_bl]);
-        println!("all block rlp = {:?}", all);
         config.keccak_table2.dev_load(
             &mut layouter,
             all,
@@ -2742,36 +2653,33 @@ mod taiko_pi_circuit_test {
         Ok(())
     }
 
-    fn mock_public_data<F: Field>() -> PublicData<F> {
-        let mut public_data = PublicData::default();
-        public_data.meta_hash = OMMERS_HASH.to_word();
-        public_data.block_hash = *OMMERS_HASH;
-        public_data.block_context.block_hash = OMMERS_HASH.to_word();
-        public_data.block_context.history_hashes = vec![Default::default(); 256];
-        public_data.block_context.number = 300.into();
-        public_data
-    }
-
     #[test]
     fn test_default_pi() {
-        let public_data = mock_public_data();
+        let (block, _,previous_blocks, previous_blocks_rlp) = default_test_block();
+        let mut public_data = PublicData::new(&block);
+        public_data.previous_blocks = previous_blocks;
+        public_data.previous_blocks_rlp = previous_blocks_rlp;
 
-        let k = 17;
+        let k = 18;
         assert_eq!(run::<Fr>(k, public_data, None, None), Ok(()));
     }
 
     #[test]
     fn test_fail_pi_hash() {
-        let public_data = mock_public_data();
+        let (block, _,previous_blocks, previous_blocks_rlp) = default_test_block();
+        let mut public_data = PublicData::new(&block);
+        public_data.previous_blocks = previous_blocks;
+        public_data.previous_blocks_rlp = previous_blocks_rlp;
 
-        let k = 17;
+        let k = 18;
         match run::<Fr>(k, public_data, Some(vec![vec![Fr::zero(), Fr::one()]]), None) {
             Ok(_) => unreachable!("this case must fail"),
             Err(errs) => {
-                assert_eq!(errs.len(), 4);
+                assert_eq!(errs.len(), 2810);
                 for err in errs {
                     match err {
                         VerifyFailure::Permutation { .. } => return,
+                        VerifyFailure::CellNotAssigned { .. } => return,
                         _ => unreachable!("unexpected error"),
                     }
                 }
@@ -2781,7 +2689,11 @@ mod taiko_pi_circuit_test {
 
     #[test]
     fn test_fail_pi_prover() {
-        let mut public_data = mock_public_data();
+        let (block, _,previous_blocks, previous_blocks_rlp) = default_test_block();
+        let mut public_data = PublicData::new(&block);
+        public_data.previous_blocks = previous_blocks;
+        public_data.previous_blocks_rlp = previous_blocks_rlp;
+
         let address_bytes = [
             0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
         ];
@@ -2789,7 +2701,7 @@ mod taiko_pi_circuit_test {
         public_data.prover = Address::from_slice(&address_bytes);
 
         let prover: Fr = public_data.prover.to_scalar().unwrap();
-        let k = 17;
+        let k = 18;
         match run::<Fr>(
             k,
             public_data,
@@ -2798,10 +2710,11 @@ mod taiko_pi_circuit_test {
         ) {
             Ok(_) => unreachable!("this case must fail"),
             Err(errs) => {
-                assert_eq!(errs.len(), 4);
+                assert_eq!(errs.len(), 2810);
                 for err in errs {
                     match err {
                         VerifyFailure::Permutation { .. } => return,
+                        VerifyFailure::CellNotAssigned { .. } => return,
                         _ => unreachable!("unexpected error"),
                     }
                 }
@@ -2811,30 +2724,15 @@ mod taiko_pi_circuit_test {
 
     #[test]
     fn test_simple_pi() {
-        let mut public_data = mock_public_data();
+        let (block, _,previous_blocks, previous_blocks_rlp) = default_test_block();
+        let mut public_data = PublicData::new(&block);
+        public_data.previous_blocks = previous_blocks;
+        public_data.previous_blocks_rlp = previous_blocks_rlp;
+
         let chain_id = 1337u64;
         public_data.chain_id = Word::from(chain_id);
 
-        let k = 17;
-        assert_eq!(run::<Fr>(k, public_data, None, None), Ok(()));
-    }
-
-    #[test]
-    fn test_verify() {
-        let mut block = witness::Block::<Fr>::default();
-
-        block.eth_block.parent_hash = *OMMERS_HASH;
-        block.eth_block.hash = Some(*OMMERS_HASH);
-        block.protocol_instance.block_hash = *OMMERS_HASH;
-        block.protocol_instance.parent_hash = *OMMERS_HASH;
-        block.context.history_hashes = vec![OMMERS_HASH.to_word()];
-        block.context.block_hash = OMMERS_HASH.to_word();
-        block.context.number = 300.into();
-
-        let public_data = PublicData::new(&block);
-
-        let k = 17;
-
+        let k = 18;
         assert_eq!(run::<Fr>(k, public_data, None, None), Ok(()));
     }
 
@@ -2852,7 +2750,6 @@ mod taiko_pi_circuit_test {
             .append(&block.context.difficulty)
             .append(&block.context.number.low_u64())
             .append(&block.context.gas_limit)
-            // .append(&U256::from(block.context.gas_limit))
             .append(&U256::from(block.protocol_instance.gas_used))
             .append(&block.context.timestamp);
         rlp_opt(&mut stream, &None::<u8>); // extra_data = ""
@@ -2877,39 +2774,39 @@ mod taiko_pi_circuit_test {
     ) {
         let mut current_block = witness::Block::<Fr>::default();
 
-        const PREVIOUS_BLOCKS_NUM:usize = 256; // TODO(George): remove shadow var
         current_block.context.history_hashes = vec![U256::zero(); PREVIOUS_BLOCKS_NUM];
         let mut previous_blocks: Vec<witness::Block<Fr>> =
             vec![witness::Block::<Fr>::default(); PREVIOUS_BLOCKS_NUM];
         let mut previous_blocks_rlp: Vec<Bytes> = vec![Bytes::default(); PREVIOUS_BLOCKS_NUM];
         let mut past_block_hash = H256::zero();
         let mut past_block_rlp: Bytes;
-        for i in 0..256 { // TODO(George): replace 256 with `PREVIOUS_BLOCKS_NUM`
+        for i in 0..PREVIOUS_BLOCKS_NUM {
             let mut past_block = witness::Block::<Fr>::default();
             past_block.context.number = U256::from(0x100);
 
             past_block.eth_block.parent_hash = past_block_hash;
+            past_block.protocol_instance.parent_hash = past_block_hash;
             (past_block_hash, past_block_rlp) = get_block_header_rlp_from_block(&past_block);
 
             current_block.context.history_hashes[i] = U256::from(past_block_hash.as_bytes());
             previous_blocks[i] = past_block.clone();
             previous_blocks_rlp[i] = past_block_rlp.clone();
-            // println!("past_block_hash[{}] = {:x?}", i, past_block_hash);
         }
 
-        println!("current_block.context.history_hashes = {:?}", current_block.context.history_hashes);
         let prover = current_block.protocol_instance.prover;
         // Populate current block
         current_block.eth_block.parent_hash = past_block_hash;
         current_block.protocol_instance.parent_hash = past_block_hash;
-        current_block.eth_block.author = Some(prover); //Some(prover);
+        current_block.eth_block.author = Some(prover);
         current_block.eth_block.state_root = H256::zero();
         current_block.eth_block.transactions_root = H256::zero();
         current_block.eth_block.receipts_root = H256::zero();
         current_block.eth_block.logs_bloom = Some([0; LOGS_BLOOM_SIZE].into());
         current_block.eth_block.difficulty = U256::from(0);
-        current_block.eth_block.number = Some(U64::from(0));
+        current_block.eth_block.number = Some(U64::from(0x100));
+        current_block.context.number = U256::from(0x100);
         current_block.eth_block.gas_limit = U256::from(0);
+        current_block.protocol_instance.block_max_gas_limit = 0;
         current_block.eth_block.gas_used = U256::from(0);
         current_block.protocol_instance.gas_used = 0;
         current_block.eth_block.timestamp = U256::from(0);
@@ -2929,7 +2826,9 @@ mod taiko_pi_circuit_test {
         const MAX_CALLDATA: usize = 200;
         let k = 18;
 
-        let (block, prover, previous_blocks, previous_blocks_rlp) = default_test_block();
+        let (mut block, prover, previous_blocks, previous_blocks_rlp) = default_test_block();
+        block.context.number = U256::from(0x100);
+
         let mut public_data = PublicData::new(&block);
         public_data.previous_blocks = previous_blocks;
         public_data.previous_blocks_rlp = previous_blocks_rlp;
@@ -2949,7 +2848,7 @@ mod taiko_pi_circuit_test {
         let (mut block, prover, previous_blocks, previous_blocks_rlp) = default_test_block();
         block.context.number = U256::from(0x100);
         block.context.gas_limit = 0x76;
-        block.protocol_instance.gas_used = 0x77; //U256::from(0x77);
+        block.protocol_instance.gas_used = 0x77;
         block.context.timestamp = U256::from(0x78);
         block.context.base_fee = U256::from(0x79);
 
@@ -2972,7 +2871,7 @@ mod taiko_pi_circuit_test {
         let (mut block, prover, previous_blocks, previous_blocks_rlp) = default_test_block();
         block.context.number = U256::from(0x100);
         block.context.gas_limit = RLP_HDR_NOT_SHORT;
-        block.protocol_instance.gas_used = RLP_HDR_NOT_SHORT as u32; //U256::from(RLP_HDR_NOT_SHORT);
+        block.protocol_instance.gas_used = RLP_HDR_NOT_SHORT as u32;
         block.context.timestamp = U256::from(RLP_HDR_NOT_SHORT);
         block.context.base_fee = U256::from(RLP_HDR_NOT_SHORT);
 
@@ -2995,7 +2894,7 @@ mod taiko_pi_circuit_test {
         let (mut block, prover, previous_blocks, previous_blocks_rlp) = default_test_block();
         block.context.number = U256::from(0x100);
         block.context.gas_limit = 0xFF;
-        block.protocol_instance.gas_used = 0xff; //U256::from(0xFF);
+        block.protocol_instance.gas_used = 0xff;
         block.context.timestamp = U256::from(0xFF);
         block.context.base_fee = U256::from(0xFF);
 
@@ -3018,7 +2917,7 @@ mod taiko_pi_circuit_test {
         let (mut block, prover, previous_blocks, previous_blocks_rlp) = default_test_block();
         block.context.number = U256::from(0x100);
         block.context.gas_limit = 0x0000919191919191;
-        block.protocol_instance.gas_used = 0x92 << 2*8; //U256::from(0x92) << (28 * 8);
+        block.protocol_instance.gas_used = 0x92 << 2*8;
         block.context.timestamp = U256::from(0x93) << (7 * 8);
         block.context.base_fee = U256::from(0x94) << (26 * 8);
 
@@ -3042,7 +2941,11 @@ mod taiko_pi_circuit_test {
 
         block.context.number = U256::from(0x100);
         block.context.gas_limit = 0x9191919191919191;
+        block.protocol_instance.block_max_gas_limit = 0x9191919191919191;
+
+        block.eth_block.gas_used = U256::from(0x92);// << (31 * 8);
         block.protocol_instance.gas_used = 0x92;// << (31 * 8);
+
         block.context.timestamp = U256::from(0x93);// << (31 * 8);
         block.context.base_fee = U256::from(0x94) << (31 * 8);
 
@@ -3062,7 +2965,7 @@ mod taiko_pi_circuit_test {
         const MAX_CALLDATA: usize = 200;
         let k = 18;
 
-        let (mut block, prover, previous_blocks, previous_blocks_rlp) = default_test_block();
+        let (mut block, _, previous_blocks, previous_blocks_rlp) = default_test_block();
 
         block.eth_block.state_root = H256::from_slice(
             &hex::decode("21223344dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49349")
@@ -3085,7 +2988,7 @@ mod taiko_pi_circuit_test {
         block.context.number = U256::from(0x9090909090909090_u128);
         block.context.gas_limit = 0x9191919191919191;
         block.protocol_instance.gas_used = 0x92 << (3 * 8);
-        block.context.timestamp = U256::from(0x93) << (31 * 8);
+        block.context.timestamp = U256::from(0);
         block.context.base_fee = U256::from(0x94) << (31 * 8);
         block.eth_block.withdrawals_root = Some(H256::from_slice(
             &hex::decode("61223344dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49353")
@@ -3096,15 +2999,16 @@ mod taiko_pi_circuit_test {
         public_data.previous_blocks = previous_blocks;
         public_data.previous_blocks_rlp = previous_blocks_rlp;
 
-        let (mut test_block, _, test_previous_blocks, previous_blocks_rlp) = default_test_block();
+        let (mut test_block, _, test_previous_blocks, test_previous_blocks_rlp) = default_test_block();
         test_block.context.number = U256::from(0x100);
-        let test_public_data = PublicData::new(&test_block);
-        public_data.previous_blocks = test_previous_blocks;
+        let mut test_public_data = PublicData::new(&test_block);
+        test_public_data.previous_blocks = test_previous_blocks;
+        test_public_data.previous_blocks_rlp = test_previous_blocks_rlp;
 
         match run::<Fr>(k, public_data, None, Some(test_public_data)) {
             Ok(_) => unreachable!("this case must fail"),
             Err(errs) => {
-                //assert_eq!(errs.len(), 14);
+                // assert_eq!(errs.len(), 14);
                 for err in errs {
                     match err {
                         VerifyFailure::Lookup { .. } => return,
