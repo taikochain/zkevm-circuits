@@ -3092,7 +3092,7 @@ mod taiko_pi_circuit_test {
         let (mut block, _, previous_blocks, previous_blocks_rlp) = default_test_block();
         block.context.number = U256::from(0x100);
         block.context.gas_limit = 0x0000919191919191;
-        block.protocol_instance.gas_used = 0x92 << 2 * 8;
+        block.protocol_instance.gas_used = 0x92 << (2 * 8);
         block.context.timestamp = U256::from(0x93) << (7 * 8);
         block.context.base_fee = U256::from(0x94) << (26 * 8);
 
