@@ -241,7 +241,12 @@ impl KeccakTable2 {
         values: [Value<F>; 4],
     ) -> Result<(), Error> {
         for (column, value) in LookupTable::<F>::columns(self).iter().zip(values.iter()) {
-            region.assign_advice(|| format!("assign {}", offset), TryInto::<Column<Advice>>::try_into(*column).unwrap(), offset, || *value)?;
+            region.assign_advice(
+                || format!("assign {}", offset),
+                TryInto::<Column<Advice>>::try_into(*column).unwrap(),
+                offset,
+                || *value,
+            )?;
         }
         Ok(())
     }

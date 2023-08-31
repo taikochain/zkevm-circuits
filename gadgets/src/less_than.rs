@@ -47,11 +47,13 @@ impl<F: Field, const N_BYTES: usize> LtConfig<F, N_BYTES> {
     }
 
     fn annotations(&self) -> Vec<String> {
-        [vec![
-            String::from("lt"),
-            String::from("u8"),
-        ],
-       (0..N_BYTES).map(|i| String::from(format!("diff byte #{}", i))).collect()].concat()
+        [
+            vec![String::from("lt"), String::from("u8")],
+            (0..N_BYTES)
+                .map(|i| String::from(format!("diff byte #{}", i)))
+                .collect(),
+        ]
+        .concat()
     }
     /// Annotates columns of an LtChip embedded within a circuit region.
     pub fn annotate_columns_in_region(&self, region: &mut Region<F>) {

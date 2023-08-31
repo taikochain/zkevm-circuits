@@ -13,7 +13,7 @@ use crate::{
 };
 use bus_mapping::{operation::Target, state_db::EMPTY_CODE_HASH_LE};
 use eth_types::Field;
-use gadgets::util::{not, and};
+use gadgets::util::{and, not};
 use halo2_proofs::{
     circuit::Value,
     plonk::{
