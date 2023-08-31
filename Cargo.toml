@@ -17,9 +17,6 @@ members = [
 halo2_proofs = { git = "https://github.com/privacy-scaling-explorations/halo2.git", tag = "v2023_04_20" }
 ethers-core = {git = "https://github.com/ggkitsas/ethers-rs/", rev = "6059806c17fa1a1d7534044bcdbecfef869392e1"}
 
-# [patch.'https://github.com/privacy-scaling-explorations/halo2']
-# halo2_proofs = { path = "../pse-halo2/halo2_proofs"} # v2023_04_20
-
 # Definition of benchmarks profile to use.
 [profile.bench]
 opt-level = 3
