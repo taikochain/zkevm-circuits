@@ -39,28 +39,42 @@
     // );
 // }
 
-
 use eth_types::{ToWord, ToBigEndian, Field};
 use ethers_core::abi::*;
 use ethers_core::abi::FixedBytes;
+use ethers_core::utils::keccak256;
+use halo2_proofs::circuit::{Value, Layouter};
 use std::convert::TryInto;
+use std::marker::PhantomData;
+use gadgets::util::{Expr, Scalar};
+use halo2_proofs::plonk::{Expression, ConstraintSystem, Selector, Instance, Column};
+use keccak256::keccak_arith::Keccak;
+use halo2_proofs::plonk::Error;
+use core::result::Result;
+use crate::circuit_tools::cached_region::CachedRegion;
+use crate::circuit_tools::cell_manager::{Cell, CellType, CellManager, CellColumn};
+use crate::circuit_tools::constraint_builder::{ConstraintBuilder, TO_FIX, RLCable};
+use crate::evm_circuit::table::Table;
+use crate::util::{Challenges, SubCircuitConfig, SubCircuit};
+use crate::witness::{self, Bytecode};
+use crate::{circuit, assign};
+use crate::table::{byte_table::ByteTable, BlockContextFieldTag, BlockTable, KeccakTable, LookupTable};
 
 const PADDING_LEN: usize = 32;
 const PROOF_LEN: usize = 102;
 const BYTE_POW_BASE: u64 = 1 << 8;
 
 #[derive(Debug, Clone)]
-pub struct BlockEvidence {
+pub struct PublicData {
     meta_hash: Token,
     parent_hash: Token,
     block_hash: Token,
     signal_root: Token,
     graffiti: Token,
     prover: Token,
-    proofs: Token,
 }
 
-impl BlockEvidence {
+impl PublicData {
     fn new<F>(block: &witness::Block<F>) -> Self {
         let meta_hash = Token::FixedBytes(block.protocol_instance.meta_hash.hash().to_word().to_be_bytes().to_vec());
         let parent_hash = Token::FixedBytes(block.protocol_instance.parent_hash.to_word().to_be_bytes().to_vec());
@@ -68,7 +82,6 @@ impl BlockEvidence {
         let signal_root = Token::FixedBytes(block.protocol_instance.signal_root.to_word().to_be_bytes().to_vec());
         let graffiti = Token::FixedBytes(block.protocol_instance.graffiti.to_word().to_be_bytes().to_vec());
         let prover = Token::Address(block.protocol_instance.prover);
-        let proofs = Token::Bytes(vec![0;PROOF_LEN]);
 
         Self {
             meta_hash,
@@ -77,7 +90,6 @@ impl BlockEvidence {
             signal_root,
             graffiti,
             prover,
-            proofs,
         }
     }
 
@@ -86,8 +98,6 @@ impl BlockEvidence {
     }
 
     fn encode_raw(&self) -> Vec<u8> {
-        // Initial padding: 20 means there's one dyn data, 40 means two, ...
-        //  0000000000000000000000000000000000000000000000000000000000000020
         // Fixed bytes are directly concat
         //  0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
         //  0000000000000000000000000000000000000000000000000000000000000000
@@ -111,9 +121,27 @@ impl BlockEvidence {
                 self.signal_root.clone(),
                 self.graffiti.clone(),
                 self.prover.clone(),
-                self.proofs.clone(),
             ])
         ])
+    }
+
+
+    fn get_pi_hi_low(&self) -> (u64, u64) {
+        let keccaked_pi = keccak256(self.encode_raw());
+        (
+            keccaked_pi
+                .iter()
+                .take(16)
+                .fold(0u64, |acc: u64, byte| {
+                    acc * BYTE_POW_BASE + *byte as u64
+                }),
+                keccaked_pi
+                .iter()
+                .skip(16)
+                .fold(0u64, |acc: u64, byte| {
+                    acc * BYTE_POW_BASE + *byte as u64
+                })
+        )
     }
 
     fn max_height(&self) -> usize {
@@ -147,22 +175,23 @@ pub struct TaikoPiCircuitConfig<F: Field> {
     block_numbers: Vec<Cell<F>>, 
     public_input_bytes: FieldGadget<F>,
 
-    padding1: FieldGadget<F>,
     meta_hash: FieldGadget<F>,
     parent_hash: FieldGadget<F>,
     block_hash: FieldGadget<F>,
     signal_root: FieldGadget<F>,
     graffiti: FieldGadget<F>,
     prover: FieldGadget<F>,
-    padding2: FieldGadget<F>,
-    proofs: FieldGadget<F>,
+
+    block_table: BlockTable,
+    keccak_table: KeccakTable,
+    byte_table: ByteTable,
 
     annotation_configs: Vec<CellColumn<F, PiCellType>>,
 }
 
 pub struct TaikoPiCircuitConfigArgs<F: Field> {
     /// 
-    pub evidence: BlockEvidence,
+    pub evidence: PublicData,
     /// BlockTable
     pub block_table: BlockTable,
     /// KeccakTable
@@ -213,15 +242,12 @@ impl<F: Field> SubCircuitConfig<F> for TaikoPiCircuitConfig<F> {
         let block_numbers = [(); 2].iter().map(|_| cb.query_one(PiCellType::Storage1)).collect::<Vec<_>>();
         let public_input_bytes = FieldGadget::config(&mut cb, PADDING_LEN);
 
-        let padding1 = FieldGadget::config(&mut cb, PADDING_LEN);
         let meta_hash = FieldGadget::config(&mut cb, evidence.meta_hash.len());
         let parent_hash = FieldGadget::config(&mut cb, evidence.parent_hash.len());
         let block_hash = FieldGadget::config(&mut cb, evidence.block_hash.len());
         let signal_root = FieldGadget::config(&mut cb, evidence.signal_root.len());
         let graffiti = FieldGadget::config(&mut cb, evidence.graffiti.len());
         let prover = FieldGadget::config(&mut cb, evidence.prover.len());
-        let padding2 = FieldGadget::config(&mut cb, PADDING_LEN);
-        let proofs = FieldGadget::config(&mut cb, evidence.proofs.len());
 
         meta.create_gate(
             "PI acc constraints", 
@@ -237,15 +263,12 @@ impl<F: Field> SubCircuitConfig<F> for TaikoPiCircuitConfig<F> {
                         );
                     }
                     let keccak_input = [
-                            padding1.clone(), 
                             meta_hash.clone(), 
                             parent_hash.clone(), 
                             block_hash.clone(), 
                             signal_root.clone(), 
                             graffiti.clone(), 
                             prover.clone(), 
-                            padding2.clone(), 
-                            proofs.clone()
                         ].iter().fold(0.expr(), |acc, gadget| {
                             let mult = (0..gadget.len).fold(1.expr(), |acc, _| acc * keccak_r.expr());
                             acc * mult + gadget.acc(keccak_r.expr())
@@ -285,37 +308,18 @@ impl<F: Field> SubCircuitConfig<F> for TaikoPiCircuitConfig<F> {
             keccak_output,
             block_numbers,
             public_input_bytes,
-            padding1,
             meta_hash,
             parent_hash,
             block_hash,
             signal_root,
             graffiti,
             prover,
-            padding2,
-            proofs,
+            block_table,
+            keccak_table,
+            byte_table,
             annotation_configs 
         }
     }
-}
-
-use gadgets::util::Expr;
-use halo2_proofs::plonk::{Expression, ConstraintSystem, Selector, Instance, Column};
-use keccak256::keccak_arith::Keccak;
-use snark_verifier::loader::evm;
-
-use crate::circuit_tools::cached_region::CachedRegion;
-use crate::circuit_tools::cell_manager::{Cell, CellType, CellManager, CellColumn};
-use crate::circuit_tools::constraint_builder::{ConstraintBuilder, TO_FIX, RLCable};
-use crate::evm_circuit::table::Table;
-use crate::util::{Challenges, SubCircuitConfig};
-use crate::witness::{self, Bytecode};
-use crate::{circuit, assign};
-use crate::table::{byte_table::ByteTable, BlockContextFieldTag, BlockTable, KeccakTable, LookupTable};
-
-#[test]
-fn test(){
-    println!("test");
 }
 
 ///
@@ -353,7 +357,7 @@ impl<F: Field> FieldGadget<F> {
         region: &mut CachedRegion<'_, '_, F>,
         offset: usize,
         bytes: &[F],
-    ) -> core::result::Result<(), Error> {
+    ) -> Result<(), Error> {
         assert!(bytes.len() == self.len);
         self.field
             .iter()
@@ -390,4 +394,71 @@ impl Default for PiCellType {
     fn default() -> Self {
         Self::Storage1
     }
+}
+
+
+/// Public Inputs Circuit
+#[derive(Clone, Debug)]
+pub struct TaikoPiCircuit<F: Field> {
+    /// PublicInputs data known by the verifier
+    pub evidence: PublicData,
+    _marker: PhantomData<F>,
+}
+
+impl<F: Field> Default for TaikoPiCircuit<F> {
+    fn default() -> Self {
+        Self::new(PublicData::default::<F>())
+    }
+}
+
+impl<F: Field> TaikoPiCircuit<F> {
+    /// Creates a new TaikoPiCircuit
+    pub fn new(evidence: PublicData) -> Self {
+        Self {
+            evidence: evidence,
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<F: Field> SubCircuit<F> for TaikoPiCircuit<F> {
+    type Config = TaikoPiCircuitConfig<F>;
+
+    fn unusable_rows() -> usize {
+        // No column queried at more than 3 distinct rotations, so returns 6 as
+        // minimum unusable rows.
+        6
+    }
+
+    fn min_num_rows_block(block: &witness::Block<F>) -> (usize, usize) {
+        // TODO(Cecilia): what is the first field?
+        (0, PublicData::new(block).max_height())
+    }
+
+    fn new_from_block(block: &witness::Block<F>) -> Self {
+        TaikoPiCircuit::new(PublicData::new(block))
+    }
+
+    /// Compute the public inputs for this circuit.
+    fn instance(&self) -> Vec<Vec<F>> {
+        let (hi, low) = self.evidence.get_pi_hi_low();
+        vec![vec![hi.scalar(), low.scalar()]]
+    }
+
+    /// Make the assignments to the PiCircuit
+    fn synthesize_sub(
+        &self,
+        config: &Self::Config,
+        challenges: &Challenges<Value<F>>,
+        layouter: &mut impl Layouter<F>,
+    ) -> Result<(), Error> {
+        config.byte_table.load(layouter)?;
+        // config.assign(layouter, &self.evidence, challenges)
+        Ok(())
+    }
+}
+
+#[test]
+fn test(){
+    println!("test");
 }
