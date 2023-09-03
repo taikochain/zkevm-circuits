@@ -27,15 +27,11 @@ pub mod root_circuit;
 pub mod state_circuit;
 pub mod super_circuit;
 pub mod table;
+
 #[macro_use]
+#[allow(missing_docs)]
 pub mod taiko_pi_circuit;
-#[macro_use]
-#[allow(missing_docs)]
-pub mod taiko_pi_circuit_;
 pub mod taiko_super_circuit;
-#[macro_use]
-#[allow(missing_docs)]
-pub mod taiko_pi_circuit__;
 #[cfg(any(feature = "test", test))]
 pub mod test_util;
 pub mod circuit_tools;

@@ -1,232 +1,85 @@
-//! Use the hash value as public input.
 
-use crate::{
-    assign,
-    evm_circuit::table::Table::*,
-    evm_circuit::{util::{constraint_builder::{ConstrainBuilderCommon}}, table::Table},
-    table::{byte_table::ByteTable, BlockContextFieldTag, BlockTable, KeccakTable, LookupTable},
-    util::{Challenges, SubCircuitConfig, SubCircuit},
-    circuit_tools::{
-        constraint_builder::{ConstraintBuilder, RLCable, TO_FIX, RLCableValue},
-        cell_manager::{CellManager, CellType, Cell, CellColumn}, gadgets::{IsEqualGadget}, cached_region::{CachedRegion},
-    },
-    
-    witness::{self, BlockContext}, circuit,
-};
 
-use gadgets::util::{Scalar, not};
-use eth_types::{Address, Field, ToBigEndian, ToWord, Word, H256};
+use bus_mapping::evm;
+use eth_types::{Address, Field, ToBigEndian, ToWord, Word, H256, H160, U256};
+use ethers_core::abi::*;
+use ethers_core::abi::FixedBytes;
 use ethers_core::utils::keccak256;
-use gadgets::{util::{Expr}};
-use halo2_proofs::{
-    circuit::{Layouter, SimpleFloorPlanner, Value},
-    plonk::{
-        Circuit, Column, ConstraintSystem, Error, Expression, Instance,
-        Selector,
-    },
-};
-
-use std::{marker::PhantomData, usize, vec};
+use halo2_proofs::circuit::{Value, Layouter, SimpleFloorPlanner, AssignedCell};
+use halo2_proofs::poly::Rotation;
+use itertools::Itertools;
+use std::convert::TryInto;
+use std::marker::PhantomData;
+use gadgets::util::{Expr, Scalar};
+use halo2_proofs::plonk::{Expression, ConstraintSystem, Selector, Instance, Column, Circuit};
+use keccak256::keccak_arith::Keccak;
+use halo2_proofs::plonk::Error;
+use core::result::Result;
+use crate::circuit_tools::cached_region::CachedRegion;
+use crate::circuit_tools::cell_manager::{Cell, CellType, CellManager, CellColumn};
+use crate::circuit_tools::constraint_builder::{ConstraintBuilder, TO_FIX, RLCable, ExprVec};
+use crate::evm_circuit::table::Table;
+use crate::evm_circuit::util::rlc;
+use crate::util::{Challenges, SubCircuitConfig, SubCircuit};
+use crate::witness::{self, Bytecode, BlockContext};
+use crate::{circuit, assign};
+use crate::table::{byte_table::ByteTable, BlockContextFieldTag, BlockTable, KeccakTable, LookupTable};
 
 const BYTE_POW_BASE: u64 = 1 << 8;
-const N: usize = 32;
-const H: usize = 12;
-const RPI_BYTES_LEN: usize = 32 * 10;
-const USED_ROWS: usize = RPI_BYTES_LEN + 64;
-
-const L1SIGNAL_IDX: usize = 0;
-const PARENT_HASH: usize = 4;
-const BLOCK_HASH: usize = 5;
-const FIELD9_IDX: usize = 8;
-const FIELD10_IDX: usize = 9;
-const KECCAK_OUTPUT: usize = 10;
-
-
-/// PublicData contains all the values that the PiCircuit receives as input
+const PADDING_LEN: usize = 32;
+const META_HASH: usize = 0;
+const PARENT_HASH: usize = 1;
+const BLOCK_HASH: usize = 2;
+const SIGNAL_ROOT: usize = 3;
+const GRAFFITI: usize = 4;
+const PROVER: usize = 5;
+const S1: PiCellType = PiCellType::Storage1;
+const S2: PiCellType = PiCellType::Storage2;
+///
 #[derive(Debug, Clone, Default)]
-pub struct PublicData {
-    /// l1 signal service address
-    pub l1_signal_service: Word,
-    /// l2 signal service address
-    pub l2_signal_service: Word,
-    /// l2 contract address
-    pub l2_contract: Word,
-
-
-    /// meta hash
-    pub meta_hash: Word,
-    /// block hash value
-    pub block_hash: Word,
-    /// the parent block hash
-    pub parent_hash: Word,
-    /// signal root
-    pub signal_root: Word,
-    /// extra message
-    pub graffiti: Word,
-    /// union field
-    pub field9: Word, // prover[96:256]+parentGasUsed[64:96]+gasUsed[32:64]
-    /// union field
-    pub field10: Word, /* blockMaxGasLimit[192:256]+maxTransactionsPerBlock[128:
-                        * 192]+maxBytesPerTxList[64:128] */
-
-    // privates
-    // Prover address
-    prover: Address,
-    // parent block gas used
-    parent_gas_used: u32,
-    // block gas used
-    gas_used: u32,
-    // blockMaxGasLimit
-    block_max_gas_limit: u64,
-    // maxTransactionsPerBlock: u64,
-    max_transactions_per_block: u64,
-    // maxBytesPerTxList: u64,
-    max_bytes_per_tx_list: u64,
-
-    block_context: BlockContext,
-    chain_id: Word,
+pub struct FieldGadget<F> {
+    field: Vec<Cell<F>>,
+    len: usize,
 }
 
-impl PublicData {
-    fn assignments(&self) -> [(&'static str, Option<Word>, Vec<u8>); 10] {
-        [
-            (
-                "l1_signal_service",
-                None,
-                self.l1_signal_service.to_be_bytes().to_vec(),
-            ),
-            (
-                "l2_signal_service",
-                None,
-                self.l2_signal_service.to_be_bytes().to_vec(),
-            ),
-            ("l2_contract", None, self.l2_contract.to_be_bytes().to_vec()),
-            
-            ("meta_hash", None, self.meta_hash.to_be_bytes().to_vec()),
-            (
-                "parent_hash",
-                Some(self.block_context.number - 1),
-                self.parent_hash.to_be_bytes().to_vec(),
-            ),
-            (
-                "block_hash",
-                Some(self.block_context.number),
-                self.block_hash.to_be_bytes().to_vec(),
-            ),
-            ("signal_root", None, self.signal_root.to_be_bytes().to_vec()),
-            ("graffiti", None, self.graffiti.to_be_bytes().to_vec()),
-            (
-                "prover+parentGasUsed+gasUsed",
-                None,
-                self.field9.to_be_bytes().to_vec(),
-            ),
-            (
-                "blockMaxGasLimit+maxTransactionsPerBlock+maxBytesPerTxList",
-                None,
-                self.field10.to_be_bytes().to_vec(),
-            ),
-        ]
-    }
-
-    // pub fn abi_encode(&self) -> Vec<u8> {
-        
-    // }
-
-    /// get rpi bytes
-    pub fn rpi_bytes(&self) -> Vec<u8> {
-        self.assignments().iter().flat_map(|v| v.2.clone()).collect()
-    }
-
-    fn default<F: Default>() -> Self {
-        Self::new::<F>(&witness::Block::default())
-    }
-
-    /// create PublicData from block and taiko
-    pub fn new<F>(block: &witness::Block<F>) -> Self {
-        use witness::left_shift;
-        let field9 = left_shift(block.protocol_instance.prover, 96)
-            + left_shift(block.protocol_instance.parent_gas_used as u64, 64)
-            + left_shift(block.protocol_instance.gas_used as u64, 32);
-
-        let field10 = left_shift(block.protocol_instance.block_max_gas_limit, 192)
-            + left_shift(block.protocol_instance.max_transactions_per_block, 128)
-            + left_shift(block.protocol_instance.max_bytes_per_tx_list, 64);
-        PublicData {
-            l1_signal_service: block.protocol_instance.l1_signal_service.to_word(),
-            l2_signal_service: block.protocol_instance.l2_signal_service.to_word(),
-            l2_contract: block.protocol_instance.l2_contract.to_word(),
-            meta_hash: block.protocol_instance.meta_hash.hash().to_word(),
-            block_hash: block.protocol_instance.block_hash.to_word(),
-            parent_hash: block.protocol_instance.parent_hash.to_word(),
-            signal_root: block.protocol_instance.signal_root.to_word(),
-            graffiti: block.protocol_instance.graffiti.to_word(),
-            prover: block.protocol_instance.prover,
-            parent_gas_used: block.protocol_instance.parent_gas_used,
-            gas_used: block.protocol_instance.gas_used,
-            block_max_gas_limit: block.protocol_instance.block_max_gas_limit,
-            max_transactions_per_block: block.protocol_instance.max_transactions_per_block,
-            max_bytes_per_tx_list: block.protocol_instance.max_bytes_per_tx_list,
-            field9,
-            field10,
-            block_context: block.context.clone(),
-            chain_id: block.context.chain_id,
+impl<F: Field> FieldGadget<F> {
+    fn config(cb: &mut ConstraintBuilder<F, PiCellType>, len: usize) -> Self {
+        Self {
+            field: cb.query_cells_dyn(PiCellType::Byte, len),
+            len
         }
     }
 
-    fn get_pi(&self) -> H256 {
-        let rpi_bytes = self.rpi_bytes();
-        let rpi_keccak = keccak256(rpi_bytes);
-        H256(rpi_keccak)
-    }  
-
-    fn get_pi_hi_low<F: Field>(&self) -> (F, F) {
-        let keccak_rpi = self.get_pi().to_fixed_bytes();
-        (
-            keccak_rpi
-                .iter()
-                .take(16)
-                .fold(F::ZERO, |acc, byte| {
-                    acc * F::from(BYTE_POW_BASE) + F::from(*byte as u64)
-                }),
-            keccak_rpi
-                .iter()
-                .skip(16)
-                .fold(F::ZERO, |acc, byte| {
-                    acc * F::from(BYTE_POW_BASE) + F::from(*byte as u64)
-                })
-        )
+    fn bytes_expr(&self) -> Vec<Expression<F>> {
+        self.field.iter().map(|f| f.expr()).collect()
     }
-}
-/// Config for PiCircuit
-#[derive(Clone, Debug)]
-pub struct TaikoPiCircuitConfig<F: Field> {
-    q_enable: Selector,
-    public_input: Column<Instance>, // equality
-    field: FieldBytesGadget<F>,
-    state: PiState<F>,
-    block_acc: Cell<F>, // Phase2
-    block_number: Cell<F>, // Phase1
-    keccak_input: Cell<F>, // Phase2
-    keccak_output:[Cell<F>;2], // Phase2
 
-    block_table: BlockTable,
-    keccak_table: KeccakTable,
-    byte_table: ByteTable,
+    fn acc(&self, r: Expression<F>) -> Expression<F> {
+        //0.expr()
+        self.bytes_expr().rlc_rev(&r)
+    }
 
-    // To annotate columns at assignment for debug purpose 
-    col_configs: Vec<CellColumn<F, PiCellType>>,
-}
+    pub(crate) fn hi_low_field(&self) -> [Expression<F>; 2] {
+        assert!(self.len == 32);
+        let hi = self.bytes_expr()[..16].to_vec();
+        let low = self.bytes_expr()[16..].to_vec();
+        [hi.rlc_rev(&BYTE_POW_BASE.expr()), low.rlc_rev(&BYTE_POW_BASE.expr())]
+    }
 
-/// Circuit configuration arguments
-pub struct TaikoPiCircuitConfigArgs<F: Field> {
-    /// BlockTable
-    pub block_table: BlockTable,
-    /// KeccakTable
-    pub keccak_table: KeccakTable,
-    /// ByteTable
-    pub byte_table: ByteTable,
-    /// Challenges
-    pub challenges: Challenges<Expression<F>>,
+    fn assign(
+        &self, 
+        region: &mut CachedRegion<'_, '_, F>,
+        offset: usize,
+        bytes: &[F],
+    ) -> Result<Vec<AssignedCell<F, F>>, Error> {
+        assert!(bytes.len() == self.len);
+        let cells = self.field.iter().zip(bytes.iter()).map(
+            |(cell, byte)| {
+                assign!(region, cell, offset => *byte).unwrap()
+            }
+        ).collect();
+        Ok(cells)
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -234,7 +87,9 @@ enum PiCellType {
     Storage1,
     Storage2,
     Byte,
-    Lookup(Table)
+    LookupPi,
+    Lookup(Table),
+
 }
 impl CellType for PiCellType {
     fn byte_type() -> Option<Self> {
@@ -255,312 +110,369 @@ impl Default for PiCellType {
 }
 
 
+
+
+#[derive(Debug, Clone)]
+pub struct PublicData<F> {
+    evidence: Token,
+    block_context: BlockContext,
+    _phantom: PhantomData<F>,
+}
+
+impl<F: Field> Default for PublicData<F> {
+    fn default() -> Self {
+        // has to have at least one history hash, block number must start with at least one
+        let mut ret = Self::new(&witness::Block::default());
+        ret.block_context.history_hashes = vec![U256::default()];
+        ret
+    }
+}
+
+impl<F: Field> PublicData<F> {
+    fn new(block: &witness::Block<F>) -> Self {
+        let meta_hash = Token::FixedBytes(block.protocol_instance.meta_hash.hash().to_word().to_be_bytes().to_vec());
+        let parent_hash = Token::FixedBytes(block.protocol_instance.parent_hash.to_word().to_be_bytes().to_vec());
+        let block_hash = Token::FixedBytes(block.protocol_instance.block_hash.to_word().to_be_bytes().to_vec());
+        let signal_root = Token::FixedBytes(block.protocol_instance.signal_root.to_word().to_be_bytes().to_vec());
+        let graffiti = Token::FixedBytes(block.protocol_instance.graffiti.to_word().to_be_bytes().to_vec());
+        let prover = Token::Address(block.protocol_instance.prover);
+        Self { 
+            evidence: Token::FixedArray(vec![
+                meta_hash,
+                parent_hash,
+                block_hash,
+                signal_root,
+                graffiti,
+                prover,
+                ]),
+            block_context: block.context.clone(),
+            _phantom: PhantomData
+        }
+    }
+
+    fn set_field(&mut self, idx: usize, bytes: Vec<u8>) {
+        match self.evidence {
+            Token::FixedArray(ref mut tokens) => {
+                tokens[idx] = match tokens[idx].clone() {
+                    Token::Bytes(_) => Token::Bytes(bytes),
+                    Token::FixedBytes(_) => Token::FixedBytes(bytes),
+                    Token::Address(_) => Token::Address(
+                        H160::from(&bytes.try_into().expect("Wrong number of bytes for address")
+                    )),
+                    _ => unreachable!(),
+                };
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    fn encode_raw(&self) -> Vec<u8> {
+        encode(&[self.evidence.clone()])
+    }
+
+    fn encode_field(&self, idx: usize) -> Vec<u8> {
+        let field = match self.evidence {
+            Token::FixedArray(ref tokens) => tokens[idx].clone(),
+            _ => unreachable!(),
+        };
+        encode(&[field])
+    }
+
+    fn total_acc(&self, r: Value<F>) -> F {
+        let mut rand = F::ZERO;
+        r.map(|r| rand = r);
+        self.encode_raw()
+            .iter()
+            .fold(F::ZERO, |acc: F, byte| {
+                acc * rand + F::from(*byte as u64)
+            }) 
+    }
+
+    fn assignment(&self, idx: usize) -> Vec<F> {
+        self.encode_field(idx)
+            .iter()
+            .map(|b| F::from(*b as u64))
+            .collect()
+    }
+
+    fn assignment_acc(&self, idx: usize, r: Value<F>) -> F {
+        let mut rand = F::ZERO;
+        r.map(|r| rand = r);
+        rlc::value(self.encode_field(idx).iter().rev(), rand)
+    }
+
+    fn keccak_hi_low(&self) -> [F; 2] {
+        let keccaked_pi = keccak256(self.encode_raw());
+        [
+            keccaked_pi
+                .iter()
+                .take(16)
+                .fold(F::ZERO, |acc: F, byte| {
+                    acc * F::from(BYTE_POW_BASE) + F::from(*byte as u64)
+                }),
+                keccaked_pi
+                .iter()
+                .skip(16)
+                .fold(F::ZERO, |acc: F, byte| {
+                    acc * F::from(BYTE_POW_BASE) + F::from(*byte as u64)
+                })
+        ]
+    }
+
+    fn keccak(&self) -> Vec<u8> {
+        keccak256(self.encode_raw()).to_vec()
+    }
+
+    fn keccak_assignment(&self) -> Vec<F> {
+        self.keccak()
+            .iter()
+            .map(|b| F::from(*b as u64))
+            .collect()
+    }
+
+    fn total_len(&self) -> usize {
+        self.encode_raw().len()
+    }
+
+    fn field_len(&self, idx: usize) -> usize {
+        self.encode_field(idx).len()
+    }
+
+
+}
+
+#[derive(Clone, Debug)]
+pub struct TaikoPiCircuitConfig<F: Field> {
+    q_enable: Selector,
+    keccak_instance: Column<Instance>, // equality
+
+    meta_hash: FieldGadget<F>,
+    parent_hash: (Cell<F>, FieldGadget<F>, Cell<F>),
+    block_hash: (Cell<F>, FieldGadget<F>, Cell<F>),
+    signal_root: FieldGadget<F>,
+    graffiti: FieldGadget<F>,
+    prover: FieldGadget<F>,
+
+    total_acc: Cell<F>,
+    keccak_bytes: FieldGadget<F>,
+    keccak_hi_lo: [Cell<F>; 2],
+
+    block_table: BlockTable,
+    keccak_table: KeccakTable,
+    byte_table: ByteTable,    
+
+    annotation_configs: Vec<CellColumn<F, PiCellType>>,
+}
+
+pub struct TaikoPiCircuitConfigArgs<F: Field> {
+    /// 
+    pub evidence: PublicData<F>,
+    /// BlockTable
+    pub block_table: BlockTable,
+    /// KeccakTable
+    pub keccak_table: KeccakTable,
+    /// ByteTable
+    pub byte_table: ByteTable,
+    /// Challenges
+    pub challenges: Challenges<Expression<F>>,
+}
+
+
 impl<F: Field> SubCircuitConfig<F> for TaikoPiCircuitConfig<F> {
     type ConfigArgs = TaikoPiCircuitConfigArgs<F>;
+    /// Return a new TaikoPiCircuitConfig
+    fn new(
+        meta: &mut ConstraintSystem<F>,
+        Self::ConfigArgs {
+            evidence,
+            block_table,
+            keccak_table,
+            byte_table,
+            challenges,
+        }: Self::ConfigArgs,
+    ) -> Self {
+        let keccak_r = challenges.keccak_input();
+        let evm_word = challenges.evm_word();
+        let cm = CellManager::new(
+            meta,
+            vec![
+                (PiCellType::Byte, 1, 1, false),
+                (PiCellType::Storage1, 1, 1, true),
+                (PiCellType::Storage2, 1, 1, true),
+            ],
+            0,
+            evidence.total_len() + PADDING_LEN,
+        );
+        let mut cb: ConstraintBuilder<F, PiCellType> = ConstraintBuilder::new(4,  Some(cm.clone()), Some(evm_word.expr()));
+        cb.preload_tables(meta,
+            &[
+                    (PiCellType::Lookup(Table::Keccak), &keccak_table), 
+                    (PiCellType::Lookup(Table::Bytecode), &byte_table), 
+                    (PiCellType::Lookup(Table::Block), &block_table)
+               ]
+           );
+        let q_enable = meta.complex_selector();
+        let keccak_instance = meta.instance_column();
+        meta.enable_equality(keccak_instance);
 
-        /// Return a new TaikoPiCircuitConfig
-        fn new(
-            meta: &mut ConstraintSystem<F>,
-            Self::ConfigArgs {
-                block_table,
-                keccak_table,
-                byte_table,
-                challenges,
-            }: Self::ConfigArgs,
-        ) -> Self {
-            let cm = CellManager::new(
-                meta,
-                vec![
-                    (PiCellType::Byte, 1, 1, false),
-                    (PiCellType::Storage1, 1, 1, false),
-                    (PiCellType::Storage2, 1, 2, true),
-                ],
-                0,
-                32,
-            );
-            let mut cb: ConstraintBuilder<F, PiCellType> = ConstraintBuilder::new(4,  Some(cm.clone()), Some(challenges.evm_word()));
-            cb.preload_tables(meta,
-                &[
-                        (PiCellType::Lookup(Keccak), &keccak_table), 
-                        (PiCellType::Lookup(Bytecode), &byte_table), 
-                        (PiCellType::Lookup(Block), &block_table)
-                   ]
-               );
-            let q_enable = meta.complex_selector();
-            let public_input = meta.instance_column();
-            let field = FieldBytesGadget::config(&mut cb, &challenges);
-            let state = PiState::config(&mut cb);
-            let block_acc = cb.query_one(PiCellType::Storage2);
-            let block_number = cb.query_one(PiCellType::Storage1);
-            let keccak_input = cb.query_one(PiCellType::Storage2);
-            let keccak_output = [();2].map(|_| cb.query_one(PiCellType::Storage2));
-            meta.enable_equality(public_input);
-            meta.create_gate(
-                "PI acc constraints", 
-                |meta| {
-                    let keccak_mult = (0..N).fold(1.expr(), |acc, _| acc * challenges.keccak_input());
-                    // let evm_mult = (0..N).fold(1.expr(), |acc, _| acc * challenges.evm_word());
-                    circuit!([meta, cb], {
-                        ifx!(state.increment_step() => {
-                            require!(block_acc.rot(meta, 32) => block_acc.expr() * keccak_mult + field.keccak_field());
-                        });
-                        matchx!((
-                            state.is_l1_signal.expr() => {
-                                require!(block_acc.expr() => field.keccak_field());
-                            },
-                            state.lookup_blockhash() => {
-                                require!(
-                                    (
-                                        BlockContextFieldTag::BlockHash.expr(), 
-                                        block_number.expr(), 
-                                        field.evm_word_field()
-                                    ) => @PiCellType::Lookup(Table::Block), (TO_FIX)
-                                );
-                            },
-                            state.is_field_10.expr() => {
-                                require!(keccak_input.expr() => block_acc.expr());
-                            },
-                            state.is_keccak_output.expr() => {
-                                require!(
-                                    (
-                                        1.expr(), 
-                                        keccak_input.expr(), 
-                                        RPI_BYTES_LEN.expr(), 
-                                        field.evm_word_field()
-                                    )
-                                    => @PiCellType::Lookup(Table::Keccak), (TO_FIX)
-                                );
-                                let (hi_expr, low_expr) = field.hi_low_field();
-                                require!(keccak_output[0].expr() => hi_expr);
-                                require!(keccak_output[1].expr() => low_expr);
-                                keccak_output.iter().for_each(|c| cb.enable_equality(c.column()));
-                            }
-                        ));
+        let meta_hash = FieldGadget::config(&mut cb, evidence.field_len(META_HASH));
+        let parent_hash =(
+            cb.query_one(S1),
+            FieldGadget::config(&mut cb, evidence.field_len(PARENT_HASH)),
+            cb.query_one(S2)
+        );
+        let block_hash =(
+            cb.query_one(S1),
+            FieldGadget::config(&mut cb, evidence.field_len(BLOCK_HASH)),
+            cb.query_one(S2)
+        );
+        let signal_root = FieldGadget::config(&mut cb, evidence.field_len(SIGNAL_ROOT));
+        let graffiti = FieldGadget::config(&mut cb, evidence.field_len(GRAFFITI));
+        let prover = FieldGadget::config(&mut cb, evidence.field_len(PROVER));
+        
+        let total_acc = cb.query_one(S2);
+        let keccak_bytes = FieldGadget::config(&mut cb, PADDING_LEN);
+        let keccak_hi_lo = [cb.query_one(S1), cb.query_one(S1)];
+        meta.create_gate(
+            "PI acc constraints", 
+            |meta| {
+                circuit!([meta, cb], {
+                    for (n, b, acc) in [parent_hash.clone() , block_hash.clone()] {
+                        require!(acc.expr() => b.acc(evm_word.expr()));
+                        require!(
+                            (
+                                BlockContextFieldTag::BlockHash.expr(), 
+                                n.expr(), 
+                                acc.expr()
+                            ) => @PiCellType::Lookup(Table::Block), (TO_FIX)
+                        );
+                    }
+                    let acc_val = [
+                        meta_hash.clone(), 
+                        parent_hash.1.clone(), 
+                        block_hash.1.clone(), 
+                        signal_root.clone(), 
+                        graffiti.clone(), 
+                        prover.clone(), 
+                    ].iter().fold(0.expr(), |acc, gadget| {
+                        let mult = (0..gadget.len).fold(1.expr(), |acc, _| acc * keccak_r.expr());
+                        acc * mult + gadget.acc(keccak_r.expr())
                     });
-                    cb.build_constraints(Some(meta.query_selector(q_enable)))
-                }
-            );
-            cb.build_equalities(meta);
-            cb.build_lookups(
-                meta, 
-                &[cm.clone()],
-                &[
-                    (PiCellType::Byte, PiCellType::Lookup(Bytecode)),
-                    (PiCellType::Lookup(Table::Keccak), PiCellType::Lookup(Table::Keccak)),
-                    (PiCellType::Lookup(Table::Block), PiCellType::Lookup(Table::Block)),
-                ],
-                Some(q_enable)
-            );
-            // meta.pinned().print_config_states();
-            // meta.pinned().print_layout_states();
-
-            let col_configs = cm.columns().to_vec();
-            Self {
-                q_enable,
-                public_input,
-                field,
-                state,
-                block_acc,
-                block_number,
-                keccak_input,
-                keccak_output,
-                block_table,
-                keccak_table,
-                byte_table,
-                col_configs,
+                    require!(total_acc.expr() => acc_val);
+                    require!(
+                        (
+                            1.expr(), 
+                            total_acc.expr(), 
+                            evidence.total_len().expr(), 
+                            keccak_bytes.acc(evm_word.expr())
+                        )
+                        => @PiCellType::Lookup(Table::Keccak), (TO_FIX)
+                    );
+                    let hi_lo = keccak_bytes.hi_low_field();
+                    keccak_hi_lo.iter().zip(hi_lo.iter()).for_each(|(cell, epxr)| {
+                        require!(cell.expr() => epxr);
+                        cb.enable_equality(cell.column());
+                    });
+                });
+                cb.build_constraints(Some(meta.query_selector(q_enable)))
             }
+        );
+        cb.build_lookups(
+            meta, 
+            &[cm.clone()],
+            &[
+                (PiCellType::Byte, PiCellType::Lookup(Table::Bytecode)),
+                (PiCellType::Lookup(Table::Keccak), PiCellType::Lookup(Table::Keccak)),
+                (PiCellType::Lookup(Table::Block), PiCellType::Lookup(Table::Block)),
+            ],
+            Some(q_enable)
+        );
+        let annotation_configs = cm.columns().to_vec();
+        Self {
+            q_enable, 
+            keccak_instance,
+            meta_hash,
+            parent_hash,
+            block_hash,
+            signal_root,
+            graffiti,
+            prover,
+            total_acc,
+            keccak_bytes,
+            keccak_hi_lo,
+            block_table,
+            keccak_table,
+            byte_table,
+            annotation_configs 
         }
-
+    }
 }
 
 impl<F: Field> TaikoPiCircuitConfig<F> {
     pub(crate) fn assign(
         &self,
         layouter: &mut impl Layouter<F>,
-        public_data: &PublicData,
-        challenges: &Challenges<Value<F>>,
+        challenge: &Challenges<Value<F>>,
+        evidence: &PublicData<F>,
     ) -> Result<(), Error> {
-        let pi_cells = layouter.assign_region(
+        let evm_word = challenge.evm_word();
+        let keccak_r = challenge.keccak_input();
+        let mut hi_lo_cells = layouter.assign_region(
         || "Pi",
         |mut region| {
-                
                 self.q_enable.enable(&mut region, 0)?;
                 let mut region = CachedRegion::new(&mut region);
-                region.annotate_columns(&self.col_configs);
+                region.annotate_columns(&self.annotation_configs);
 
-                let mut block_acc = F::ZERO;
-                let mut keccak_r = F::ZERO;
-                challenges.keccak_input().map(|v| keccak_r = v);
-                let keccak_mult = (0..N).fold(1.scalar(), |acc: F, _| acc * keccak_r);
+                assign!(region, self.parent_hash.0, 0 => (evidence.block_context.number - 1).as_u64().scalar());
+                assign!(region, self.parent_hash.2, 0 => evidence.assignment_acc(PARENT_HASH, evm_word));
+                assign!(region, self.block_hash.0, 0 => (evidence.block_context.number).as_u64().scalar());
+                assign!(region, self.block_hash.2, 0 => evidence.assignment_acc(BLOCK_HASH, evm_word));
 
-                let mut assignments = public_data.assignments().to_vec();
-                assignments.append(&mut vec![
-                    ("keccak_output", None, public_data.get_pi().to_fixed_bytes().to_vec())
-                ]);
-                let mut offset = 0;
-                let mut state = 0;
-                let mut pi_cells = Vec::new();
-                for (_annotation, block_number, bytes) in assignments {
-                    self.state.assign(&mut region, offset, state)?;
-                    if state != KECCAK_OUTPUT {
-                        let next = block_acc * keccak_mult 
-                            + self.field.assign(&mut region, offset, &bytes, keccak_r)?;
-                        assign!(region, self.block_acc, offset => next)?;
-                        block_acc = next;
-                    }
-                    match state {
-                        PARENT_HASH | BLOCK_HASH => {
-                            let block_number = block_number.expect(&format!("block_number missing at {:?}th row", offset));
-                            assign!(region, self.block_number, offset => block_number.as_u64().scalar())?;
-                        },
-                        FIELD10_IDX => {
-                            assign!(region, self.keccak_input, offset => block_acc)?;
-                        },
-                        KECCAK_OUTPUT => {
-                            let (hi, low) = public_data.get_pi_hi_low::<F>();
-                            pi_cells.push(assign!(region, self.keccak_output[0], offset => hi)?);
-                            pi_cells.push(assign!(region, self.keccak_output[1], offset => low)?);
-                        },
-                        _ => ()
-                    }
-                    offset += N;
-                    state += 1
-                }
-                Ok(pi_cells)
-            }
-        )?;
-        for (i, cell) in pi_cells.iter().enumerate() {
-            layouter.constrain_instance(cell.cell(), self.public_input, i)?;
+                let mut acc = F::ZERO;
+                let mut idx = 0;
+                [
+                    &self.meta_hash,
+                    &self.parent_hash.1,
+                    &self.block_hash.1,
+                    &self.signal_root,
+                    &self.graffiti,
+                    &self.prover,
+                ].iter().for_each(|gadget| {
+                    gadget.assign(&mut region, 0, &evidence.assignment(idx))
+                        .expect(&format!("FieldGadget assignment failed at {:?}", idx));
+                    idx += 1;
+                });
+                self.keccak_bytes.assign(&mut region, 0, &evidence.keccak_assignment())
+                    .expect("Keccak bytes assignment failed");
+                assign!(region, self.total_acc, 0 => evidence.total_acc(keccak_r))?;
+                let hi_low_assignment = evidence.keccak_hi_low();
+                let hi = assign!(region, self.keccak_hi_lo[0], 0 => hi_low_assignment[0])?;
+                let lo = assign!(region, self.keccak_hi_lo[1], 0 => hi_low_assignment[1])?;
+
+                Ok([hi, lo])
+        })?;
+        for (i, cell) in hi_lo_cells.iter().enumerate() {
+            layouter.constrain_instance(cell.cell(), self.keccak_instance, i)?;
         }
         Ok(())
     }
 }
-
-#[derive(Clone, Debug)]
-struct PiState<F> {
-    pub(crate) state: Cell<F>,
-    is_l1_signal: IsEqualGadget<F>,
-    is_parent_hash: IsEqualGadget<F>,
-    is_block_hash: IsEqualGadget<F>,
-    is_field_10: IsEqualGadget<F>,
-    is_keccak_output: IsEqualGadget<F>,
-}
-impl<F: Field> PiState<F> {
-    pub(crate) fn config(cb: &mut ConstraintBuilder<F, PiCellType>) -> Self {
-        let state = cb.query_default();
-        Self { 
-            state: state.clone(),
-            is_l1_signal: IsEqualGadget::construct(cb, state.expr(), L1SIGNAL_IDX.expr()), 
-            is_parent_hash:  IsEqualGadget::construct(cb, state.expr(), PARENT_HASH.expr()), 
-            is_block_hash: IsEqualGadget::construct(cb, state.expr(), BLOCK_HASH.expr()), 
-            is_field_10: IsEqualGadget::construct(cb, state.expr(), FIELD10_IDX.expr()), 
-            is_keccak_output: IsEqualGadget::construct(cb, state.expr(), KECCAK_OUTPUT.expr()), 
-        }
-    }
-
-    pub(crate) fn increment_step(&self) -> Expression<F> {
-        not::expr(self.is_field_10.expr()) + not::expr(self.is_keccak_output.expr())
-    }
-
-    pub(crate) fn lookup_blockhash(&self) -> Expression<F> {
-        self.is_block_hash.expr()
-    }
-
-    pub(crate) fn assign(
-        &self,
-        region: &mut CachedRegion<'_, '_, F>,
-        offset: usize,
-        state: usize
-    ) -> Result<(), Error> {
-        assign!(region, self.state, offset => state.scalar());
-        self.is_l1_signal.assign(region, offset, state.scalar(), L1SIGNAL_IDX.scalar())?;
-        self.is_parent_hash.assign(region, offset, state.scalar(), PARENT_HASH.scalar())?;
-        self.is_block_hash.assign(region, offset, state.scalar(), BLOCK_HASH.scalar())?;
-        self.is_field_10.assign(region, offset, state.scalar(), FIELD10_IDX.scalar())?;
-        self.is_keccak_output.assign(region, offset, state.scalar(), KECCAK_OUTPUT.scalar())?;
-        Ok(())
-    }
-
-}
-
-
-#[derive(Clone, Debug)]
-struct FieldBytesGadget<F> {
-    bytes: [Cell<F>; N],
-    word_r: Expression<F>,
-    keccak_r: Expression<F>,
-}
-impl<F: Field> FieldBytesGadget<F> {
-    pub(crate) fn config(
-        cb: &mut ConstraintBuilder<F, PiCellType>, 
-        challenges: &Challenges<Expression<F>>
-    ) -> Self {
-        Self {
-            bytes: cb.query_bytes(),
-            word_r: challenges.evm_word().expr(),
-            keccak_r: challenges.keccak_input().expr(),
-        }
-    } 
-
-    pub(crate) fn bytes_expr(&self) -> Vec<Expression<F>> {
-        self.bytes.iter().map(|b| b.expr()).collect()
-    }
-
-    /// RLC of bytes of a field with evm_word 1<<8
-    pub(crate) fn hi_low_field(&self) -> (Expression<F>, Expression<F>) {
-        let hi = self.bytes_expr()[..16].to_vec();
-        let low = self.bytes_expr()[16..].to_vec();
-        (hi.rlc_rev(&BYTE_POW_BASE.expr()), low.rlc_rev(&BYTE_POW_BASE.expr()))
-    }
-
-    /// RLC of bytes of a field with evm_word
-    pub(crate) fn evm_word_field(&self) -> Expression<F> {
-        self.bytes_expr().rlc_rev(&self.word_r)
-    }
-
-    /// RLC of bytes of a field with keccak_input
-    pub(crate) fn keccak_field(&self) -> Expression<F> {
-        self.bytes_expr().rlc_rev(&self.keccak_r) // OK!
-        // = b0 * r^31 + ... + b31 * r^0
-    }
-
-    // ------------------ Assign ------------------
-
-    /// Returns the rlc of given bytes
-    pub(crate) fn assign(
-        &self,
-        region: &mut CachedRegion<'_, '_, F>,
-        offset: usize,
-        bytes: &[u8],
-        r: F,
-    ) -> Result<F, Error> {
-        // Assign the bytes
-        for (byte, cell) in bytes.iter().zip(self.bytes.iter()) {
-            assign!(region, cell, offset => byte.scalar())?;
-        }
-        Ok(bytes.rlc_rev_value(r))
-    }
-}
-
-
 /// Public Inputs Circuit
-#[derive(Clone, Default, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct TaikoPiCircuit<F: Field> {
     /// PublicInputs data known by the verifier
-    pub public_data: PublicData,
-    _marker: PhantomData<F>,
+    pub evidence: PublicData<F>,
 }
 
 impl<F: Field> TaikoPiCircuit<F> {
     /// Creates a new TaikoPiCircuit
-    pub fn new(public_data: PublicData) -> Self {
+    pub fn new(evidence: PublicData<F>) -> Self {
         Self {
-            public_data,
-            _marker: PhantomData,
+            evidence: evidence,
         }
     }
 }
-
 
 impl<F: Field> SubCircuit<F> for TaikoPiCircuit<F> {
     type Config = TaikoPiCircuitConfig<F>;
@@ -568,11 +480,12 @@ impl<F: Field> SubCircuit<F> for TaikoPiCircuit<F> {
     fn unusable_rows() -> usize {
         // No column queried at more than 3 distinct rotations, so returns 6 as
         // minimum unusable rows.
-        6
+        PublicData::<F>::default().total_len() + 3
     }
 
-    fn min_num_rows_block(_block: &witness::Block<F>) -> (usize, usize) {
-        (USED_ROWS, USED_ROWS)
+    fn min_num_rows_block(block: &witness::Block<F>) -> (usize, usize) {
+        // TODO(Cecilia): what is the first field?
+        (0, PublicData::new(block).total_len())
     }
 
     fn new_from_block(block: &witness::Block<F>) -> Self {
@@ -581,8 +494,7 @@ impl<F: Field> SubCircuit<F> for TaikoPiCircuit<F> {
 
     /// Compute the public inputs for this circuit.
     fn instance(&self) -> Vec<Vec<F>> {
-        let (hi, low) = self.public_data.get_pi_hi_low::<F>();
-        vec![vec![hi, low]]
+        vec![ self.evidence.keccak_hi_low().to_vec()]
     }
 
     /// Make the assignments to the PiCircuit
@@ -593,33 +505,32 @@ impl<F: Field> SubCircuit<F> for TaikoPiCircuit<F> {
         layouter: &mut impl Layouter<F>,
     ) -> Result<(), Error> {
         config.byte_table.load(layouter)?;
-        config.assign(layouter, &self.public_data, challenges)
+        config.assign(layouter, challenges, &self.evidence)
     }
 }
 
-
-// We define the PiTestCircuit as a wrapper over PiCircuit extended to take the
-// generic const parameters MAX_TXS and MAX_CALLDATA.  This is necessary because
-// the trait Circuit requires an implementation of `configure` that doesn't take
-// any circuit parameters, and the PiCircuit defines gates that use rotations
-// that depend on MAX_TXS and MAX_CALLDATA, so these two values are required
-// during the configuration.
-/// Test Circuit for PiCircuit
 #[cfg(any(feature = "test", test))]
-#[derive(Default, Clone)]
-pub struct TaikoPiTestCircuit<F: Field>(pub TaikoPiCircuit<F>);
-
-#[cfg(any(feature = "test", test))]
-impl<F: Field> Circuit<F> for TaikoPiTestCircuit<F> {
-    type Config = (TaikoPiCircuitConfig<F>, Challenges);
+impl<F: Field> Circuit<F> for TaikoPiCircuit<F> {
+    type Config =  (TaikoPiCircuitConfig<F>, Challenges);
     type FloorPlanner = SimpleFloorPlanner;
-    type Params = ();
+    type Params = PublicData<F>;
 
     fn without_witnesses(&self) -> Self {
         Self::default()
     }
 
+    fn params(&self) -> Self::Params {
+        self.evidence.clone()
+    }
+
     fn configure(meta: &mut ConstraintSystem<F>) -> Self::Config {
+        Self::configure_with_params(meta, PublicData::default())
+    }
+
+    fn configure_with_params(
+        meta: &mut ConstraintSystem<F>,
+        params: Self::Params,
+    ) -> Self::Config {
         let block_table = BlockTable::construct(meta);
         let keccak_table = KeccakTable::construct(meta);
         let byte_table = ByteTable::construct(meta);
@@ -629,13 +540,14 @@ impl<F: Field> Circuit<F> for TaikoPiTestCircuit<F> {
             TaikoPiCircuitConfig::new(
                 meta,
                 TaikoPiCircuitConfigArgs {
+                    evidence: params,
                     block_table,
                     keccak_table,
                     byte_table,
                     challenges: challenge_exprs,
-                },
+                }
             ),
-            challenges,
+            challenges
         )
     }
 
@@ -645,26 +557,27 @@ impl<F: Field> Circuit<F> for TaikoPiTestCircuit<F> {
         mut layouter: impl Layouter<F>,
     ) -> Result<(), Error> {
         let challenges = challenges.values(&mut layouter);
-        let public_data = &self.0.public_data;
-        // assign block table
+        let evidance = self.params();
         let randomness = challenges.evm_word();
+        // assign block table
         config
             .block_table
-            .load(&mut layouter, &public_data.block_context, randomness)?;
-            // [Tag, 0  (b0*r^31 + ... + b31*r^0)]
-
+            .load(&mut layouter, &evidance.block_context, randomness)?;
         // assign keccak table
         config
             .keccak_table
-            .dev_load(&mut layouter, vec![&public_data.rpi_bytes()], &challenges)?;
+            .dev_load(&mut layouter, vec![&evidance.encode_raw()], &challenges)?;
         config.byte_table.load(&mut layouter)?;
 
-        self.0.synthesize_sub(&config, &challenges, &mut layouter)
+        self.synthesize_sub(&config, &challenges, &mut layouter)
     }
+
 }
 
 #[cfg(test)]
 mod taiko_pi_circuit_test {
+
+    use std::vec;
 
     use super::*;
 
@@ -685,72 +598,43 @@ mod taiko_pi_circuit_test {
 
     fn run<F: Field>(
         k: u32,
-        public_data: PublicData,
+        evidence: PublicData<F>,
         pi: Option<Vec<Vec<F>>>,
     ) -> Result<(), Vec<VerifyFailure>> {
-        let circuit = TaikoPiTestCircuit::<F>(TaikoPiCircuit::new(public_data));
-        
-        let public_inputs = pi.unwrap_or_else(|| circuit.0.instance());
-        let prover = match MockProver::run(k, &circuit, public_inputs) {
+        let circuit = TaikoPiCircuit::new(evidence);
+        let keccak_instance = pi.unwrap_or_else(|| circuit.instance());
+        let prover = match MockProver::run(k, &circuit, keccak_instance) {
             Ok(prover) => prover,
             Err(e) => panic!("{:#?}", e),
         };
         prover.verify()
     }
 
-    fn mock_public_data() -> PublicData {
-        let mut public_data = PublicData::default::<Fr>();
-        public_data.meta_hash = OMMERS_HASH.to_word();
-        public_data.block_hash = OMMERS_HASH.to_word();
-        public_data.block_context.block_hash = OMMERS_HASH.to_word();
-        public_data.block_context.history_hashes = vec![Default::default(); 256];
-        public_data.block_context.number = 300.into();
-        public_data
+    fn mock_public_data() -> PublicData<Fr> {
+        let mut evidence = PublicData::default();
+        evidence.set_field(PARENT_HASH, OMMERS_HASH.to_fixed_bytes().to_vec());
+        evidence.set_field(BLOCK_HASH, OMMERS_HASH.to_fixed_bytes().to_vec());
+        evidence.block_context.number = 300.into();
+        evidence.block_context.block_hash = OMMERS_HASH.to_word();
+        // has to have at least one history block
+        evidence.block_context.history_hashes = vec![OMMERS_HASH.to_word()];
+        evidence
     }
 
     #[test]
     fn test_default_pi() {
-        let public_data = mock_public_data();
+        let evidence = mock_public_data();
 
         let k = 17;
-        assert_eq!(run::<Fr>(k, public_data, None), Ok(()));
+        assert_eq!(run::<Fr>(k, evidence, None), Ok(()));
     }
 
     #[test]
     fn test_fail_pi_hash() {
-        let public_data = mock_public_data();
+        let evidence = mock_public_data();
 
         let k = 17;
-        match run::<Fr>(k, public_data, Some(vec![vec![Fr::zero(), Fr::one()]])) {
-            Ok(_) => unreachable!("this case must fail"),
-            Err(errs) => {
-                assert_eq!(errs.len(), 4);
-                for err in errs {
-                    match err {
-                        VerifyFailure::Permutation { .. } => return,
-                        _ => unreachable!("unexpected error"),
-                    }
-                }
-            }
-        }
-    }
-
-    #[test]
-    fn test_fail_pi_prover() {
-        let mut public_data = mock_public_data();
-        let address_bytes = [
-            0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
-        ];
-
-        public_data.prover = Address::from_slice(&address_bytes);
-
-        let prover: Fr = public_data.prover.to_scalar().unwrap();
-        let k = 17;
-        match run::<Fr>(
-            k,
-            public_data,
-            Some(vec![vec![prover, Fr::zero(), Fr::one()]]),
-        ) {
+        match run::<Fr>(k, evidence, Some(vec![vec![Fr::zero(), Fr::one()]])) {
             Ok(_) => unreachable!("this case must fail"),
             Err(errs) => {
                 assert_eq!(errs.len(), 4);
@@ -766,12 +650,14 @@ mod taiko_pi_circuit_test {
 
     #[test]
     fn test_simple_pi() {
-        let mut public_data = mock_public_data();
-        let chain_id = 1337u64;
-        public_data.chain_id = Word::from(chain_id);
+        let mut evidence = mock_public_data();
+        let block_number = 1337u64;
+        evidence.block_context.number = block_number.into();
+        evidence.block_context.history_hashes = vec![OMMERS_HASH.to_word()];
+        evidence.set_field(PROVER, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19].into());
 
         let k = 17;
-        assert_eq!(run::<Fr>(k, public_data, None), Ok(()));
+        assert_eq!(run::<Fr>(k, evidence, None), Ok(()));
     }
 
     #[test]
@@ -785,16 +671,15 @@ mod taiko_pi_circuit_test {
         block.context.history_hashes = vec![OMMERS_HASH.to_word()];
         block.context.block_hash = OMMERS_HASH.to_word();
         block.context.number = 300.into();
-        
-        println!("{:?}\n{:?}", 
-            block.protocol_instance.meta_hash.hash(), 
-            block.protocol_instance.meta_hash.hash().to_word());
 
-        let public_data = PublicData::new(&block);
-        println!("public_data: {:?}\n{:?}", public_data.meta_hash, public_data.meta_hash.to_be_bytes());
+        let evidence = PublicData::new(&block);
 
         let k = 17;
 
-        assert_eq!(run::<Fr>(k, public_data, None), Ok(()));
+        assert_eq!(run::<Fr>(k, evidence, None), Ok(()));
     }
+
+
 }
+
+
