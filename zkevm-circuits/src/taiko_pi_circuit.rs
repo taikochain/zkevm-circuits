@@ -795,6 +795,6 @@ mod taiko_pi_circuit_test {
 
         let k = 17;
 
-        // assert_eq!(run::<Fr>(k, public_data, None), Ok(()));
+        assert_eq!(run::<Fr>(k, public_data, None), Ok(()));
     }
 }

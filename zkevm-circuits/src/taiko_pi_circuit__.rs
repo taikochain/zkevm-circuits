@@ -1,7 +1,7 @@
 
 
 use bus_mapping::evm;
-use eth_types::{Address, Field, ToBigEndian, ToWord, Word, H256, H160};
+use eth_types::{Address, Field, ToBigEndian, ToWord, Word, H256, H160, U256};
 use ethers_core::abi::*;
 use ethers_core::abi::FixedBytes;
 use ethers_core::utils::keccak256;
@@ -121,7 +121,10 @@ pub struct PublicData<F> {
 
 impl<F: Field> Default for PublicData<F> {
     fn default() -> Self {
-        Self::new(&witness::Block::default())
+        // has to have at least one history hash, block number must start with at least one
+        let mut ret = Self::new(&witness::Block::default());
+        ret.block_context.history_hashes = vec![U256::default()];
+        ret
     }
 }
 
@@ -623,6 +626,7 @@ mod taiko_pi_circuit_test {
         evidence.set_field(BLOCK_HASH, OMMERS_HASH.to_fixed_bytes().to_vec());
         evidence.block_context.number = 300.into();
         evidence.block_context.block_hash = OMMERS_HASH.to_word();
+        // has to have at least one history block
         evidence.block_context.history_hashes = vec![OMMERS_HASH.to_word()];
         evidence
     }
@@ -636,25 +640,55 @@ mod taiko_pi_circuit_test {
     }
 
     #[test]
-    fn test(){
-        println!("test");
-        let mut evidence = PublicData::<Fr>::default();
-        let data = hex::decode("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef").unwrap();
-        evidence.set_field(0, data.clone());
-        // evidence.set_field(1, vec![0u8; 32]);
-        // evidence.set_field(2, data.clone());
-        // evidence.set_field(3, vec![0u8; 32]);
-        // evidence.set_field(4, vec![0u8; 32]);
-        // evidence.set_field(5, vec![0u8; 20]);
+    fn test_fail_pi_hash() {
+        let evidence = mock_public_data();
 
-        // evidence.parent_hash = Token::FixedBytes(vec![0u8; 32]);
-        // evidence.block_hash = Token::FixedBytes(data);
-        // evidence.signal_root = Token::FixedBytes(vec![0u8; 32]);
-        // evidence.graffiti = Token::FixedBytes(vec![0u8; 32]);
-        // evidence.prover = Token::Address([0x22u8; 20].into());
-        let encode_raw = evidence.encode_raw();
-        println!("abi.encode {:?}\nkeccak {:?}\nhi-lo {:?}", encode_raw.clone(), keccak256(encode_raw), evidence.keccak_hi_low());
+        let k = 17;
+        match run::<Fr>(k, evidence, Some(vec![vec![Fr::zero(), Fr::one()]])) {
+            Ok(_) => unreachable!("this case must fail"),
+            Err(errs) => {
+                assert_eq!(errs.len(), 4);
+                for err in errs {
+                    match err {
+                        VerifyFailure::Permutation { .. } => return,
+                        _ => unreachable!("unexpected error"),
+                    }
+                }
+            }
+        }
     }
+
+    #[test]
+    fn test_simple_pi() {
+        let mut evidence = mock_public_data();
+        let block_number = 1337u64;
+        evidence.block_context.number = block_number.into();
+        evidence.block_context.history_hashes = vec![OMMERS_HASH.to_word()];
+        evidence.set_field(PROVER, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19].into());
+
+        let k = 17;
+        assert_eq!(run::<Fr>(k, evidence, None), Ok(()));
+    }
+
+    #[test]
+    fn test_verify() {
+        let mut block = witness::Block::<Fr>::default();
+
+        block.eth_block.parent_hash = *OMMERS_HASH;
+        block.eth_block.hash = Some(*OMMERS_HASH);
+        block.protocol_instance.block_hash = *OMMERS_HASH;
+        block.protocol_instance.parent_hash = *OMMERS_HASH;
+        block.context.history_hashes = vec![OMMERS_HASH.to_word()];
+        block.context.block_hash = OMMERS_HASH.to_word();
+        block.context.number = 300.into();
+
+        let evidence = PublicData::new(&block);
+
+        let k = 17;
+
+        assert_eq!(run::<Fr>(k, evidence, None), Ok(()));
+    }
+
 
 }
 
