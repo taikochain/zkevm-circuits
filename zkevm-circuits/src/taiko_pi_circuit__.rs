@@ -16,7 +16,7 @@ use halo2_proofs::plonk::Error;
 use core::result::Result;
 use crate::circuit_tools::cached_region::CachedRegion;
 use crate::circuit_tools::cell_manager::{Cell, CellType, CellManager, CellColumn};
-use crate::circuit_tools::constraint_builder::{ConstraintBuilder, TO_FIX, RLCable};
+use crate::circuit_tools::constraint_builder::{ConstraintBuilder, TO_FIX, RLCable, ExprVec};
 use crate::evm_circuit::table::Table;
 use crate::evm_circuit::util::rlc;
 use crate::util::{Challenges, SubCircuitConfig, SubCircuit};
@@ -164,6 +164,12 @@ impl<F: Field> PublicData<F> {
             .collect()
     }
 
+    fn assignment_acc(&self, idx: usize, r: Value<F>) -> F {
+        let mut rand = F::ZERO;
+        r.map(|r| rand = r);
+        rlc::value(self.encode_field(idx).iter().rev(), rand)
+    }
+
     fn keccak_hi_low(&self) -> [F; 2] {
         let keccaked_pi = keccak256(self.encode_raw());
         [
@@ -201,7 +207,7 @@ impl<F: Field> PublicData<F> {
 pub struct TaikoPiCircuitConfig<F: Field> {
     q_enable: Selector,
     public_input: Column<Instance>, // equality
-    block_hash: (Cell<F>, FieldGadget<F>),
+    block_hash: (Cell<F>, FieldGadget<F>, Cell<F>),
 
     block_table: BlockTable,
     keccak_table: KeccakTable,
@@ -262,13 +268,15 @@ impl<F: Field> SubCircuitConfig<F> for TaikoPiCircuitConfig<F> {
         let block_hash =(
             cb.query_one(PiCellType::Storage1),
             FieldGadget::config(&mut cb, evidence.field_len(0)),
+            cb.query_one(PiCellType::Storage2)
         );
 
         meta.create_gate(
             "PI acc constraints", 
             |meta| {
                 circuit!([meta, cb], {
-                    for (n, b) in [/* parent_hash.clone() , */ block_hash.clone()] {
+                    for (n, b, acc) in [/* parent_hash.clone() , */ block_hash.clone()] {
+                        require!(acc.expr() => b.acc(evm_word.expr()));
                         require!(
                             (
                                 BlockContextFieldTag::BlockHash.expr(), 
@@ -314,9 +322,11 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
     pub(crate) fn assign(
         &self,
         layouter: &mut impl Layouter<F>,
-        // challenge: &Challenges<Value<F>>,
+        challenge: &Challenges<Value<F>>,
         evidence: &PublicData<F>,
     ) -> Result<(), Error> {
+        let evm_word = challenge.evm_word();
+        let keccak_r = challenge.keccak_input();
         let pi_cells = layouter.assign_region(
         || "Pi",
         |mut region| {
@@ -339,6 +349,7 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
 
                 println!("evidence.block_context.number: {:?}\n", evidence.block_context.number);
                 assign!(region, self.block_hash.0, 0 => (evidence.block_context.number).as_u64().scalar());
+                assign!(region, self.block_hash.2, 0 => evidence.assignment_acc(0, evm_word));
 
                 Ok(())
         });
@@ -388,11 +399,11 @@ impl<F: Field> SubCircuit<F> for TaikoPiCircuit<F> {
     fn synthesize_sub(
         &self,
         config: &Self::Config,
-        _challenges: &Challenges<Value<F>>,
+        challenges: &Challenges<Value<F>>,
         layouter: &mut impl Layouter<F>,
     ) -> Result<(), Error> {
         config.byte_table.load(layouter)?;
-        config.assign(layouter, &self.evidence)
+        config.assign(layouter, challenges, &self.evidence)
     }
 }
 
