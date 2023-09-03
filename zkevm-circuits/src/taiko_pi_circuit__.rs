@@ -6,6 +6,7 @@ use ethers_core::abi::*;
 use ethers_core::abi::FixedBytes;
 use ethers_core::utils::keccak256;
 use halo2_proofs::circuit::{Value, Layouter, SimpleFloorPlanner, AssignedCell};
+use halo2_proofs::poly::Rotation;
 use itertools::Itertools;
 use std::convert::TryInto;
 use std::marker::PhantomData;
@@ -202,6 +203,13 @@ impl<F: Field> PublicData<F> {
         keccak256(self.encode_raw()).to_vec()
     }
 
+    fn keccak_assignment(&self) -> Vec<F> {
+        self.keccak()
+            .iter()
+            .map(|b| F::from(*b as u64))
+            .collect()
+    }
+
     fn total_len(&self) -> usize {
         self.encode_raw().len()
     }
@@ -216,16 +224,20 @@ impl<F: Field> PublicData<F> {
 #[derive(Clone, Debug)]
 pub struct TaikoPiCircuitConfig<F: Field> {
     q_enable: Selector,
-    public_input: Column<Instance>, // equality
+    keccak_instance: Column<Instance>, // equality
+
     meta_hash: FieldGadget<F>,
     parent_hash: (Cell<F>, FieldGadget<F>, Cell<F>),
     block_hash: (Cell<F>, FieldGadget<F>, Cell<F>),
     signal_root: FieldGadget<F>,
     graffiti: FieldGadget<F>,
     prover: FieldGadget<F>,
+    keccak_bytes: FieldGadget<F>,
+    keccak_hi_lo: [Cell<F>; 2],
+
     block_table: BlockTable,
     keccak_table: KeccakTable,
-    byte_table: ByteTable,
+    byte_table: ByteTable,    
 
     annotation_configs: Vec<CellColumn<F, PiCellType>>,
 }
@@ -278,7 +290,9 @@ impl<F: Field> SubCircuitConfig<F> for TaikoPiCircuitConfig<F> {
                ]
            );
         let q_enable = meta.complex_selector();
-        let public_input = meta.instance_column();
+        let keccak_instance = meta.instance_column();
+        meta.enable_equality(keccak_instance);
+
         let meta_hash = FieldGadget::config(&mut cb, evidence.field_len(0));
         let parent_hash =(
             cb.query_one(PiCellType::Storage1),
@@ -293,7 +307,8 @@ impl<F: Field> SubCircuitConfig<F> for TaikoPiCircuitConfig<F> {
         let signal_root = FieldGadget::config(&mut cb, evidence.field_len(3));
         let graffiti = FieldGadget::config(&mut cb, evidence.field_len(4));
         let prover = FieldGadget::config(&mut cb, evidence.field_len(5));
-
+        let keccak_bytes = FieldGadget::config(&mut cb, PADDING_LEN);
+        let keccak_hi_lo = [cb.query_one(PiCellType::Storage1), cb.query_one(PiCellType::Storage1)];
         meta.create_gate(
             "PI acc constraints", 
             |meta| {
@@ -314,6 +329,12 @@ impl<F: Field> SubCircuitConfig<F> for TaikoPiCircuitConfig<F> {
                             b.acc(evm_word.expr()).identifier()
                         );
                     }
+                    let hi_lo = keccak_bytes.hi_low_field();
+                    keccak_hi_lo.iter().zip(hi_lo.iter()).for_each(|(cell, epxr)| {
+                        require!(cell.expr() => epxr);
+                        cb.enable_equality(cell.column());
+                    });
+
                 });
                 cb.build_constraints(Some(meta.query_selector(q_enable)))
             }
@@ -331,13 +352,15 @@ impl<F: Field> SubCircuitConfig<F> for TaikoPiCircuitConfig<F> {
         let annotation_configs = cm.columns().to_vec();
         Self {
             q_enable, 
-            public_input,
+            keccak_instance,
             meta_hash,
             parent_hash,
             block_hash,
             signal_root,
             graffiti,
             prover,
+            keccak_bytes,
+            keccak_hi_lo,
             block_table,
             keccak_table,
             byte_table,
@@ -355,12 +378,19 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
     ) -> Result<(), Error> {
         let evm_word = challenge.evm_word();
         let keccak_r = challenge.keccak_input();
-        let pi_cells = layouter.assign_region(
+        let mut hi_lo_cells = Vec::new();
+        layouter.assign_region(
         || "Pi",
         |mut region| {
                 self.q_enable.enable(&mut region, 0)?;
                 let mut region = CachedRegion::new(&mut region);
                 region.annotate_columns(&self.annotation_configs);
+
+                println!("evidence.block_context.number: {:?}\n", evidence.block_context.number);
+                assign!(region, self.parent_hash.0, 0 => (evidence.block_context.number - 1).as_u64().scalar());
+                assign!(region, self.parent_hash.2, 0 => evidence.assignment_acc(1, evm_word));
+                assign!(region, self.block_hash.0, 0 => (evidence.block_context.number).as_u64().scalar());
+                assign!(region, self.block_hash.2, 0 => evidence.assignment_acc(2, evm_word));
 
                 let mut acc = F::ZERO;
                 let mut idx = 0;
@@ -377,15 +407,20 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
                         .expect(&format!("FieldGadget assignment failed at {:?}", idx));
                     idx += 1;
                 });
-
-                println!("evidence.block_context.number: {:?}\n", evidence.block_context.number);
-                assign!(region, self.parent_hash.0, 0 => (evidence.block_context.number - 1).as_u64().scalar());
-                assign!(region, self.parent_hash.2, 0 => evidence.assignment_acc(1, evm_word));
-                assign!(region, self.block_hash.0, 0 => (evidence.block_context.number).as_u64().scalar());
-                assign!(region, self.block_hash.2, 0 => evidence.assignment_acc(2, evm_word));
+                self.keccak_bytes.assign(&mut region, 0, &evidence.keccak_assignment())
+                    .expect("Keccak bytes assignment failed");
+                self.keccak_hi_lo
+                    .iter()
+                    .zip(evidence.keccak_hi_low().iter())
+                    .for_each(|(cell, val)| {
+                        hi_lo_cells.push(assign!(region, cell, 0 => *val).unwrap());
+                    });
 
                 Ok(())
-        });
+        })?;
+        // for (i, cell) in hi_lo_cells.iter().enumerate() {
+        //     layouter.constrain_instance(cell.cell(), self.keccak_instance, i)?;
+        // }
         Ok(())
     }
 }
