@@ -166,7 +166,7 @@ impl<F: Field> PublicData<F> {
         }
     }
 
-    fn encode_raw(&self) -> Vec<u8> {
+    pub fn encode_raw(&self) -> Vec<u8> {
         encode(&[self.evidence.clone()])
     }
 
