@@ -9,7 +9,7 @@ use crate::{evm_circuit::util::rlc, table::LookupTable, util::{Expr, query_expre
 use eth_types::Field;
 use gadgets::util::{and, sum, Scalar};
 use halo2_proofs::{
-    plonk::{ConstraintSystem, Expression, Column, Advice, Selector},
+    plonk::{ConstraintSystem, Expression, Column, Advice, Selector}, circuit::AssignedCell,
 };
 use itertools::Itertools;
 

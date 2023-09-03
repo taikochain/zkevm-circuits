@@ -65,6 +65,7 @@ impl KeccakTable {
                 challenge,
             )
         });
+        println!("keccak table input rlc {:?} len {:?} output rlc {:?}", input, input_len, output);
         vec![[
             Value::known(F::ONE),
             input_rlc,

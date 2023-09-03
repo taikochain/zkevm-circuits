@@ -10,7 +10,8 @@ use bus_mapping::{
     circuit_input_builder::{self, CircuitsParams, CopyEvent, ExpEvent},
     Error,
 };
-use eth_types::{Address, Field, ToLittleEndian, ToScalar, ToWord, Word};
+use eth_types::{Address, Field, ToLittleEndian, ToScalar, ToWord, Word, ToBigEndian};
+use gadgets::util::Scalar;
 use halo2_proofs::circuit::Value;
 
 use super::{tx::tx_convert, Bytecode, ExecStep, ProtocolInstance, Rw, RwMap, Transaction};
@@ -143,6 +144,8 @@ pub struct BlockContext {
 impl BlockContext {
     /// Assignments for block table
     pub fn table_assignments<F: Field>(&self, randomness: Value<F>) -> Vec<[Value<F>; 3]> {
+        // let randomness = Value::known(F::from(2u64));
+        println!("block table {:?} (le_bytes) {:?} evm_word = {:?}", self.number, self.block_hash.to_le_bytes(), randomness);
         [
             vec![
                 [
@@ -188,7 +191,6 @@ impl BlockContext {
                     Value::known(self.number.to_scalar().unwrap()),
                     randomness
                         .map(|randomness| rlc::value(&self.block_hash.to_le_bytes(), randomness)),
-                    // b0 * r^31 + ... + b31 * r^0
                 ],
             ],
             {
