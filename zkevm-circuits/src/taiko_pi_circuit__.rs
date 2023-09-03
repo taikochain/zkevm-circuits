@@ -168,6 +168,16 @@ impl<F: Field> PublicData<F> {
         encode(&[field])
     }
 
+    fn total_acc(&self, r: Value<F>) -> F {
+        let mut rand = F::ZERO;
+        r.map(|r| rand = r);
+        self.encode_raw()
+            .iter()
+            .fold(F::ZERO, |acc: F, byte| {
+                acc * rand + F::from(*byte as u64)
+            }) 
+    }
+
     fn assignment(&self, idx: usize) -> Vec<F> {
         self.encode_field(idx)
             .iter()
@@ -232,6 +242,8 @@ pub struct TaikoPiCircuitConfig<F: Field> {
     signal_root: FieldGadget<F>,
     graffiti: FieldGadget<F>,
     prover: FieldGadget<F>,
+
+    total_acc: Cell<F>,
     keccak_bytes: FieldGadget<F>,
     keccak_hi_lo: [Cell<F>; 2],
 
@@ -307,6 +319,8 @@ impl<F: Field> SubCircuitConfig<F> for TaikoPiCircuitConfig<F> {
         let signal_root = FieldGadget::config(&mut cb, evidence.field_len(3));
         let graffiti = FieldGadget::config(&mut cb, evidence.field_len(4));
         let prover = FieldGadget::config(&mut cb, evidence.field_len(5));
+        
+        let total_acc = cb.query_one(PiCellType::Storage2);
         let keccak_bytes = FieldGadget::config(&mut cb, PADDING_LEN);
         let keccak_hi_lo = [cb.query_one(PiCellType::Storage1), cb.query_one(PiCellType::Storage1)];
         meta.create_gate(
@@ -329,12 +343,32 @@ impl<F: Field> SubCircuitConfig<F> for TaikoPiCircuitConfig<F> {
                             b.acc(evm_word.expr()).identifier()
                         );
                     }
+                    let acc_val = [
+                        meta_hash.clone(), 
+                        parent_hash.1.clone(), 
+                        block_hash.1.clone(), 
+                        signal_root.clone(), 
+                        graffiti.clone(), 
+                        prover.clone(), 
+                    ].iter().fold(0.expr(), |acc, gadget| {
+                        let mult = (0..gadget.len).fold(1.expr(), |acc, _| acc * keccak_r.expr());
+                        acc * mult + gadget.acc(keccak_r.expr())
+                    });
+                    require!(total_acc.expr() => acc_val);
+                    require!(
+                        (
+                            1.expr(), 
+                            total_acc.expr(), 
+                            evidence.total_len().expr(), 
+                            keccak_bytes.acc(evm_word.expr())
+                        )
+                        => @PiCellType::Lookup(Table::Keccak), (TO_FIX)
+                    );
                     let hi_lo = keccak_bytes.hi_low_field();
                     keccak_hi_lo.iter().zip(hi_lo.iter()).for_each(|(cell, epxr)| {
                         require!(cell.expr() => epxr);
                         cb.enable_equality(cell.column());
                     });
-
                 });
                 cb.build_constraints(Some(meta.query_selector(q_enable)))
             }
@@ -359,6 +393,7 @@ impl<F: Field> SubCircuitConfig<F> for TaikoPiCircuitConfig<F> {
             signal_root,
             graffiti,
             prover,
+            total_acc,
             keccak_bytes,
             keccak_hi_lo,
             block_table,
@@ -408,6 +443,7 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
                 });
                 self.keccak_bytes.assign(&mut region, 0, &evidence.keccak_assignment())
                     .expect("Keccak bytes assignment failed");
+                assign!(region, self.total_acc, 0 => evidence.total_acc(keccak_r))?;
                 let hi_low_assignment = evidence.keccak_hi_low();
                 let hi = assign!(region, self.keccak_hi_lo[0], 0 => hi_low_assignment[0])?;
                 let lo = assign!(region, self.keccak_hi_lo[1], 0 => hi_low_assignment[1])?;
