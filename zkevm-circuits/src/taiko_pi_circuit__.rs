@@ -120,9 +120,11 @@ impl<F: Field> Default for PublicData<F> {
 impl<F: Field> PublicData<F> {
     fn new(block: &witness::Block<F>) -> Self {
         let block_hash = Token::FixedBytes(block.protocol_instance.block_hash.to_word().to_be_bytes().to_vec());
+        let signal_root = Token::FixedBytes(block.protocol_instance.signal_root.to_word().to_be_bytes().to_vec());
         Self { 
             evidence: Token::FixedArray(vec![
                 block_hash,
+                signal_root,
                 ]),
             block_context: block.context.clone(),
             _phantom: PhantomData
@@ -208,7 +210,7 @@ pub struct TaikoPiCircuitConfig<F: Field> {
     q_enable: Selector,
     public_input: Column<Instance>, // equality
     block_hash: (Cell<F>, FieldGadget<F>, Cell<F>),
-
+    signal_root: FieldGadget<F>,
     block_table: BlockTable,
     keccak_table: KeccakTable,
     byte_table: ByteTable,
@@ -270,6 +272,7 @@ impl<F: Field> SubCircuitConfig<F> for TaikoPiCircuitConfig<F> {
             FieldGadget::config(&mut cb, evidence.field_len(0)),
             cb.query_one(PiCellType::Storage2)
         );
+        let signal_root = FieldGadget::config(&mut cb, evidence.field_len(1));
 
         meta.create_gate(
             "PI acc constraints", 
@@ -310,6 +313,7 @@ impl<F: Field> SubCircuitConfig<F> for TaikoPiCircuitConfig<F> {
             q_enable, 
             public_input,
             block_hash,
+            signal_root,
             block_table,
             keccak_table,
             byte_table,
@@ -339,6 +343,7 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
                 let mut idx = 0;
                 [
                     &self.block_hash.1,
+                    &self.signal_root,
                 ].iter().for_each(|gadget| {
                     println!("assignment {:?}: {:?}, {:?}", idx, offset, evidence.encode_field(idx));
                     gadget.assign(&mut region, offset, &evidence.assignment(idx))
