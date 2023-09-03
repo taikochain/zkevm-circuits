@@ -27,8 +27,14 @@ use crate::table::{byte_table::ByteTable, BlockContextFieldTag, BlockTable, Kecc
 
 const BYTE_POW_BASE: u64 = 1 << 8;
 const PADDING_LEN: usize = 32;
-
-
+const META_HASH: usize = 0;
+const PARENT_HASH: usize = 1;
+const BLOCK_HASH: usize = 2;
+const SIGNAL_ROOT: usize = 3;
+const GRAFFITI: usize = 4;
+const PROVER: usize = 5;
+const S1: PiCellType = PiCellType::Storage1;
+const S2: PiCellType = PiCellType::Storage2;
 ///
 #[derive(Debug, Clone, Default)]
 pub struct FieldGadget<F> {
@@ -102,6 +108,7 @@ impl Default for PiCellType {
         Self::Storage1
     }
 }
+
 
 
 
@@ -305,24 +312,24 @@ impl<F: Field> SubCircuitConfig<F> for TaikoPiCircuitConfig<F> {
         let keccak_instance = meta.instance_column();
         meta.enable_equality(keccak_instance);
 
-        let meta_hash = FieldGadget::config(&mut cb, evidence.field_len(0));
+        let meta_hash = FieldGadget::config(&mut cb, evidence.field_len(META_HASH));
         let parent_hash =(
-            cb.query_one(PiCellType::Storage1),
-            FieldGadget::config(&mut cb, evidence.field_len(1)),
-            cb.query_one(PiCellType::Storage2)
+            cb.query_one(S1),
+            FieldGadget::config(&mut cb, evidence.field_len(PARENT_HASH)),
+            cb.query_one(S2)
         );
         let block_hash =(
-            cb.query_one(PiCellType::Storage1),
-            FieldGadget::config(&mut cb, evidence.field_len(2)),
-            cb.query_one(PiCellType::Storage2)
+            cb.query_one(S1),
+            FieldGadget::config(&mut cb, evidence.field_len(BLOCK_HASH)),
+            cb.query_one(S2)
         );
-        let signal_root = FieldGadget::config(&mut cb, evidence.field_len(3));
-        let graffiti = FieldGadget::config(&mut cb, evidence.field_len(4));
-        let prover = FieldGadget::config(&mut cb, evidence.field_len(5));
+        let signal_root = FieldGadget::config(&mut cb, evidence.field_len(SIGNAL_ROOT));
+        let graffiti = FieldGadget::config(&mut cb, evidence.field_len(GRAFFITI));
+        let prover = FieldGadget::config(&mut cb, evidence.field_len(PROVER));
         
-        let total_acc = cb.query_one(PiCellType::Storage2);
+        let total_acc = cb.query_one(S2);
         let keccak_bytes = FieldGadget::config(&mut cb, PADDING_LEN);
-        let keccak_hi_lo = [cb.query_one(PiCellType::Storage1), cb.query_one(PiCellType::Storage1)];
+        let keccak_hi_lo = [cb.query_one(S1), cb.query_one(S1)];
         meta.create_gate(
             "PI acc constraints", 
             |meta| {
@@ -422,9 +429,9 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
 
                 println!("evidence.block_context.number: {:?}\n", evidence.block_context.number);
                 assign!(region, self.parent_hash.0, 0 => (evidence.block_context.number - 1).as_u64().scalar());
-                assign!(region, self.parent_hash.2, 0 => evidence.assignment_acc(1, evm_word));
+                assign!(region, self.parent_hash.2, 0 => evidence.assignment_acc(PARENT_HASH, evm_word));
                 assign!(region, self.block_hash.0, 0 => (evidence.block_context.number).as_u64().scalar());
-                assign!(region, self.block_hash.2, 0 => evidence.assignment_acc(2, evm_word));
+                assign!(region, self.block_hash.2, 0 => evidence.assignment_acc(BLOCK_HASH, evm_word));
 
                 let mut acc = F::ZERO;
                 let mut idx = 0;
@@ -611,13 +618,12 @@ mod taiko_pi_circuit_test {
     }
 
     fn mock_public_data() -> PublicData<Fr> {
-        let A = OMMERS_HASH.clone()/* H256::default() */;
         let mut evidence = PublicData::default();
-        evidence.set_field(1, A.to_fixed_bytes().to_vec());
-        evidence.set_field(2, A.to_fixed_bytes().to_vec());
+        evidence.set_field(PARENT_HASH, OMMERS_HASH.to_fixed_bytes().to_vec());
+        evidence.set_field(BLOCK_HASH, OMMERS_HASH.to_fixed_bytes().to_vec());
         evidence.block_context.number = 300.into();
-        evidence.block_context.block_hash = A.to_word();
-        evidence.block_context.history_hashes = vec![A.to_word()];
+        evidence.block_context.block_hash = OMMERS_HASH.to_word();
+        evidence.block_context.history_hashes = vec![OMMERS_HASH.to_word()];
         evidence
     }
 
