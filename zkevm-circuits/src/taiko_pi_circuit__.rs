@@ -123,12 +123,16 @@ impl<F: Field> PublicData<F> {
         let parent_hash = Token::FixedBytes(block.protocol_instance.parent_hash.to_word().to_be_bytes().to_vec());
         let block_hash = Token::FixedBytes(block.protocol_instance.block_hash.to_word().to_be_bytes().to_vec());
         let signal_root = Token::FixedBytes(block.protocol_instance.signal_root.to_word().to_be_bytes().to_vec());
+        let graffiti = Token::FixedBytes(block.protocol_instance.graffiti.to_word().to_be_bytes().to_vec());
+        let prover = Token::Address(block.protocol_instance.prover);
         Self { 
             evidence: Token::FixedArray(vec![
                 meta_hash,
                 parent_hash,
                 block_hash,
                 signal_root,
+                graffiti,
+                prover,
                 ]),
             block_context: block.context.clone(),
             _phantom: PhantomData
@@ -217,6 +221,8 @@ pub struct TaikoPiCircuitConfig<F: Field> {
     parent_hash: (Cell<F>, FieldGadget<F>, Cell<F>),
     block_hash: (Cell<F>, FieldGadget<F>, Cell<F>),
     signal_root: FieldGadget<F>,
+    graffiti: FieldGadget<F>,
+    prover: FieldGadget<F>,
     block_table: BlockTable,
     keccak_table: KeccakTable,
     byte_table: ByteTable,
@@ -285,6 +291,8 @@ impl<F: Field> SubCircuitConfig<F> for TaikoPiCircuitConfig<F> {
             cb.query_one(PiCellType::Storage2)
         );
         let signal_root = FieldGadget::config(&mut cb, evidence.field_len(3));
+        let graffiti = FieldGadget::config(&mut cb, evidence.field_len(4));
+        let prover = FieldGadget::config(&mut cb, evidence.field_len(5));
 
         meta.create_gate(
             "PI acc constraints", 
@@ -328,6 +336,8 @@ impl<F: Field> SubCircuitConfig<F> for TaikoPiCircuitConfig<F> {
             parent_hash,
             block_hash,
             signal_root,
+            graffiti,
+            prover,
             block_table,
             keccak_table,
             byte_table,
@@ -359,6 +369,8 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
                     &self.parent_hash.1,
                     &self.block_hash.1,
                     &self.signal_root,
+                    &self.graffiti,
+                    &self.prover,
                 ].iter().for_each(|gadget| {
                     println!("assignment {:?}:\n{:?}", idx, evidence.encode_field(idx));
                     gadget.assign(&mut region, 0, &evidence.assignment(idx))
