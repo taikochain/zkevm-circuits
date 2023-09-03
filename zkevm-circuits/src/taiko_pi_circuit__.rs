@@ -119,10 +119,12 @@ impl<F: Field> Default for PublicData<F> {
 
 impl<F: Field> PublicData<F> {
     fn new(block: &witness::Block<F>) -> Self {
+        let meta_hash = Token::FixedBytes(block.protocol_instance.meta_hash.hash().to_word().to_be_bytes().to_vec());
         let block_hash = Token::FixedBytes(block.protocol_instance.block_hash.to_word().to_be_bytes().to_vec());
         let signal_root = Token::FixedBytes(block.protocol_instance.signal_root.to_word().to_be_bytes().to_vec());
         Self { 
             evidence: Token::FixedArray(vec![
+                meta_hash,
                 block_hash,
                 signal_root,
                 ]),
@@ -209,6 +211,7 @@ impl<F: Field> PublicData<F> {
 pub struct TaikoPiCircuitConfig<F: Field> {
     q_enable: Selector,
     public_input: Column<Instance>, // equality
+    meta_hash: FieldGadget<F>,
     block_hash: (Cell<F>, FieldGadget<F>, Cell<F>),
     signal_root: FieldGadget<F>,
     block_table: BlockTable,
@@ -267,12 +270,13 @@ impl<F: Field> SubCircuitConfig<F> for TaikoPiCircuitConfig<F> {
            );
         let q_enable = meta.complex_selector();
         let public_input = meta.instance_column();
+        let meta_hash = FieldGadget::config(&mut cb, evidence.field_len(0));
         let block_hash =(
             cb.query_one(PiCellType::Storage1),
-            FieldGadget::config(&mut cb, evidence.field_len(0)),
+            FieldGadget::config(&mut cb, evidence.field_len(1)),
             cb.query_one(PiCellType::Storage2)
         );
-        let signal_root = FieldGadget::config(&mut cb, evidence.field_len(1));
+        let signal_root = FieldGadget::config(&mut cb, evidence.field_len(2));
 
         meta.create_gate(
             "PI acc constraints", 
@@ -312,6 +316,7 @@ impl<F: Field> SubCircuitConfig<F> for TaikoPiCircuitConfig<F> {
         Self {
             q_enable, 
             public_input,
+            meta_hash,
             block_hash,
             signal_root,
             block_table,
@@ -339,22 +344,21 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
                 region.annotate_columns(&self.annotation_configs);
 
                 let mut acc = F::ZERO;
-                let mut offset = 0;
                 let mut idx = 0;
                 [
+                    &self.meta_hash,
                     &self.block_hash.1,
                     &self.signal_root,
                 ].iter().for_each(|gadget| {
-                    println!("assignment {:?}: {:?}, {:?}", idx, offset, evidence.encode_field(idx));
-                    gadget.assign(&mut region, offset, &evidence.assignment(idx))
+                    println!("assignment {:?}:\n{:?}", idx, evidence.encode_field(idx));
+                    gadget.assign(&mut region, 0, &evidence.assignment(idx))
                         .expect(&format!("FieldGadget assignment failed at {:?}", idx));
-                    offset += evidence.field_len(idx);
                     idx += 1;
                 });
 
                 println!("evidence.block_context.number: {:?}\n", evidence.block_context.number);
                 assign!(region, self.block_hash.0, 0 => (evidence.block_context.number).as_u64().scalar());
-                assign!(region, self.block_hash.2, 0 => evidence.assignment_acc(0, evm_word));
+                assign!(region, self.block_hash.2, 0 => evidence.assignment_acc(1, evm_word));
 
                 Ok(())
         });
@@ -516,7 +520,7 @@ mod taiko_pi_circuit_test {
     fn mock_public_data() -> PublicData<Fr> {
         let A = OMMERS_HASH.clone()/* H256::default() */;
         let mut evidence = PublicData::default();
-        evidence.set_field(0, A.to_fixed_bytes().to_vec());
+        evidence.set_field(1, A.to_fixed_bytes().to_vec());
         evidence.block_context.number = 300.into();
         evidence.block_context.block_hash = A.to_word();
         evidence
