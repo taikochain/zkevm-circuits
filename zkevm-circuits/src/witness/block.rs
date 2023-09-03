@@ -10,8 +10,8 @@ use bus_mapping::{
     circuit_input_builder::{self, CircuitsParams, CopyEvent, ExpEvent},
     Error,
 };
-use eth_types::{Address, Field, ToLittleEndian, ToScalar, ToWord, Word, ToBigEndian};
-use gadgets::util::Scalar;
+use eth_types::{Address, Field, ToLittleEndian, ToScalar, ToWord, Word};
+
 use halo2_proofs::circuit::Value;
 
 use super::{tx::tx_convert, Bytecode, ExecStep, ProtocolInstance, Rw, RwMap, Transaction};

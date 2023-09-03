@@ -1,18 +1,18 @@
 
 
-use bus_mapping::evm;
-use eth_types::{Address, Field, ToBigEndian, ToWord, Word, H256, H160, U256};
+
+use eth_types::{Field, ToBigEndian, ToWord, H256, H160, U256};
 use ethers_core::abi::*;
-use ethers_core::abi::FixedBytes;
+
 use ethers_core::utils::keccak256;
 use halo2_proofs::circuit::{Value, Layouter, SimpleFloorPlanner, AssignedCell};
-use halo2_proofs::poly::Rotation;
+
 use itertools::Itertools;
 use std::convert::TryInto;
 use std::marker::PhantomData;
 use gadgets::util::{Expr, Scalar};
 use halo2_proofs::plonk::{Expression, ConstraintSystem, Selector, Instance, Column, Circuit};
-use keccak256::keccak_arith::Keccak;
+
 use halo2_proofs::plonk::Error;
 use core::result::Result;
 use crate::circuit_tools::cached_region::CachedRegion;
@@ -21,7 +21,7 @@ use crate::circuit_tools::constraint_builder::{ConstraintBuilder, TO_FIX, RLCabl
 use crate::evm_circuit::table::Table;
 use crate::evm_circuit::util::rlc;
 use crate::util::{Challenges, SubCircuitConfig, SubCircuit};
-use crate::witness::{self, Bytecode, BlockContext};
+use crate::witness::{self, BlockContext};
 use crate::{circuit, assign};
 use crate::table::{byte_table::ByteTable, BlockContextFieldTag, BlockTable, KeccakTable, LookupTable};
 
@@ -417,7 +417,7 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
     ) -> Result<(), Error> {
         let evm_word = challenge.evm_word();
         let keccak_r = challenge.keccak_input();
-        let mut hi_lo_cells = layouter.assign_region(
+        let hi_lo_cells = layouter.assign_region(
         || "Pi",
         |mut region| {
                 self.q_enable.enable(&mut region, 0)?;
@@ -429,7 +429,7 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
                 assign!(region, self.block_hash.0, 0 => (evidence.block_context.number).as_u64().scalar());
                 assign!(region, self.block_hash.2, 0 => evidence.assignment_acc(BLOCK_HASH, evm_word));
 
-                let mut acc = F::ZERO;
+                let _acc = F::ZERO;
                 let mut idx = 0;
                 [
                     &self.meta_hash,
@@ -581,7 +581,7 @@ mod taiko_pi_circuit_test {
 
     use super::*;
 
-    use eth_types::ToScalar;
+    
     use halo2_proofs::{
         dev::{MockProver, VerifyFailure},
         halo2curves::bn256::Fr,
