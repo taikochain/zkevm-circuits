@@ -378,8 +378,7 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
     ) -> Result<(), Error> {
         let evm_word = challenge.evm_word();
         let keccak_r = challenge.keccak_input();
-        let mut hi_lo_cells = Vec::new();
-        layouter.assign_region(
+        let mut hi_lo_cells = layouter.assign_region(
         || "Pi",
         |mut region| {
                 self.q_enable.enable(&mut region, 0)?;
@@ -409,18 +408,16 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
                 });
                 self.keccak_bytes.assign(&mut region, 0, &evidence.keccak_assignment())
                     .expect("Keccak bytes assignment failed");
-                self.keccak_hi_lo
-                    .iter()
-                    .zip(evidence.keccak_hi_low().iter())
-                    .for_each(|(cell, val)| {
-                        hi_lo_cells.push(assign!(region, cell, 0 => *val).unwrap());
-                    });
+                let hi_low_assignment = evidence.keccak_hi_low();
+                let hi = assign!(region, self.keccak_hi_lo[0], 0 => hi_low_assignment[0])?;
+                let lo = assign!(region, self.keccak_hi_lo[1], 0 => hi_low_assignment[1])?;
 
-                Ok(())
+                Ok([hi, lo])
         })?;
-        // for (i, cell) in hi_lo_cells.iter().enumerate() {
-        //     layouter.constrain_instance(cell.cell(), self.keccak_instance, i)?;
-        // }
+        for (i, cell) in hi_lo_cells.iter().enumerate() {
+            layouter.constrain_instance(cell.cell(), self.keccak_instance, i)?;
+            println!("cell: {:?}, keccak_instance: {:?}, i: {:?}", cell.cell(), self.keccak_instance, i);
+        }
         Ok(())
     }
 }
@@ -568,8 +565,9 @@ mod taiko_pi_circuit_test {
         pi: Option<Vec<Vec<F>>>,
     ) -> Result<(), Vec<VerifyFailure>> {
         let circuit = TaikoPiCircuit::new(evidence);
-        let public_inputs = pi.unwrap_or_else(|| circuit.instance());
-        let prover = match MockProver::run(k, &circuit, public_inputs) {
+        let keccak_instance = pi.unwrap_or_else(|| circuit.instance());
+        println!("run instance: {:?}", keccak_instance);
+        let prover = match MockProver::run(k, &circuit, keccak_instance) {
             Ok(prover) => prover,
             Err(e) => panic!("{:#?}", e),
         };
