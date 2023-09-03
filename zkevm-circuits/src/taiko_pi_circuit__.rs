@@ -281,7 +281,7 @@ impl<F: Field> SubCircuitConfig<F> for TaikoPiCircuitConfig<F> {
                             (
                                 BlockContextFieldTag::BlockHash.expr(), 
                                 n.expr(), 
-                                b.acc(evm_word.expr()) 
+                                acc.expr()
                             ) => @PiCellType::Lookup(Table::Block), (TO_FIX)
                         );
                         println!(
