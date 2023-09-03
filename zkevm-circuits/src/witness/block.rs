@@ -144,7 +144,7 @@ pub struct BlockContext {
 impl BlockContext {
     /// Assignments for block table
     pub fn table_assignments<F: Field>(&self, randomness: Value<F>) -> Vec<[Value<F>; 3]> {
-        // let randomness = Value::known(F::from(2u64));
+        // let randomness: Value<F> = Value::known(F::from(0u64));
         println!("block table {:?} (le_bytes) {:?} evm_word = {:?}", self.number, self.block_hash.to_le_bytes(), randomness);
         [
             vec![
@@ -189,6 +189,7 @@ impl BlockContext {
                 [
                     Value::known(F::from(BlockContextFieldTag::BlockHash as u64)),
                     Value::known(self.number.to_scalar().unwrap()),
+                    // Value::known(F::ZERO),
                     randomness
                         .map(|randomness| rlc::value(&self.block_hash.to_le_bytes(), randomness)),
                 ],

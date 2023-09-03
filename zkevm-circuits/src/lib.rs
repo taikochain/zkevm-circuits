@@ -33,7 +33,9 @@ pub mod taiko_pi_circuit;
 #[allow(missing_docs)]
 pub mod taiko_pi_circuit_;
 pub mod taiko_super_circuit;
-
+#[macro_use]
+#[allow(missing_docs)]
+pub mod taiko_pi_circuit__;
 #[cfg(any(feature = "test", test))]
 pub mod test_util;
 pub mod circuit_tools;
