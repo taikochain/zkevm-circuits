@@ -656,22 +656,6 @@ impl<F: Field> SubCircuitConfig<F> for TaikoPiCircuitConfig<F> {
                 .collect::<Vec<_>>()
         });
 
-        // TODO: do we need this, we  already check block hash in another lookup
-        // in block table
-        // meta.lookup_any("in block table", |meta| {
-        // let q_block_table = meta.query_selector(q_block_table);
-        // let block_index = meta.query_advice(block_index, Rotation::cur());
-        // let block_hash = meta.query_advice(rpi_field_bytes_acc, Rotation::cur());
-        // [
-        // BlockContextFieldTag::BlockHash.expr(),
-        // block_index,
-        // block_hash,
-        // ]
-        // .into_iter()
-        // .zip(block_table.table_exprs(meta).into_iter())
-        // .map(|(arg, table)| (q_block_table.expr() * arg, table))
-        // .collect::<Vec<_>>()
-        // });
         // is byte
         meta.lookup_any("is_byte", |meta| {
             let q_field_step = meta.query_selector(q_field_start);
@@ -1075,56 +1059,40 @@ impl<F: Field> SubCircuitConfig<F> for TaikoPiCircuitConfig<F> {
         }
 
         // Check all parent_hash fields against previous_hashes in block table
-        meta.lookup_any("Block header: Check parent hashes hi", |meta| {
-            let tag = meta.query_fixed(block_table_tag_blockhash, Rotation::cur());
-            let index = meta.query_fixed(block_table_index_blockhash, Rotation::cur()) - 1.expr();
-            let q_hi = meta.query_fixed(q_hi, Rotation::cur());
-            let q_lo_next = meta.query_fixed(q_lo, Rotation::next());
+        for (cur, hi_lo) in [(q_hi, 0),
+                             (q_lo, 1)]
+        {
+            meta.lookup_any("Block header: Check parent hashes hi/lo", |meta| {
+                let tag = meta.query_fixed(block_table_tag_blockhash, Rotation::cur());
+                let index = meta.query_fixed(block_table_index_blockhash, Rotation::cur()) - 1.expr();
+                let q_cur = meta.query_fixed(cur, Rotation::cur());
+                let q_lo_next = meta.query_fixed(q_lo, Rotation::next());
 
-            let q_sel = and::expr([q_hi, q_lo_next, meta.query_selector(q_parent_hash)]);
+                let next_cond = if hi_lo == 0 {
+                    q_lo_next
+                } else
+                {
+                    not::expr(q_lo_next)
+                };
 
-            vec![
-                (
-                    q_sel.expr() * tag,
-                    meta.query_advice(block_table_blockhash.tag, Rotation::cur()),
-                ),
-                (
-                    q_sel.expr() * index,
-                    meta.query_advice(block_table_blockhash.index, Rotation::cur()),
-                ),
-                (
-                    q_sel.expr() * meta.query_advice(blk_hdr_reconstruct_value, Rotation::cur()),
-                    meta.query_advice(block_table_blockhash.value, Rotation::cur()),
-                ),
-            ]
-        });
-        meta.lookup_any("Block header: Check parent hashes lo", |meta| {
-            let tag = meta.query_fixed(block_table_tag_blockhash, Rotation::cur());
-            let index = meta.query_fixed(block_table_index_blockhash, Rotation::cur()) - 1.expr();
-            let q_lo_cur = meta.query_fixed(q_lo, Rotation::cur());
-            let q_lo_next = meta.query_fixed(q_lo, Rotation::next());
+                let q_sel = and::expr([q_cur, next_cond, meta.query_selector(q_parent_hash)]);
 
-            let q_sel = and::expr([
-                q_lo_cur,
-                not::expr(q_lo_next),
-                meta.query_selector(q_parent_hash),
-            ]);
-
-            vec![
-                (
-                    q_sel.expr() * tag,
-                    meta.query_advice(block_table_blockhash.tag, Rotation::cur()),
-                ),
-                (
-                    q_sel.expr() * index,
-                    meta.query_advice(block_table_blockhash.index, Rotation::cur()),
-                ),
-                (
-                    q_sel.expr() * meta.query_advice(blk_hdr_reconstruct_value, Rotation::cur()),
-                    meta.query_advice(block_table_blockhash.value, Rotation::cur()),
-                ),
-            ]
-        });
+                vec![
+                    (
+                        q_sel.expr() * tag,
+                        meta.query_advice(block_table_blockhash.tag, Rotation::cur()),
+                    ),
+                    (
+                        q_sel.expr() * index,
+                        meta.query_advice(block_table_blockhash.index, Rotation::cur()),
+                    ),
+                    (
+                        q_sel.expr() * meta.query_advice(blk_hdr_reconstruct_value, Rotation::cur()),
+                        meta.query_advice(block_table_blockhash.value, Rotation::cur()),
+                    ),
+                ]
+            });
+        }
 
         Self {
             rpi_field_bytes,
