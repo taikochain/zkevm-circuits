@@ -1045,56 +1045,34 @@ impl<F: Field> SubCircuitConfig<F> for TaikoPiCircuitConfig<F> {
             ]
         });
 
-        meta.lookup_any(
-            "Block header: Check hi parts of block hashes against previous hashes",
-            |meta| {
-                let q_blk_hdr_rlp_end = meta.query_selector(q_blk_hdr_rlp_end);
-                let blk_hdr_hash_hi = meta.query_advice(blk_hdr_blockhash, Rotation::cur());
-                let q_lookup_blockhash = meta.query_selector(q_lookup_blockhash);
-                let tag = meta.query_fixed(block_table_tag_blockhash, Rotation::prev());
-                let index = meta.query_fixed(block_table_index_blockhash, Rotation::cur());
-                let q_sel = and::expr([q_blk_hdr_rlp_end, q_lookup_blockhash]);
-                vec![
-                    (
-                        q_sel.expr() * tag,
-                        meta.query_advice(block_table_blockhash.tag, Rotation::cur()),
-                    ),
-                    (
-                        q_sel.expr() * index,
-                        meta.query_advice(block_table_blockhash.index, Rotation::cur()),
-                    ),
-                    (
-                        q_sel.expr() * blk_hdr_hash_hi,
-                        meta.query_advice(block_table_blockhash.value, Rotation::cur()),
-                    ),
-                ]
-            },
-        );
-        meta.lookup_any(
-            "Block header: Check lo parts of block hashes against previous hashes",
-            |meta| {
-                let q_blk_hdr_rlp_end = meta.query_selector(q_blk_hdr_rlp_end);
-                let blk_hdr_hash_lo = meta.query_advice(blk_hdr_blockhash, Rotation::prev());
-                let q_lookup_blockhash = meta.query_selector(q_lookup_blockhash);
-                let tag = meta.query_fixed(block_table_tag_blockhash, Rotation(-2));
-                let index = meta.query_fixed(block_table_index_blockhash, Rotation::cur());
-                let q_sel = and::expr([q_blk_hdr_rlp_end, q_lookup_blockhash]);
-                vec![
-                    (
-                        q_sel.expr() * tag,
-                        meta.query_advice(block_table_blockhash.tag, Rotation::cur()),
-                    ),
-                    (
-                        q_sel.expr() * index,
-                        meta.query_advice(block_table_blockhash.index, Rotation::cur()),
-                    ),
-                    (
-                        q_sel.expr() * blk_hdr_hash_lo,
-                        meta.query_advice(block_table_blockhash.value, Rotation::cur()),
-                    ),
-                ]
-            },
-        );
+
+        for rotation in [0,-1] { // hi blockhash is in current offset, lo blockhash in in previous
+            meta.lookup_any(
+                "Block header: Check hi/lo parts of block hashes against previous hashes",
+                |meta| {
+                    let q_blk_hdr_rlp_end = meta.query_selector(q_blk_hdr_rlp_end);
+                    let blk_hdr_hash_hi = meta.query_advice(blk_hdr_blockhash, Rotation(rotation));
+                    let q_lookup_blockhash = meta.query_selector(q_lookup_blockhash);
+                    let tag = meta.query_fixed(block_table_tag_blockhash, Rotation(rotation-1));
+                    let index = meta.query_fixed(block_table_index_blockhash, Rotation::cur());
+                    let q_sel = and::expr([q_blk_hdr_rlp_end, q_lookup_blockhash]);
+                    vec![
+                        (
+                            q_sel.expr() * tag,
+                            meta.query_advice(block_table_blockhash.tag, Rotation::cur()),
+                        ),
+                        (
+                            q_sel.expr() * index,
+                            meta.query_advice(block_table_blockhash.index, Rotation::cur()),
+                        ),
+                        (
+                            q_sel.expr() * blk_hdr_hash_hi,
+                            meta.query_advice(block_table_blockhash.value, Rotation::cur()),
+                        ),
+                    ]
+                },
+            );
+        }
 
         // Check all parent_hash fields against previous_hashes in block table
         meta.lookup_any("Block header: Check parent hashes hi", |meta| {
