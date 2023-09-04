@@ -932,42 +932,25 @@ impl<F: Field> SubCircuitConfig<F> for TaikoPiCircuitConfig<F> {
                 );
             });
 
-            // Decode RLC field values
-            cb.condition(
-                and::expr([
-                    q_reconstruct_next.expr(),
-                    not::expr(q_hi_next.expr()),
-                    not::expr(q_lo_next.expr()),
-                ]),
-                |cb| {
+            // Decode RLC and Hi/Lo field values
+            for (selector, values, r_mul) in [
+                            (q_hi_next.expr(), q_reconstruct_cur.expr(), 2_u64.pow(8).expr()),
+                            (q_lo_next.expr(), q_lo_cur, 2_u64.pow(8).expr()),
+                            (and::expr([
+                                q_reconstruct_next.expr(),
+                                not::expr(q_hi_next.expr()),
+                                not::expr(q_lo_next.expr()),
+                            ]), q_reconstruct_cur.expr(), challenges.evm_word().expr()),
+                            ]
+            {
+                cb.condition(selector, |cb| {
                     let decode = meta.query_advice(blk_hdr_reconstruct_value, Rotation::cur());
-                    let decode_next =
-                        meta.query_advice(blk_hdr_reconstruct_value, Rotation::next());
+                    let decode_next = meta.query_advice(blk_hdr_reconstruct_value, Rotation::next());
                     // For the first byte start from scratch and just copy over the next byte
-                    let r = select::expr(
-                        q_reconstruct_cur.expr(),
-                        challenges.evm_word().expr(),
-                        0.expr(),
-                    );
-                    cb.require_equal("decode", decode_next, decode * r + byte_next.expr());
-                },
-            );
-
-            // Decode Hi/Lo field values
-            cb.condition(q_hi_next.expr(), |cb| {
-                let decode = meta.query_advice(blk_hdr_reconstruct_value, Rotation::cur());
-                let decode_next = meta.query_advice(blk_hdr_reconstruct_value, Rotation::next());
-                // For the first byte start from scratch and just copy over the next byte
-                let r = select::expr(q_reconstruct_cur.expr(), 2_u64.pow(8).expr(), 0.expr());
-                cb.require_equal("hi value", decode_next, decode * r + byte_next.expr());
-            });
-            cb.condition(q_lo_next.expr(), |cb| {
-                let decode = meta.query_advice(blk_hdr_reconstruct_value, Rotation::cur());
-                let decode_next = meta.query_advice(blk_hdr_reconstruct_value, Rotation::next());
-                // For the first byte start from scratch and just copy over the next byte
-                let r = select::expr(q_lo_cur.expr(), 2_u64.pow(8).expr(), 0.expr());
-                cb.require_equal("lo value", decode_next, decode * r + byte_next.expr());
-            });
+                    let r = select::expr(values, r_mul, 0.expr());
+                    cb.require_equal("decode rlc fields and hi/lo values", decode_next, decode * r + byte_next.expr());
+                });
+            }
 
             // 2. Check RLC of RLP'd block header
             // Accumulate only bytes that have q_blk_hdr_rlp AND
