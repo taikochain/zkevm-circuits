@@ -7,7 +7,6 @@ use ethers_core::abi::*;
 use ethers_core::utils::keccak256;
 use halo2_proofs::circuit::{Value, Layouter, SimpleFloorPlanner, AssignedCell};
 
-use itertools::Itertools;
 use std::convert::TryInto;
 use std::marker::PhantomData;
 use gadgets::util::{Expr, Scalar};
@@ -33,8 +32,8 @@ const BLOCK_HASH: usize = 2;
 const SIGNAL_ROOT: usize = 3;
 const GRAFFITI: usize = 4;
 const PROVER: usize = 5;
-const S1: PiCellType = PiCellType::Storage1;
-const S2: PiCellType = PiCellType::Storage2;
+const S1: PiCellType = PiCellType::StoragePhase1;
+const S2: PiCellType = PiCellType::StoragePhase2;
 ///
 #[derive(Debug, Clone, Default)]
 pub struct FieldGadget<F> {
@@ -84,8 +83,8 @@ impl<F: Field> FieldGadget<F> {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 enum PiCellType {
-    Storage1,
-    Storage2,
+    StoragePhase1,
+    StoragePhase2,
     Byte,
     LookupPi,
     Lookup(Table),
@@ -97,15 +96,15 @@ impl CellType for PiCellType {
     }
     fn storage_for_phase(phase: u8) -> Self {
         match phase {
-            1 => PiCellType::Storage1,
-            2 => PiCellType::Storage2,
+            1 => PiCellType::StoragePhase1,
+            2 => PiCellType::StoragePhase2,
             _ => unimplemented!()
         }
     }
 }
 impl Default for PiCellType {
     fn default() -> Self {
-        Self::Storage1
+        Self::StoragePhase1
     }
 }
 
@@ -295,8 +294,8 @@ impl<F: Field> SubCircuitConfig<F> for TaikoPiCircuitConfig<F> {
             meta,
             vec![
                 (PiCellType::Byte, 1, 1, false),
-                (PiCellType::Storage1, 1, 1, true),
-                (PiCellType::Storage2, 1, 1, true),
+                (PiCellType::StoragePhase1, 1, 1, true),
+                (PiCellType::StoragePhase2, 1, 1, true),
             ],
             0,
             evidence.total_len() + PADDING_LEN,
@@ -589,8 +588,16 @@ mod taiko_pi_circuit_test {
     use pretty_assertions::assert_eq;
 
     lazy_static! {
-        static ref OMMERS_HASH: H256 = H256::from_slice(
+        static ref LAST_HASH: H256 = H256::from_slice(
             &hex::decode("1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347")
+                .unwrap(),
+        );
+        static ref THIS_HASH: H256 = H256::from_slice(
+            &hex::decode("1dcc4de8dec751111b85b567b6cc12fea12451b9480000000a142fd40d493111")
+                .unwrap(),
+        );
+        static ref PROVER_ADDR: H160 = H160::from_slice(
+            &hex::decode("8626f6940E2eb28930eFb4CeF49B2d1F2C9C1199")
                 .unwrap(),
         );
     }
@@ -611,12 +618,12 @@ mod taiko_pi_circuit_test {
 
     fn mock_public_data() -> PublicData<Fr> {
         let mut evidence = PublicData::default();
-        evidence.set_field(PARENT_HASH, OMMERS_HASH.to_fixed_bytes().to_vec());
-        evidence.set_field(BLOCK_HASH, OMMERS_HASH.to_fixed_bytes().to_vec());
+        evidence.set_field(PARENT_HASH, LAST_HASH.to_fixed_bytes().to_vec());
+        evidence.set_field(BLOCK_HASH, THIS_HASH.to_fixed_bytes().to_vec());
         evidence.block_context.number = 300.into();
-        evidence.block_context.block_hash = Some(OMMERS_HASH.to_word());
+        evidence.block_context.block_hash = Some(THIS_HASH.to_word());
         // has to have at least one history block
-        evidence.block_context.history_hashes = vec![OMMERS_HASH.to_word()];
+        evidence.block_context.history_hashes = vec![LAST_HASH.to_word()];
         evidence
     }
 
@@ -629,7 +636,7 @@ mod taiko_pi_circuit_test {
     }
 
     #[test]
-    fn test_fail_pi_hash() {
+    fn test_fail_hi_lo() {
         let evidence = mock_public_data();
 
         let k = 17;
@@ -648,12 +655,42 @@ mod taiko_pi_circuit_test {
     }
 
     #[test]
+    fn test_fail_historical_hash() {
+        let mut block = witness::Block::<Fr>::default();
+
+        block.eth_block.parent_hash = *LAST_HASH;
+        block.eth_block.hash = Some(*THIS_HASH);
+        block.protocol_instance.block_hash = *THIS_HASH;
+        block.protocol_instance.parent_hash = *LAST_HASH;
+        // parent hash doesn't exist in table!
+        block.context.history_hashes = vec![THIS_HASH.to_word(), THIS_HASH.to_word()];
+        block.context.block_hash = Some(THIS_HASH.to_word());
+        block.context.number = 300.into();
+
+        let evidence = PublicData::new(&block);
+
+        let k = 17;
+        match run::<Fr>(k, evidence, None) {
+            Ok(_) => unreachable!("this case must fail"),
+            Err(errs) => {
+                assert_eq!(errs.len(), 1);
+                for err in errs {
+                    match err {
+                        VerifyFailure::Lookup { .. } => return,
+                        _ => unreachable!("unexpected error"),
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
     fn test_simple_pi() {
         let mut evidence = mock_public_data();
         let block_number = 1337u64;
         evidence.block_context.number = block_number.into();
-        evidence.block_context.history_hashes = vec![OMMERS_HASH.to_word()];
-        evidence.set_field(PROVER, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19].into());
+        evidence.block_context.history_hashes = vec![LAST_HASH.to_word()];
+        evidence.set_field(PROVER, PROVER_ADDR.to_fixed_bytes().to_vec());
 
         let k = 17;
         assert_eq!(run::<Fr>(k, evidence, None), Ok(()));
@@ -663,12 +700,12 @@ mod taiko_pi_circuit_test {
     fn test_verify() {
         let mut block = witness::Block::<Fr>::default();
 
-        block.eth_block.parent_hash = *OMMERS_HASH;
-        block.eth_block.hash = Some(*OMMERS_HASH);
-        block.protocol_instance.block_hash = *OMMERS_HASH;
-        block.protocol_instance.parent_hash = *OMMERS_HASH;
-        block.context.history_hashes = vec![OMMERS_HASH.to_word()];
-        block.context.block_hash = Some(OMMERS_HASH.to_word());
+        block.eth_block.parent_hash = *LAST_HASH;
+        block.eth_block.hash = Some(*THIS_HASH);
+        block.protocol_instance.block_hash = *THIS_HASH;
+        block.protocol_instance.parent_hash = *LAST_HASH;
+        block.context.history_hashes = vec![LAST_HASH.to_word()];
+        block.context.block_hash = Some(THIS_HASH.to_word());
         block.context.number = 300.into();
 
         let evidence = PublicData::new(&block);
