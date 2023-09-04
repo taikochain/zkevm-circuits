@@ -1987,17 +1987,6 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
                 block_number,
                 randomness.map(|randomness| rlc(block_values.base_fee.to_le_bytes(), randomness)),
             ),
-            // TODO
-            // (
-            // "blockhash",
-            // BlockContextFieldTag::BlockHash,
-            // block_number,
-            // randomness.map(|randomness| rlc(pb.block_context.base_fee.to_le_bytes().into_iter()
-            // .rev()
-            // .collect::<Vec<u8>>()
-            // .try_into()
-            // .unwrap(), randomness)),
-            // ),
             (
                 "chain_id",
                 BlockContextFieldTag::ChainId,
@@ -2227,187 +2216,55 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
                 // avoid the humongous amount of rubbish halo2 errors produced when circuit is
                 // failing
                 for i in 0..BLOCKHASH_TOTAL_ROWS * (PREVIOUS_BLOCKS_NUM + 1) {
-                    region
-                        .assign_advice(
-                            || "0",
-                            self.blockhash_cols.blk_hdr_reconstruct_value,
-                            i,
-                            || Value::known(F::ZERO),
-                        )
-                        .unwrap();
-                    region
-                        .assign_advice(
-                            || "0",
-                            self.blockhash_cols.blk_hdr_is_leading_zero,
-                            i,
-                            || Value::known(F::ZERO),
-                        )
-                        .unwrap();
-                    region
-                        .assign_advice(
-                            || "0",
-                            self.blockhash_cols.blk_hdr_rlp_inv,
-                            i,
-                            || Value::known(F::ZERO),
-                        )
-                        .unwrap();
-                    region
-                        .assign_fixed(
-                            || "0",
-                            self.blockhash_cols.blk_hdr_rlp_const,
-                            i,
-                            || Value::known(F::ZERO),
-                        )
-                        .unwrap();
-                    region
-                        .assign_advice(
-                            || "0",
-                            self.blockhash_cols.blk_hdr_rlp_len_calc,
-                            i,
-                            || Value::known(F::ZERO),
-                        )
-                        .unwrap();
-                    region
-                        .assign_advice(
-                            || "0",
-                            self.blockhash_cols.blk_hdr_rlp_len_calc_inv,
-                            i,
-                            || Value::known(F::ZERO),
-                        )
-                        .unwrap();
-                    region
-                        .assign_advice(
-                            || "0",
-                            self.blockhash_cols.blk_hdr_reconstruct_value,
-                            i,
-                            || Value::known(F::ZERO),
-                        )
-                        .unwrap();
-                    region
-                        .assign_advice(
-                            || "0",
-                            self.blockhash_cols.blk_hdr_reconstruct_hi_lo,
-                            i,
-                            || Value::known(F::ZERO),
-                        )
-                        .unwrap();
-                    region
-                        .assign_fixed(
-                            || "0",
-                            self.blockhash_cols.q_hi,
-                            i,
-                            || Value::known(F::ZERO),
-                        )
-                        .unwrap();
-                    region
-                        .assign_fixed(
-                            || "0",
-                            self.blockhash_cols.q_lo,
-                            i,
-                            || Value::known(F::ZERO),
-                        )
-                        .unwrap();
-                    region
-                        .assign_fixed(
-                            || "0",
-                            self.blockhash_cols.block_table_tag_blockhash,
-                            i,
-                            || Value::known(F::ZERO),
-                        )
-                        .unwrap();
-                    region
-                        .assign_fixed(
-                            || "0",
-                            self.blockhash_cols.block_table_index_blockhash,
-                            i,
-                            || Value::known(F::ZERO),
-                        )
-                        .unwrap();
-                    region
-                        .assign_fixed(
-                            || "0",
-                            self.blockhash_cols.q_reconstruct,
-                            i,
-                            || Value::known(F::ZERO),
-                        )
-                        .unwrap();
-                    region
-                        .assign_fixed(
-                            || "0",
-                            self.blockhash_cols.q_number,
-                            i,
-                            || Value::known(F::ZERO),
-                        )
-                        .unwrap();
-                    region
-                        .assign_fixed(
-                            || "0",
-                            self.blockhash_cols.q_var_field_256,
-                            i,
-                            || Value::known(F::ZERO),
-                        )
-                        .unwrap();
-                    region
-                        .assign_advice(
-                            || "0",
-                            self.blockhash_cols.blk_hdr_rlc_acc,
-                            i,
-                            || Value::known(F::ZERO),
-                        )
-                        .unwrap();
-                    region
-                        .assign_advice(
-                            || "0",
-                            self.blockhash_cols.blk_hdr_do_rlc_acc,
-                            i,
-                            || Value::known(F::ZERO),
-                        )
-                        .unwrap();
-                    region
-                        .assign_advice(
-                            || "0",
-                            self.blockhash_cols.blk_hdr_blockhash,
-                            i,
-                            || Value::known(F::ZERO),
-                        )
-                        .unwrap();
-                    region
-                        .assign_advice(|| "0", self.block_index, i, || Value::known(F::ZERO))
-                        .unwrap();
-                    region
-                        .assign_advice(|| "0", self.rpi_field_bytes, i, || Value::known(F::ZERO))
-                        .unwrap();
-                    region
-                        .assign_advice(
-                            || "0",
-                            self.rpi_field_bytes_acc,
-                            i,
-                            || Value::known(F::ZERO),
-                        )
-                        .unwrap();
-                    region
-                        .assign_advice(|| "0", self.rpi_rlc_acc, i, || Value::known(F::ZERO))
-                        .unwrap();
-                    region
-                        .assign_advice(|| "0", self.block_index, i, || Value::known(F::ZERO))
-                        .unwrap();
-                    region
-                        .assign_advice(|| "0", self.rpi_field_bytes, i, || Value::known(F::ZERO))
-                        .unwrap();
-                    region
-                        .assign_advice(
-                            || "0",
-                            self.rpi_field_bytes_acc,
-                            i,
-                            || Value::known(F::ZERO),
-                        )
-                        .unwrap();
-                    region
-                        .assign_advice(|| "0", self.rpi_rlc_acc, i, || Value::known(F::ZERO))
-                        .unwrap();
-                    region
-                        .assign_fixed(|| "0", self.is_field_rlc, i, || Value::known(F::ZERO))
-                        .unwrap();
+                    for field in [
+                        self.blockhash_cols.blk_hdr_reconstruct_value,
+                        self.blockhash_cols.blk_hdr_is_leading_zero,
+                        self.blockhash_cols.blk_hdr_rlp_inv,
+                        self.blockhash_cols.blk_hdr_rlp_len_calc,
+                        self.blockhash_cols.blk_hdr_rlp_len_calc_inv,
+                        self.blockhash_cols.blk_hdr_reconstruct_value,
+                        self.blockhash_cols.blk_hdr_reconstruct_hi_lo,
+                        self.blockhash_cols.blk_hdr_rlc_acc,
+                        self.blockhash_cols.blk_hdr_do_rlc_acc,
+                        self.blockhash_cols.blk_hdr_blockhash,
+                        self.block_index,
+                        self.rpi_field_bytes,
+                        self.rpi_field_bytes_acc,
+                        self.rpi_rlc_acc,
+                        self.block_index,
+                        self.rpi_field_bytes,
+                        self.rpi_field_bytes_acc,
+                    ] {
+                            region
+                                .assign_advice(
+                                    || "0",
+                                    field,
+                                    i,
+                                    || Value::known(F::ZERO),
+                                )
+                                .unwrap();
+                    }
+
+                    for field in [
+                        self.blockhash_cols.blk_hdr_rlp_const,
+                        self.blockhash_cols.q_hi,
+                        self.blockhash_cols.q_lo,
+                        self.blockhash_cols.block_table_tag_blockhash,
+                        self.blockhash_cols.block_table_index_blockhash,
+                        self.blockhash_cols.q_reconstruct,
+                        self.blockhash_cols.q_number,
+                        self.blockhash_cols.q_var_field_256,
+                        self.is_field_rlc,
+                    ] {
+                            region
+                                .assign_fixed(
+                                    || "0",
+                                    field,
+                                    i,
+                                    || Value::known(F::ZERO),
+                                )
+                                .unwrap();
+                    }
                 }
 
                 // Annotate columns
