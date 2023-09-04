@@ -199,7 +199,7 @@ mod pcd_test {
     use halo2_proofs::{
         circuit::{Layouter, SimpleFloorPlanner, Value},
         dev::MockProver,
-        halo2curves::bn256::{Bn256, Fq, Fr, G1Affine},
+        halo2curves::bn256::{Bn256, Fr},
         plonk::{
             keygen_pk, keygen_vk, Advice, Circuit, Column, ConstraintSystem, Error, Fixed, Instance,
         },
