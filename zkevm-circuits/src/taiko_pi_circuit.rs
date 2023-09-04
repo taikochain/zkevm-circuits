@@ -850,7 +850,7 @@ impl<F: Field> SubCircuitConfig<F> for TaikoPiCircuitConfig<F> {
                     );
                 });
 
-                // Check RLP encoding
+                // Check the RLP encoding when on the next row the field value begins
                 cb.condition(
                     and::expr([not::expr(q_field.clone()), q_field_next.expr()]),
                     |cb| {
