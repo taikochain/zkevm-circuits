@@ -340,7 +340,7 @@ impl<F: Field, C: CellType> CellManager<F, C> {
     pub(crate) fn get_height(&self) -> usize {
         self.columns
             .iter()
-            .map(|column| column.height)
+            .map(|column| column.cells.len())
             .max()
             .unwrap()
     }

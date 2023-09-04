@@ -25,7 +25,7 @@ use crate::{circuit, assign};
 use crate::table::{byte_table::ByteTable, BlockContextFieldTag, BlockTable, KeccakTable, LookupTable};
 
 const BYTE_POW_BASE: u64 = 1 << 8;
-const PADDING_LEN: usize = 32;
+const DEFAULT_LEN: usize = 32;
 const META_HASH: usize = 0;
 const PARENT_HASH: usize = 1;
 const BLOCK_HASH: usize = 2;
@@ -293,12 +293,12 @@ impl<F: Field> SubCircuitConfig<F> for TaikoPiCircuitConfig<F> {
         let cm = CellManager::new(
             meta,
             vec![
-                (PiCellType::Byte, 1, 1, false),
+                (PiCellType::Byte, 7, 1, false),
                 (PiCellType::StoragePhase1, 1, 1, true),
                 (PiCellType::StoragePhase2, 1, 1, true),
             ],
             0,
-            evidence.total_len() + PADDING_LEN,
+            DEFAULT_LEN,
         );
         let mut cb: ConstraintBuilder<F, PiCellType> = ConstraintBuilder::new(4,  Some(cm.clone()), Some(evm_word.expr()));
         cb.preload_tables(meta,
@@ -328,7 +328,7 @@ impl<F: Field> SubCircuitConfig<F> for TaikoPiCircuitConfig<F> {
         let prover = FieldGadget::config(&mut cb, evidence.field_len(PROVER));
         
         let total_acc = cb.query_one(S2);
-        let keccak_bytes = FieldGadget::config(&mut cb, PADDING_LEN);
+        let keccak_bytes = FieldGadget::config(&mut cb, DEFAULT_LEN);
         let keccak_hi_lo = [cb.query_one(S1), cb.query_one(S1)];
         meta.create_gate(
             "PI acc constraints", 
@@ -385,6 +385,8 @@ impl<F: Field> SubCircuitConfig<F> for TaikoPiCircuitConfig<F> {
             Some(q_enable)
         );
         let annotation_configs = cm.columns().to_vec();
+        println!("#col {:?}\n#constraints {:?}\n#lookup {:?}\n#permu {:?}\nrotation {:?}", 
+            meta.num_advice_columns() + meta.num_fixed_columns(), meta.gates().len(), meta.lookups().len(), meta.permutation().get_columns().len(), cm.get_height());
         Self {
             q_enable, 
             keccak_instance,
@@ -426,7 +428,6 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
                 assign!(region, self.block_hash.0, 0 => (evidence.block_context.number).as_u64().scalar());
                 assign!(region, self.block_hash.2, 0 => evidence.assignment_acc(BLOCK_HASH, evm_word));
 
-                let _acc = F::ZERO;
                 let mut idx = 0;
                 [
                     &self.meta_hash,
@@ -662,6 +663,7 @@ mod taiko_pi_circuit_test {
         block.eth_block.hash = Some(*THIS_HASH);
         block.protocol_instance.block_hash = *THIS_HASH;
         block.protocol_instance.parent_hash = *LAST_HASH;
+
         // parent hash doesn't exist in table!
         block.context.history_hashes = vec![THIS_HASH.to_word(), THIS_HASH.to_word()];
         block.context.block_hash = Some(THIS_HASH.to_word());
