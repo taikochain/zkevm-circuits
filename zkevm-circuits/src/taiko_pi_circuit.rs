@@ -824,14 +824,12 @@ impl<F: Field> SubCircuitConfig<F> for TaikoPiCircuitConfig<F> {
                         not::expr(is_leading_zero.expr()),
                         not::expr(is_total_len_zero.expr()),
                     ]);
-                    cb.condition(do_increment_length, |cb| {
-                        let length_prev = meta.query_advice(blk_hdr_rlp_len_calc, Rotation::prev());
-                        cb.require_equal(
-                            "len = len_prev + 1",
-                            length.expr(),
-                            length_prev.expr() + 1.expr(),
-                        );
-                    });
+                    let length_prev = meta.query_advice(blk_hdr_rlp_len_calc, Rotation::prev());
+                    cb.require_equal(
+                        "len = len_prev + do_increment_length",
+                        length.expr(),
+                        length_prev.expr() + do_increment_length,
+                    );
 
                     // The length is also set to 0 when the RLP encoding is short (single RLP byte
                     // encoding)
