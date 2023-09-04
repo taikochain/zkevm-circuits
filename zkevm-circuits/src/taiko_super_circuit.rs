@@ -4,8 +4,8 @@
 pub(crate) mod test;
 
 use crate::{
-    pi_circuit2::{PiCircuit, PiCircuitConfig, PiCircuitConfigArgs},
-    table::{BlockTable, KeccakTable},
+    taiko_pi_circuit::{TaikoPiCircuit, TaikoPiCircuitConfig, TaikoPiCircuitConfigArgs, PublicData},
+    table::{BlockTable, KeccakTable, byte_table::ByteTable},
     util::{log2_ceil, Challenges, SubCircuit, SubCircuitConfig},
     witness::{block_convert, Block},
 };
@@ -27,7 +27,8 @@ use snark_verifier_sdk::CircuitExt;
 pub struct SuperCircuitConfig<F: Field> {
     keccak_table: KeccakTable,
     block_table: BlockTable,
-    pi_circuit: PiCircuitConfig<F>,
+    byte_table: ByteTable,
+    pi_circuit: TaikoPiCircuitConfig<F>,
 }
 
 /// Circuit configuration arguments
@@ -46,13 +47,16 @@ impl<F: Field> SubCircuitConfig<F> for SuperCircuitConfig<F> {
     ) -> Self {
         let block_table = BlockTable::construct(meta);
         let keccak_table = KeccakTable::construct(meta);
+        let byte_table = ByteTable::construct(meta);
 
-        let pi_circuit = PiCircuitConfig::new(
+        let pi_circuit = TaikoPiCircuitConfig::new(
             meta,
-            PiCircuitConfigArgs {
+            TaikoPiCircuitConfigArgs {
+                evidence: PublicData::default(),
                 block_table: block_table.clone(),
                 keccak_table: keccak_table.clone(),
-                challenges,
+                byte_table: byte_table.clone(),
+                challenges: challenges.clone(),
             },
         );
 
@@ -60,6 +64,7 @@ impl<F: Field> SubCircuitConfig<F> for SuperCircuitConfig<F> {
             pi_circuit,
             block_table,
             keccak_table,
+            byte_table,
         }
     }
 }
@@ -68,7 +73,7 @@ impl<F: Field> SubCircuitConfig<F> for SuperCircuitConfig<F> {
 #[derive(Clone, Default, Debug)]
 pub struct SuperCircuit<F: Field> {
     /// Public Input Circuit
-    pub pi_circuit: PiCircuit<F>,
+    pub pi_circuit: TaikoPiCircuit<F>,
     /// Block witness
     pub block: Block<F>,
 }
@@ -90,15 +95,14 @@ impl<F: Field> SubCircuit<F> for SuperCircuit<F> {
     type Config = SuperCircuitConfig<F>;
 
     fn unusable_rows() -> usize {
-        PiCircuit::<F>::unusable_rows()
+        TaikoPiCircuit::<F>::unusable_rows()
     }
 
     fn new_from_block(block: &Block<F>) -> Self {
-        let pi_circuit = PiCircuit::new_from_block(block);
+        let pi_circuit = TaikoPiCircuit::new_from_block(block);
 
         SuperCircuit::<_> {
             pi_circuit,
-
             block: block.clone(),
         }
     }
@@ -112,7 +116,7 @@ impl<F: Field> SubCircuit<F> for SuperCircuit<F> {
 
     /// Return the minimum number of rows required to prove the block
     fn min_num_rows_block(block: &Block<F>) -> (usize, usize) {
-        PiCircuit::min_num_rows_block(block)
+        TaikoPiCircuit::min_num_rows_block(block)
     }
 
     /// Make the assignments to the SuperCircuit
@@ -170,7 +174,7 @@ impl<F: Field> Circuit<F> for SuperCircuit<F> {
             .load(&mut layouter, &self.block.context, randomness)?;
         config.keccak_table.dev_load(
             &mut layouter,
-            vec![&self.pi_circuit.public_data.rpi_bytes()],
+            vec![&self.pi_circuit.evidence.encode_raw()],
             &challenges,
         )?;
         self.synthesize_sub(&config, &challenges, &mut layouter)
@@ -208,8 +212,8 @@ impl<F: Field> SuperCircuit<F> {
         builder: &CircuitInputBuilder,
     ) -> Result<(u32, Self, Vec<Vec<F>>), bus_mapping::Error> {
         let mut block = block_convert(&builder.block, &builder.code_db).unwrap();
-        block.protocal_instance.block_hash = block.eth_block.hash.unwrap();
-        block.protocal_instance.parent_hash = block.eth_block.parent_hash;
+        block.protocol_instance.block_hash = block.eth_block.hash.unwrap();
+        block.protocol_instance.parent_hash = block.eth_block.parent_hash;
         let (_, rows_needed) = Self::min_num_rows_block(&block);
         let k = log2_ceil(Self::unusable_rows() + rows_needed);
         log::debug!("super circuit uses k = {}", k);
