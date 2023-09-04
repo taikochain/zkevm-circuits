@@ -56,7 +56,7 @@ impl<F: Field> SubCircuitConfig<F> for SuperCircuitConfig<F> {
                 block_table: block_table.clone(),
                 keccak_table: keccak_table.clone(),
                 byte_table: byte_table.clone(),
-                challenges: challenges.clone(),
+                challenges,
             },
         );
 
