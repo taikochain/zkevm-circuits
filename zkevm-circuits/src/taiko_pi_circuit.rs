@@ -295,7 +295,7 @@ impl<F: Field> SubCircuitConfig<F> for TaikoPiCircuitConfig<F> {
             vec![
                 (PiCellType::Byte, 7, 1, false),
                 (PiCellType::StoragePhase1, 1, 1, true),
-                (PiCellType::StoragePhase2, 1, 1, true),
+                (PiCellType::StoragePhase2, 1, 2, true),
             ],
             0,
             DEFAULT_LEN,
