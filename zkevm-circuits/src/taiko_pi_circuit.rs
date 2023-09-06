@@ -1136,7 +1136,7 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
         rpi_rlc_acc: &mut Value<F>,
         challenges: &Challenges<Value<F>>,
         keccak_hi_lo: bool,
-        block_number: Option<Word>,
+        block_offset: Option<Word>,
     ) -> Result<Vec<AssignedCell<F, F>>, Error> {
         let len = field_bytes.len();
         let mut field_rlc_acc = Value::known(F::ZERO);
@@ -1193,7 +1193,7 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
                 self.q_field_end.enable(region, row_offset)?;
                 cells[RPI_CELL_IDX] = Some(rpi_cell);
                 cells[RPI_RLC_ACC_CELL_IDX] = Some(rpi_rlc_acc_cell);
-                if let Some(block_number) = block_number {
+                if let Some(block_number) = block_offset {
                     self.q_block_table.enable(region, row_offset)?;
                     region.assign_advice(
                         || "block_index",
@@ -1326,34 +1326,34 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
         &self,
         region: &mut Region<'_, F>,
         public_data: &PublicData<F>,
-        block_number: usize,
+        block_offset: usize,
         challenges: &Challenges<Value<F>>,
     ) {
         let randomness = challenges.evm_word();
         // Current block is the exception, it sits on offset zero but hash block number
         // = CURRENT_BLOCK_NUM The rest blocks are following, with their block
         // number being one less from their position
-        let block_offset = if block_number == CURRENT_BLOCK_NUM {
+        let blk_offset = if block_offset == CURRENT_BLOCK_NUM {
             0
         } else {
-            (block_number + 1) * BLOCKHASH_TOTAL_ROWS
+            (block_offset + 1) * BLOCKHASH_TOTAL_ROWS
         };
 
         self.blockhash_cols
             .q_blk_hdr_rlc_start
-            .enable(region, block_offset)
+            .enable(region, blk_offset)
             .unwrap();
         self.blockhash_cols
             .q_blk_hdr_rlp_end
-            .enable(region, block_offset + BLOCKHASH_TOTAL_ROWS - 1)
+            .enable(region, blk_offset + BLOCKHASH_TOTAL_ROWS - 1)
             .unwrap();
 
         region
             .assign_fixed(
                 || "block_table_index_blockhash",
                 self.blockhash_cols.block_table_index_blockhash,
-                block_offset + BLOCKHASH_TOTAL_ROWS - 1,
-                || Value::known(F::from(block_number as u64)),
+                blk_offset + BLOCKHASH_TOTAL_ROWS - 1,
+                || Value::known(F::from(block_offset as u64)),
             )
             .unwrap();
 
@@ -1363,7 +1363,7 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
             .assign_fixed(
                 || "block_table_tag_blockhash",
                 self.blockhash_cols.block_table_tag_blockhash,
-                block_offset + BLOCKHASH_TOTAL_ROWS - 2,
+                blk_offset + BLOCKHASH_TOTAL_ROWS - 2,
                 || Value::known(F::from(BlockContextFieldTag::PreviousHashHi as u64)),
             )
             .unwrap();
@@ -1372,8 +1372,8 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
             .assign_fixed(
                 || "block_table_index_blockhash",
                 self.blockhash_cols.block_table_index_blockhash,
-                block_offset + BLOCKHASH_TOTAL_ROWS - 2,
-                || Value::known(F::from(block_number as u64)),
+                blk_offset + BLOCKHASH_TOTAL_ROWS - 2,
+                || Value::known(F::from(block_offset as u64)),
             )
             .unwrap();
 
@@ -1383,7 +1383,7 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
             .assign_fixed(
                 || "block_table_tag_blockhash",
                 self.blockhash_cols.block_table_tag_blockhash,
-                block_offset + BLOCKHASH_TOTAL_ROWS - 3,
+                blk_offset + BLOCKHASH_TOTAL_ROWS - 3,
                 || Value::known(F::from(BlockContextFieldTag::PreviousHashLo as u64)),
             )
             .unwrap();
@@ -1392,15 +1392,15 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
             .assign_fixed(
                 || "block_table_index_blockhash",
                 self.blockhash_cols.block_table_index_blockhash,
-                block_offset + BLOCKHASH_TOTAL_ROWS - 3,
-                || Value::known(F::from(block_number as u64)),
+                blk_offset + BLOCKHASH_TOTAL_ROWS - 3,
+                || Value::known(F::from(block_offset as u64)),
             )
             .unwrap();
 
-        if block_number != CURRENT_BLOCK_NUM {
+        if block_offset != CURRENT_BLOCK_NUM {
             self.blockhash_cols
                 .q_lookup_blockhash
-                .enable(region, block_offset + BLOCKHASH_TOTAL_ROWS - 1)
+                .enable(region, blk_offset + BLOCKHASH_TOTAL_ROWS - 1)
                 .unwrap();
         }
 
@@ -1454,7 +1454,7 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
         .concat();
 
         for (offset, rlp_byte) in block_header_rlp_byte.iter().enumerate() {
-            let absolute_offset = block_offset + offset;
+            let absolute_offset = blk_offset + offset;
             region
                 .assign_advice(
                     || "blk_hdr_rlp",
@@ -1551,7 +1551,7 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
         }
 
         for (offset, (v, q)) in rlp_const.iter().enumerate() {
-            let absolute_offset = block_offset + offset;
+            let absolute_offset = blk_offset + offset;
             region
                 .assign_fixed(
                     || "blk_hdr_rlp_const",
@@ -1592,7 +1592,7 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
         .enumerate()
         {
             for (offset, val) in reconstructed_values[field_num].iter().enumerate() {
-                let absolute_offset = block_offset + base_offset + offset;
+                let absolute_offset = blk_offset + base_offset + offset;
                 let is_parent_hash_hi = *name == "parent_hash hi";
                 let is_parent_hash_lo = *name == "parent_hash lo";
                 let is_parent_hash = is_parent_hash_hi || is_parent_hash_lo;
@@ -1600,7 +1600,7 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
                 // `q_parent_hash` enables the lookup of parent_hash against the past 256 block
                 // hashes We skip this check for the oldest block as we don't
                 // have its parent block hash to compare it with
-                if block_number != OLDEST_BLOCK_NUM {
+                if block_offset != OLDEST_BLOCK_NUM {
                     if is_parent_hash {
                         self.blockhash_cols
                             .q_parent_hash
@@ -1637,7 +1637,7 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
                     )
                     .unwrap();
 
-                if *is_reconstruct && !(is_parent_hash && block_number == OLDEST_BLOCK_NUM) {
+                if *is_reconstruct && !(is_parent_hash && block_offset == OLDEST_BLOCK_NUM) {
                     region
                         .assign_fixed(
                             || "q_reconstruct for ".to_string() + name,
@@ -1794,7 +1794,7 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
         ]
         .iter()
         {
-            let absolute_offset = block_offset + offset - 1;
+            let absolute_offset = blk_offset + offset - 1;
             region
                 .assign_fixed(
                     || "block_table_tag_blockhash",
@@ -1809,7 +1809,7 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
                     || "block_table_index_blockhash",
                     self.blockhash_cols.block_table_index_blockhash,
                     absolute_offset,
-                    || Value::known(F::from(block_number as u64)),
+                    || Value::known(F::from(block_offset as u64)),
                 )
                 .unwrap();
         }
@@ -1820,7 +1820,7 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
             lt_chip
                 .assign(
                     region,
-                    block_offset + offset,
+                    blk_offset + offset,
                     F::from(byte as u64),
                     F::from(RLP_HDR_NOT_SHORT),
                 )
@@ -1832,7 +1832,7 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
             .assign_advice(
                 || "blk_hdr_hash_hi",
                 self.blockhash_cols.blk_hdr_blockhash,
-                block_offset + BLOCKHASH_TOTAL_ROWS - 1,
+                blk_offset + BLOCKHASH_TOTAL_ROWS - 1,
                 || blk_hdr_hash_hi,
             )
             .unwrap();
@@ -1840,7 +1840,7 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
             .assign_advice(
                 || "blk_hdr_hash_lo",
                 self.blockhash_cols.blk_hdr_blockhash,
-                block_offset + BLOCKHASH_TOTAL_ROWS - 2,
+                blk_offset + BLOCKHASH_TOTAL_ROWS - 2,
                 || blk_hdr_hash_lo,
             )
             .unwrap();
@@ -1851,7 +1851,7 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
         &self,
         region: &mut Region<'_, F>,
         public_data: &PublicData<F>,
-        block_number: usize,
+        block_offset: usize,
         test_public_data: &Option<PublicData<F>>,
         challenges: &Challenges<Value<F>>,
     ) -> Result<AssignedCell<F, F>, Error> {
@@ -1862,29 +1862,29 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
         let randomness = challenges.evm_word();
         self.q_start.enable(region, 0)?;
 
-        let base_offset = if block_number == CURRENT_BLOCK_NUM {
+        let base_offset = if block_offset == CURRENT_BLOCK_NUM {
             0
         } else {
-            BLOCK_LEN_IN_TABLE * (block_number + 1) + BLOCK_TABLE_MISC_LEN
+            BLOCK_LEN_IN_TABLE * (block_offset + 1) + BLOCK_TABLE_MISC_LEN
         };
 
         let mut block_data: Vec<(&str, BlockContextFieldTag, usize, Value<F>)> = vec![
             (
                 "coinbase",
                 BlockContextFieldTag::Coinbase,
-                block_number,
+                block_offset,
                 Value::known(block_values.coinbase.to_scalar().unwrap()),
             ),
             (
                 "timestamp",
                 BlockContextFieldTag::Timestamp,
-                block_number,
+                block_offset,
                 Value::known(F::from(block_values.timestamp)),
             ),
             (
                 "number",
                 BlockContextFieldTag::Number,
-                block_number,
+                block_offset,
                 randomness.map(|randomness| {
                     rlc(
                         [0; 32 - NUMBER_SIZE]
@@ -1901,31 +1901,31 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
             (
                 "difficulty",
                 BlockContextFieldTag::Difficulty,
-                block_number,
+                block_offset,
                 randomness.map(|randomness| rlc(block_values.difficulty.to_le_bytes(), randomness)),
             ),
             (
                 "gas_limit",
                 BlockContextFieldTag::GasLimit,
-                block_number,
+                block_offset,
                 Value::known(F::from(block_values.gas_limit)),
             ),
             (
                 "base_fee",
                 BlockContextFieldTag::BaseFee,
-                block_number,
+                block_offset,
                 randomness.map(|randomness| rlc(block_values.base_fee.to_le_bytes(), randomness)),
             ),
             (
                 "chain_id",
                 BlockContextFieldTag::ChainId,
-                block_number,
+                block_offset,
                 Value::known(F::from(block_values.chain_id)),
             ),
             (
                 "beneficiary",
                 BlockContextFieldTag::Beneficiary,
-                block_number,
+                block_offset,
                 randomness.map(|randomness| {
                     rlc(
                         ([0u8; 32 - BENEFICIARY_SIZE]
@@ -1942,7 +1942,7 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
             (
                 "state_root",
                 BlockContextFieldTag::StateRoot,
-                block_number,
+                block_offset,
                 randomness.map(|randomness| {
                     rlc(
                         pb.state_root
@@ -1959,7 +1959,7 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
             (
                 "transactions_root",
                 BlockContextFieldTag::TransactionsRoot,
-                block_number,
+                block_offset,
                 randomness.map(|randomness| {
                     rlc(
                         pb.transactions_root
@@ -1976,7 +1976,7 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
             (
                 "receipts_root",
                 BlockContextFieldTag::ReceiptsRoot,
-                block_number,
+                block_offset,
                 randomness.map(|randomness| {
                     rlc(
                         pb.receipts_root
@@ -1993,13 +1993,13 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
             (
                 "gas_used",
                 BlockContextFieldTag::GasUsed,
-                block_number,
+                block_offset,
                 Value::known(F::from(pb.gas_used as u64)),
             ),
             (
                 "mix_hash",
                 BlockContextFieldTag::MixHash,
-                block_number,
+                block_offset,
                 randomness.map(|randomness| {
                     rlc(
                         pb.mix_hash
@@ -2016,7 +2016,7 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
             (
                 "withdrawals_root",
                 BlockContextFieldTag::WithdrawalsRoot,
-                block_number,
+                block_offset,
                 randomness.map(|randomness| {
                     rlc(
                         pb.withdrawals_root
@@ -2033,7 +2033,7 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
         ];
 
         // The following need to be added only once in block table
-        if block_number == CURRENT_BLOCK_NUM {
+        if block_offset == CURRENT_BLOCK_NUM {
             block_data.extend_from_slice(
                 block_values
                     .history_hashes
@@ -2247,7 +2247,7 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
                     challenges,
                 )?;
 
-                for (block_number, prev_block) in public_data.previous_blocks
+                for (block_offset, prev_block) in public_data.previous_blocks
                     [0..PREVIOUS_BLOCKS_NUM]
                     .iter()
                     .enumerate()
@@ -2256,13 +2256,13 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
                     self.assign_block_hash_calc(
                         region,
                         &prev_public_data,
-                        block_number,
+                        block_offset,
                         challenges,
                     );
                     self.assign_block_table(
                         region,
                         public_data,
-                        block_number,
+                        block_offset,
                         test_public_data,
                         challenges,
                     )?;
@@ -2271,7 +2271,7 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
                 let mut rpi_rlc_acc = Value::known(F::ZERO);
                 let mut offset = 0;
                 let mut rpi_rlc_acc_cell = None;
-                for (annotation, block_number, field_bytes) in public_data.assignments() {
+                for (annotation, block_offset, field_bytes) in public_data.assignments() {
                     let cells = self.assign_pi_field(
                         region,
                         &mut offset,
@@ -2280,7 +2280,7 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
                         &mut rpi_rlc_acc,
                         challenges,
                         false,
-                        block_number,
+                        block_offset,
                     )?;
                     rpi_rlc_acc_cell = Some(cells[RPI_RLC_ACC_CELL_IDX].clone());
                 }
