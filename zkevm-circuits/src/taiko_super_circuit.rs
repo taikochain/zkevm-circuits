@@ -177,6 +177,7 @@ impl<F: Field> Circuit<F> for SuperCircuit<F> {
             vec![&self.pi_circuit.evidence.encode_raw()],
             &challenges,
         )?;
+        config.byte_table.load(&mut layouter)?;
         self.synthesize_sub(&config, &challenges, &mut layouter)
     }
 }
