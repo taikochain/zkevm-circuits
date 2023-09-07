@@ -1854,7 +1854,7 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
         block_offset: usize,
         test_public_data: &Option<PublicData<F>>,
         challenges: &Challenges<Value<F>>,
-    ) -> Result<AssignedCell<F, F>, Error> {
+    ) -> Result<(), Error> {
         // When in negative testing, we need to bypass the actual public_data with some
         // wrong test data
         let pb = test_public_data.as_ref().unwrap_or(public_data);
@@ -2126,7 +2126,7 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
             }
         }
 
-        Ok(chain_id_cell.pop().unwrap())
+        Ok(())
     }
 
     fn assign(
