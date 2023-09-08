@@ -918,21 +918,33 @@ impl<F: Field> SubCircuitConfig<F> for TaikoPiCircuitConfig<F> {
 
             // Decode RLC and Hi/Lo field values
             for (selector, values, r_mul) in [
-                            (q_hi_next.expr(), q_reconstruct_cur.expr(), 2_u64.pow(8).expr()),
-                            (q_lo_next.expr(), q_lo_cur, 2_u64.pow(8).expr()),
-                            (and::expr([
-                                q_reconstruct_next.expr(),
-                                not::expr(q_hi_next.expr()),
-                                not::expr(q_lo_next.expr()),
-                            ]), q_reconstruct_cur.expr(), challenges.evm_word().expr()),
-                            ]
-            {
+                (
+                    q_hi_next.expr(),
+                    q_reconstruct_cur.expr(),
+                    2_u64.pow(8).expr(),
+                ),
+                (q_lo_next.expr(), q_lo_cur, 2_u64.pow(8).expr()),
+                (
+                    and::expr([
+                        q_reconstruct_next.expr(),
+                        not::expr(q_hi_next.expr()),
+                        not::expr(q_lo_next.expr()),
+                    ]),
+                    q_reconstruct_cur.expr(),
+                    challenges.evm_word().expr(),
+                ),
+            ] {
                 cb.condition(selector, |cb| {
                     let decode = meta.query_advice(blk_hdr_reconstruct_value, Rotation::cur());
-                    let decode_next = meta.query_advice(blk_hdr_reconstruct_value, Rotation::next());
+                    let decode_next =
+                        meta.query_advice(blk_hdr_reconstruct_value, Rotation::next());
                     // For the first byte start from scratch and just copy over the next byte
                     let r = select::expr(values, r_mul, 0.expr());
-                    cb.require_equal("decode rlc fields and hi/lo values", decode_next, decode * r + byte_next.expr());
+                    cb.require_equal(
+                        "decode rlc fields and hi/lo values",
+                        decode_next,
+                        decode * r + byte_next.expr(),
+                    );
                 });
             }
 
@@ -1029,15 +1041,15 @@ impl<F: Field> SubCircuitConfig<F> for TaikoPiCircuitConfig<F> {
             ]
         });
 
-
-        for rotation in [0,-1] { // hi blockhash is in current offset, lo blockhash in in previous
+        for rotation in [0, -1] {
+            // hi blockhash is in current offset, lo blockhash in in previous
             meta.lookup_any(
                 "Block header: Check hi/lo parts of block hashes against previous hashes",
                 |meta| {
                     let q_blk_hdr_rlp_end = meta.query_selector(q_blk_hdr_rlp_end);
                     let blk_hdr_hash_hi = meta.query_advice(blk_hdr_blockhash, Rotation(rotation));
                     let q_lookup_blockhash = meta.query_selector(q_lookup_blockhash);
-                    let tag = meta.query_fixed(block_table_tag_blockhash, Rotation(rotation-1));
+                    let tag = meta.query_fixed(block_table_tag_blockhash, Rotation(rotation - 1));
                     let index = meta.query_fixed(block_table_index_blockhash, Rotation::cur());
                     let q_sel = and::expr([q_blk_hdr_rlp_end, q_lookup_blockhash]);
                     vec![
@@ -1059,19 +1071,17 @@ impl<F: Field> SubCircuitConfig<F> for TaikoPiCircuitConfig<F> {
         }
 
         // Check all parent_hash fields against previous_hashes in block table
-        for (cur, hi_lo) in [(q_hi, 0),
-                             (q_lo, 1)]
-        {
+        for (cur, hi_lo) in [(q_hi, 0), (q_lo, 1)] {
             meta.lookup_any("Block header: Check parent hashes hi/lo", |meta| {
                 let tag = meta.query_fixed(block_table_tag_blockhash, Rotation::cur());
-                let index = meta.query_fixed(block_table_index_blockhash, Rotation::cur()) - 1.expr();
+                let index =
+                    meta.query_fixed(block_table_index_blockhash, Rotation::cur()) - 1.expr();
                 let q_cur = meta.query_fixed(cur, Rotation::cur());
                 let q_lo_next = meta.query_fixed(q_lo, Rotation::next());
 
                 let next_cond = if hi_lo == 0 {
                     q_lo_next
-                } else
-                {
+                } else {
                     not::expr(q_lo_next)
                 };
 
@@ -1087,7 +1097,8 @@ impl<F: Field> SubCircuitConfig<F> for TaikoPiCircuitConfig<F> {
                         meta.query_advice(block_table_blockhash.index, Rotation::cur()),
                     ),
                     (
-                        q_sel.expr() * meta.query_advice(blk_hdr_reconstruct_value, Rotation::cur()),
+                        q_sel.expr()
+                            * meta.query_advice(blk_hdr_reconstruct_value, Rotation::cur()),
                         meta.query_advice(block_table_blockhash.value, Rotation::cur()),
                     ),
                 ]
@@ -2164,14 +2175,9 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
                         self.rpi_field_bytes,
                         self.rpi_field_bytes_acc,
                     ] {
-                            region
-                                .assign_advice(
-                                    || "0",
-                                    field,
-                                    i,
-                                    || Value::known(F::ZERO),
-                                )
-                                .unwrap();
+                        region
+                            .assign_advice(|| "0", field, i, || Value::known(F::ZERO))
+                            .unwrap();
                     }
 
                     for field in [
@@ -2185,14 +2191,9 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
                         self.blockhash_cols.q_var_field_256,
                         self.is_field_rlc,
                     ] {
-                            region
-                                .assign_fixed(
-                                    || "0",
-                                    field,
-                                    i,
-                                    || Value::known(F::ZERO),
-                                )
-                                .unwrap();
+                        region
+                            .assign_fixed(|| "0", field, i, || Value::known(F::ZERO))
+                            .unwrap();
                     }
                 }
 
