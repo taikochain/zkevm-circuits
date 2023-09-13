@@ -359,7 +359,7 @@ fuzz_target!(|sic: StateInputCollections| {
     // if sic.tx_access_list_account_operations.tx_access_list_account_operations.len() < 20 {
     //     return;
     // }
-    if sic.tx_access_list_account_storage_operations.tx_access_list_account_storage_operations.len() < 5 {
+    if sic.tx_access_list_account_storage_operations.tx_access_list_account_storage_operations.len() < 3 {
         return;
     }
     let success = true;
