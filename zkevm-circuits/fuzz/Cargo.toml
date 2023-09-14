@@ -48,3 +48,15 @@ name = "state"
 path = "fuzz_targets/state.rs"
 test = false
 doc = false
+
+[[bin]]
+name = "tx"
+path = "fuzz_targets/tx.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "bytecode"
+path = "fuzz_targets/bytecode.rs"
+test = false
+doc = false

@@ -16,7 +16,7 @@ fn tx_circuit_unusable_rows() {
     )
 }
 
-fn run<F: Field>(
+pub fn run<F: Field>(
     txs: Vec<Transaction>,
     chain_id: u64,
     max_txs: usize,

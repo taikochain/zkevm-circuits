@@ -6,8 +6,10 @@ use crate::{
     Error,
 };
 use eth_types::{bytecode, Bytecode, GethExecStep, Word, U256};
-use ethers_core::utils::keccak256;
-use ethers_core::rand::{rngs::ThreadRng, Rng};
+use ethers_core::{
+    rand::{rngs::ThreadRng, Rng},
+    utils::keccak256,
+};
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct Sha3;
