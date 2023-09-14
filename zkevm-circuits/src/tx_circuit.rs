@@ -6,10 +6,10 @@
 
 pub mod sign_verify;
 
-#[cfg(any(feature = "test", test, feature = "test-circuits"))]
+// #[cfg(any(feature = "test", test, feature = "test-circuits"))]
 mod dev;
-#[cfg(any(feature = "test", test))]
-mod test;
+// #[cfg(any(feature = "test", test))]
+pub mod test;
 #[cfg(any(feature = "test", test, feature = "test-circuits"))]
 pub use dev::TxCircuit as TestTxCircuit;
 

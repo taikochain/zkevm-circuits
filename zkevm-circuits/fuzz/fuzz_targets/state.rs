@@ -1,27 +1,24 @@
 #![no_main]
 
-use libfuzzer_sys::fuzz_target;
-use libfuzzer_sys::arbitrary::Arbitrary;
 use bus_mapping::operation::{
-    MemoryOp, Operation, OperationContainer, RWCounter, StackOp, StorageOp, RW,
-    TxAccessListAccountOp, TxAccessListAccountStorageOp,
+    MemoryOp, Op, Operation, OperationContainer, RWCounter, StackOp, StorageOp,
+    TxAccessListAccountOp, TxAccessListAccountStorageOp, TxRefundOp, RW,
 };
 use eth_types::{
     address,
     evm_types::{MemoryAddress, StackAddress},
     Address, Field, ToAddress, Word, U256,
 };
-use zkevm_circuits::state_circuit::test::test_state_circuit_ok;
-use bus_mapping::operation::Op;
-use halo2_proofs::halo2curves::bn256::Fr;
-use halo2_proofs::dev::MockProver;
-use zkevm_circuits::state_circuit::StateCircuit;
-use zkevm_circuits::witness::RwMap;
-use zkevm_circuits::util::SubCircuit;
+use halo2_proofs::{dev::MockProver, halo2curves::bn256::Fr};
+use libfuzzer_sys::{arbitrary::Arbitrary, fuzz_target};
 use log::error;
-use std::collections::HashSet;
-use std::collections::HashMap;
 use rand::Rng;
+use std::collections::{HashMap, HashSet};
+use zkevm_circuits::{
+    state_circuit::{test::test_state_circuit_ok, StateCircuit},
+    util::SubCircuit,
+    witness::RwMap,
+};
 
 const N_ROWS: usize = 1 << 16;
 
@@ -94,7 +91,6 @@ impl StackOperationCollection {
         let mut rng = rand::thread_rng();
         let mut rw_counter = 0;
         let mut stack_pointer: usize = 1;
-
 
         let mut written_values: HashMap<usize, u32> = HashMap::new();
         let mut known_stack_pointers: HashSet<usize> = HashSet::new();
@@ -180,7 +176,6 @@ impl StorageOperationCollection {
         let mut rw_counter = 0;
         let mut storage_values: HashMap<([u8; 20], u32), u32> = HashMap::new();
 
-
         self.storage_operations
             .iter()
             .map(|so| {
@@ -188,7 +183,9 @@ impl StorageOperationCollection {
                 let address_key = (so.storage_address, so.key);
                 let storage_op = if so.rw {
                     // Write operation: Update the storage value
-                    let initial_value_prev = *storage_values.get(&address_key).unwrap_or(&so.committed_value);
+                    let initial_value_prev = *storage_values
+                        .get(&address_key)
+                        .unwrap_or(&so.committed_value);
                     storage_values.insert(address_key, so.value);
                     Operation::new(
                         RWCounter::from(rw_counter),
@@ -197,7 +194,8 @@ impl StorageOperationCollection {
                             Address::from(so.storage_address),
                             Word::from(so.key),
                             Word::from(so.value), // Use the new value for writes
-                            Word::from(initial_value_prev), // Set value_prev initially to committed_value
+                            Word::from(initial_value_prev), /* Set value_prev initially to
+                                                             * committed_value */
                             // so.tx_id,
                             1,
                             Word::from(so.committed_value),
@@ -211,7 +209,9 @@ impl StorageOperationCollection {
                         so.committed_value
                     } else {
                         // Not the first read: Retrieve the previously written value
-                        *storage_values.get(&address_key).unwrap_or(&so.committed_value)
+                        *storage_values
+                            .get(&address_key)
+                            .unwrap_or(&so.committed_value)
                     };
                     Operation::new(
                         RWCounter::from(rw_counter),
@@ -253,11 +253,14 @@ impl TxAccessListAccountOperationCollection {
         let mut rw_counter = 0;
         let mut access_list_state: HashMap<[u8; 20], (bool, bool)> = HashMap::new();
 
-        self.tx_access_list_account_operations.iter()
+        self.tx_access_list_account_operations
+            .iter()
             .map(|operation| {
                 rw_counter += 1;
                 let address_key = operation.account_address;
-                let (is_warm, is_warm_prev) = *access_list_state.get(&address_key).unwrap_or(&(false, false));
+                let (is_warm, is_warm_prev) = *access_list_state
+                    .get(&address_key)
+                    .unwrap_or(&(false, false));
                 // Write operation: Update the access list state
                 match (is_warm, is_warm_prev) {
                     (false, false) => {
@@ -304,11 +307,14 @@ impl TxAccessListAccountStorageOperationCollection {
         let mut rw_counter = 0;
         let mut access_list_state: HashMap<([u8; 20], u32), (bool, bool)> = HashMap::new();
 
-        self.tx_access_list_account_storage_operations.iter()
+        self.tx_access_list_account_storage_operations
+            .iter()
             .map(|operation| {
                 rw_counter += 1;
                 let address_key = (operation.account_address, operation.key);
-                let (is_warm, is_warm_prev) = *access_list_state.get(&address_key).unwrap_or(&(false, false));
+                let (is_warm, is_warm_prev) = *access_list_state
+                    .get(&address_key)
+                    .unwrap_or(&(false, false));
                 // Write operation: Update the access list state
                 match (is_warm, is_warm_prev) {
                     (false, false) => {
@@ -335,6 +341,56 @@ impl TxAccessListAccountStorageOperationCollection {
     }
 }
 
+#[derive(Debug, libfuzzer_sys::arbitrary::Arbitrary)]
+pub struct TxRefundOperation {
+    pub rw_counter: usize,
+    pub rw: bool,
+    pub tx_id: usize,
+    pub value: u64,
+    pub value_prev: u64,
+}
+
+#[derive(Debug, libfuzzer_sys::arbitrary::Arbitrary)]
+pub struct TxRefundOperationCollection {
+    pub tx_refund_operations: Vec<TxRefundOperation>,
+}
+
+impl TxRefundOperationCollection {
+    pub fn to_operations(&self) -> Vec<Operation<TxRefundOp>> {
+        let mut rw_counter = 0;
+        let mut tx_id = 0;
+        let mut refund_values: HashMap<usize, u64> = HashMap::new();
+
+        self.tx_refund_operations
+            .iter()
+            .map(|op| {
+                rw_counter += 1;
+                tx_id += 1;
+                // Write operation: Update the refund value
+
+                refund_values.insert(op.tx_id, op.value);
+                Operation::new(
+                    RWCounter::from(rw_counter),
+                    convertBoolToRW(true),
+                    TxRefundOp {
+                        // tx_id: op.tx_id,
+                        tx_id: tx_id,
+                        value: if op.value > op.value_prev {
+                            op.value
+                        } else {
+                            op.value_prev
+                        },
+                        value_prev: if op.value > op.value_prev {
+                            op.value_prev
+                        } else {
+                            op.value
+                        },
+                    },
+                )
+            })
+            .collect()
+    }
+}
 
 #[derive(Debug, libfuzzer_sys::arbitrary::Arbitrary)]
 pub struct StateInputCollections {
@@ -343,7 +399,7 @@ pub struct StateInputCollections {
     pub storage_operations: StorageOperationCollection,
     pub tx_access_list_account_operations: TxAccessListAccountOperationCollection,
     pub tx_access_list_account_storage_operations: TxAccessListAccountStorageOperationCollection,
-
+    pub tx_refund_operations: TxRefundOperationCollection,
 }
 
 fuzz_target!(|sic: StateInputCollections| {
@@ -359,7 +415,10 @@ fuzz_target!(|sic: StateInputCollections| {
     // if sic.tx_access_list_account_operations.tx_access_list_account_operations.len() < 20 {
     //     return;
     // }
-    if sic.tx_access_list_account_storage_operations.tx_access_list_account_storage_operations.len() < 3 {
+    // if sic.tx_access_list_account_storage_operations.tx_access_list_account_storage_operations.
+    // len() < 2 {     return;
+    // }
+    if sic.tx_refund_operations.tx_refund_operations.len() < 1 {
         return;
     }
     let success = true;
@@ -369,7 +428,9 @@ fuzz_target!(|sic: StateInputCollections| {
         // stack: sic.stack_operations.to_operations(),
         // storage: sic.storage_operations.to_operations(),
         // tx_access_list_account: sic.tx_access_list_account_operations.to_operations(),
-        tx_access_list_account_storage: sic.tx_access_list_account_storage_operations.to_operations(),
+        // tx_access_list_account_storage:
+        // sic.tx_access_list_account_storage_operations.to_operations(),
+        tx_refund: sic.tx_refund_operations.to_operations(),
         ..Default::default()
     });
     println!("{:?}", rw_map);

@@ -2,22 +2,20 @@
 #[macro_use]
 extern crate libfuzzer_sys;
 
-use libfuzzer_sys::fuzz_target;
-use eth_types::{U256, Word};
-use libfuzzer_sys::arbitrary::Arbitrary;
-use zkevm_circuits::exp_circuit::test::test_ok;
-use zkevm_circuits::exp_circuit::test::test_ok_multiple;
-use zkevm_circuits::exp_circuit::test::gen_code_multiple;
-use zkevm_circuits::exp_circuit::test::gen_data;
-use zkevm_circuits::exp_circuit::test::test_exp_circuit;
-use halo2_proofs::halo2curves::bn256::Fr;
-use zkevm_circuits::witness::block_convert;
 use bus_mapping::circuit_input_builder::ExpStep;
-use rand::Rng;
-use zkevm_circuits::exp_circuit::ExpCircuit;
-use halo2_proofs::dev::MockProver;
+use eth_types::{Word, U256};
+use halo2_proofs::{dev::MockProver, halo2curves::bn256::Fr};
+use libfuzzer_sys::{arbitrary::Arbitrary, fuzz_target};
 use log::error;
+use rand::Rng;
 use std::panic;
+use zkevm_circuits::{
+    exp_circuit::{
+        test::{gen_code_multiple, gen_data, test_exp_circuit, test_ok, test_ok_multiple},
+        ExpCircuit,
+    },
+    witness::block_convert,
+};
 
 #[derive(Debug, libfuzzer_sys::arbitrary::Arbitrary)]
 pub struct ExpInput {
@@ -33,18 +31,24 @@ pub struct ExpInputCollection {
 impl ExpInputCollection {
     pub fn to_word_pairs(&self) -> Vec<(Word, Word)> {
         let mut rng = rand::thread_rng(); // Initialize the random number generator
-        self.inputs.iter().map(|input| {
-            let random_base_factor = rng.gen_range(1..=4);
-            let random_exp_factor = rng.gen_range(1..=4);
-            println!("random_base_factor: {}, random_exp_factor: {}", random_base_factor, random_exp_factor);
-            println!("random_base: {}, random_exp {}", input.base, input.exponent);
+        self.inputs
+            .iter()
+            .map(|input| {
+                let random_base_factor = rng.gen_range(1..=4);
+                let random_exp_factor = rng.gen_range(1..=4);
+                println!(
+                    "random_base_factor: {}, random_exp_factor: {}",
+                    random_base_factor, random_exp_factor
+                );
+                println!("random_base: {}, random_exp {}", input.base, input.exponent);
 
-            let final_base = Word::from(input.base) * Word::from(random_base_factor);
-            let final_exp = Word::from(input.exponent) * Word::from(random_exp_factor);
-            println!("final_base: {}, final_exp: {}", final_base, final_exp);
+                let final_base = Word::from(input.base) * Word::from(random_base_factor);
+                let final_exp = Word::from(input.exponent) * Word::from(random_exp_factor);
+                println!("final_base: {}, final_exp: {}", final_base, final_exp);
 
-            (Word::from(final_base), Word::from(final_exp))
-        }).collect()
+                (Word::from(final_base), Word::from(final_exp))
+            })
+            .collect()
     }
 }
 
@@ -64,7 +68,11 @@ fuzz_target!(|exp_input_collection: ExpInputCollection| {
             println!("Introducing error");
             success = false;
             builder.block.exp_events[0].exponentiation = U256::from(10);
-            builder.block.exp_events[0].steps.push(ExpStep::from((Word::from(1), Word::from(2), Word::from(3))));
+            builder.block.exp_events[0].steps.push(ExpStep::from((
+                Word::from(1),
+                Word::from(2),
+                Word::from(3),
+            )));
         } else {
             println!("Not introducing error");
         }

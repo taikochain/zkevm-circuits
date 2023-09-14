@@ -3,11 +3,12 @@
 extern crate libfuzzer_sys;
 // extern crate std;
 
-use zkevm_circuits::bytecode_circuit::bytecode_unroller::unroll;
-use zkevm_circuits::bytecode_circuit::test::test_bytecode_circuit_unrolled;
 use halo2_proofs::halo2curves::bn256::Fr;
+use zkevm_circuits::bytecode_circuit::{
+    bytecode_unroller::unroll, test::test_bytecode_circuit_unrolled,
+};
 
-use evm_disassembler::{disassemble_str, disassemble_bytes, format_operations};
+use evm_disassembler::{disassemble_bytes, disassemble_str, format_operations};
 
 fuzz_target!(|data: &[u8]| {
     if data.len() == 0 {
@@ -29,7 +30,7 @@ fuzz_target!(|data: &[u8]| {
         Ok(_) => {
             println!("Found valid bytecode");
             test_bytecode_circuit_unrolled::<Fr>(k, vec![(&unrolled).clone()], true);
-            }
+        }
         Err(_e) => {
             println!("Found invalid bytecode");
             test_bytecode_circuit_unrolled::<Fr>(k, vec![(&unrolled).clone()], false);
