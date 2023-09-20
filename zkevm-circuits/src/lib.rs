@@ -30,7 +30,7 @@ pub mod table;
 pub mod taiko_pi_circuit;
 pub mod taiko_super_circuit;
 
-#[cfg(any(feature = "test", test))]
+// #[cfg(any(feature = "test", test))]
 pub mod test_util;
 
 pub mod anchor_tx_circuit;
