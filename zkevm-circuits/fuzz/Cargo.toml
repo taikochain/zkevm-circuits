@@ -20,6 +20,7 @@ eth-types = { path = "../../eth-types" }
 mock = { path = "../../mock" }
 bus-mapping = { path = "../../bus-mapping" }
 rand = "0.8.5"
+rand_chacha = "0.3.1"
 [dependencies.zkevm-circuits]
 path = "../"
 
@@ -58,5 +59,11 @@ doc = false
 [[bin]]
 name = "bytecode"
 path = "fuzz_targets/bytecode.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "evm"
+path = "fuzz_targets/evm.rs"
 test = false
 doc = false

@@ -6,8 +6,12 @@ use halo2_proofs::{
     halo2curves::bn256::Fr,
 };
 use zkevm_circuits::tx_circuit::test::run;
-use eth_types::geth_types::Transaction;
+use eth_types::{
+    geth_types::Transaction, word, Bytes,
+};
 use mock::MockTransaction;
+use rand_chacha::ChaCha20Rng;
+use rand::SeedableRng;
 // use zkevm_circuits::tx_circuit::TxCircuit;
 // use halo2_proofs::dev::MockProver;
 
@@ -18,11 +22,18 @@ fuzz_target!(|_data: &[u8]| {
 
     let chain_id: u64 = mock::MOCK_CHAIN_ID.as_u64();
 
+    let mut rng = ChaCha20Rng::seed_from_u64(2u64);
+
     // let tx: Transaction = mock::CORRECT_MOCK_TXS[0].clone().into();
     let tx: Transaction = MockTransaction::default()
-        .value(word!("0x3e8")
+        .from(mock::AddrOrWallet::random(&mut rng))
+        .to(mock::AddrOrWallet::random(&mut rng))
+        // .nonce(0x103u64)
+        // .value(word!("0x3e8"))
+        // .gas_price(word!("0x4d2"))
+        // .input(Bytes::from(b"hello"))
         .build()
         .into();
 
-    assert_eq!(run::<Fr>(vec![tx], chain_id, MAX_TXS, MAX_CALLDATA), Ok(())));
+    assert_eq!(run::<Fr>(vec![tx], chain_id, MAX_TXS, MAX_CALLDATA), Ok(()));
 });
