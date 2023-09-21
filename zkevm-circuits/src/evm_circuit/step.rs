@@ -108,7 +108,9 @@ pub enum ExecutionState {
     RETURN_REVERT, // RETURN, REVERT
     CREATE2,
     SELFDESTRUCT,
+
     // Error cases
+    ErrorInvalidTx,
     ErrorInvalidOpcode,
     ErrorStack,
     ErrorWriteProtection,
@@ -119,6 +121,7 @@ pub enum ExecutionState {
     ErrorMaxCodeSizeExceeded,
     ErrorInvalidJump,
     ErrorReturnDataOutOfBound,
+    
     ErrorOutOfGasConstant,
     ErrorOutOfGasStaticMemoryExpansion,
     ErrorOutOfGasDynamicMemoryExpansion,
@@ -159,6 +162,7 @@ impl Display for ExecutionState {
 impl From<&ExecError> for ExecutionState {
     fn from(error: &ExecError) -> Self {
         match error {
+            ExecError::InvalidTx => ExecutionState::ErrorInvalidTx,
             ExecError::InvalidOpcode => ExecutionState::ErrorInvalidOpcode,
             ExecError::StackOverflow | ExecError::StackUnderflow => ExecutionState::ErrorStack,
             ExecError::WriteProtection => ExecutionState::ErrorWriteProtection,
@@ -331,7 +335,8 @@ impl ExecutionState {
     pub(crate) fn halts_in_exception(&self) -> bool {
         matches!(
             self,
-            Self::ErrorInvalidOpcode
+            Self::ErrorInvalidTx
+                | Self::ErrorInvalidOpcode
                 | Self::ErrorStack
                 | Self::ErrorWriteProtection
                 | Self::ErrorInvalidCreationCode

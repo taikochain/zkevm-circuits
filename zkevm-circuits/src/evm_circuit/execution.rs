@@ -62,6 +62,7 @@ mod dummy;
 mod dup;
 mod end_block;
 mod end_tx;
+mod error_invalid_tx;
 mod error_invalid_jump;
 mod error_invalid_opcode;
 mod error_oog_call;
@@ -136,8 +137,11 @@ use dummy::DummyGadget;
 use dup::DupGadget;
 use end_block::EndBlockGadget;
 use end_tx::EndTxGadget;
+
+use error_invalid_tx::ErrorInvalidTxGadget;
 use error_invalid_jump::ErrorInvalidJumpGadget;
 use error_invalid_opcode::ErrorInvalidOpcodeGadget;
+
 use error_oog_call::ErrorOOGCallGadget;
 use error_oog_constant::ErrorOOGConstantGadget;
 use error_oog_exp::ErrorOOGExpGadget;
@@ -293,7 +297,7 @@ pub struct ExecutionConfig<F> {
     error_oog_memory_copy: Box<ErrorOOGMemoryCopyGadget<F>>,
     error_oog_sload_sstore: Box<ErrorOOGSloadSstoreGadget<F>>,
     error_oog_static_memory_gadget:
-        Box<DummyGadget<F, 0, 0, { ExecutionState::ErrorOutOfGasStaticMemoryExpansion }>>,
+        Box<DummyGadget<F, 0, 0, { ExecutionState::ErrorOutOfGasStaticMemoryExpansion }>>,    
     error_stack: Box<ErrorStackGadget<F>>,
     error_write_protection: Box<ErrorWriteProtectionGadget<F>>,
     error_oog_dynamic_memory_gadget:
@@ -308,6 +312,8 @@ pub struct ExecutionConfig<F> {
         Box<DummyGadget<F, 0, 0, { ExecutionState::ErrorOutOfGasSELFDESTRUCT }>>,
     error_oog_code_store: Box<DummyGadget<F, 0, 0, { ExecutionState::ErrorOutOfGasCodeStore }>>,
     error_invalid_jump: Box<ErrorInvalidJumpGadget<F>>,
+    
+    error_invalid_tx: Box<ErrorInvalidTxGadget<F>>,
     error_invalid_opcode: Box<ErrorInvalidOpcodeGadget<F>>,
     error_depth: Box<DummyGadget<F, 0, 0, { ExecutionState::ErrorDepth }>>,
     error_contract_address_collision:
@@ -573,6 +579,7 @@ impl<F: Field> ExecutionConfig<F> {
             error_oog_self_destruct: configure_gadget!(),
             error_oog_code_store: configure_gadget!(),
             error_invalid_jump: configure_gadget!(),
+            error_invalid_tx: configure_gadget!(),
             error_invalid_opcode: configure_gadget!(),
             error_write_protection: configure_gadget!(),
             error_depth: configure_gadget!(),
@@ -1295,6 +1302,9 @@ impl<F: Field> ExecutionConfig<F> {
             }
             ExecutionState::ErrorInvalidJump => {
                 assign_exec_step!(self.error_invalid_jump)
+            }
+            ExecutionState::ErrorInvalidTx => {
+                assign_exec_step!(self.error_invalid_tx)
             }
             ExecutionState::ErrorInvalidOpcode => {
                 assign_exec_step!(self.error_invalid_opcode)
