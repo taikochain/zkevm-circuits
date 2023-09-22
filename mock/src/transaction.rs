@@ -144,6 +144,7 @@ pub struct MockTransaction {
     pub max_priority_fee_per_gas: Word,
     pub max_fee_per_gas: Word,
     pub chain_id: Word,
+    pub enable_skipping_invalid_tx: bool,
 }
 
 impl Default for MockTransaction {
@@ -168,6 +169,7 @@ impl Default for MockTransaction {
             max_priority_fee_per_gas: *MOCK_GASTIPCAP,
             max_fee_per_gas: *MOCK_GASFEECAP,
             chain_id: *MOCK_CHAIN_ID,
+            enable_skipping_invalid_tx: false,
         }
     }
 }

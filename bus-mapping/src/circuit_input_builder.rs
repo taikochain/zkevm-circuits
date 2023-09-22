@@ -156,6 +156,7 @@ impl<'a> CircuitInputBuilder {
         eth_block: &EthBlock,
         eth_tx: &eth_types::Transaction,
         is_success: bool,
+        is_invalid: bool,
     ) -> Result<Transaction, Error> {
         let call_id = self.block_ctx.rwc.0;
 
@@ -177,6 +178,7 @@ impl<'a> CircuitInputBuilder {
             eth_block,
             eth_tx,
             is_success,
+            is_invalid,
             self.block.is_taiko(),
         )
     }
@@ -284,7 +286,7 @@ impl<'a> CircuitInputBuilder {
         geth_trace: &GethExecTrace,
         is_last_tx: bool,
     ) -> Result<(), Error> {
-        let mut tx = self.new_tx(eth_block, eth_tx, !geth_trace.failed)?;
+        let mut tx = self.new_tx(eth_block, eth_tx, !geth_trace.failed, geth_trace.invalid)?;
         let mut tx_ctx = TransactionContext::new(eth_tx, geth_trace, is_last_tx)?;
 
         // Generate BeginTx step

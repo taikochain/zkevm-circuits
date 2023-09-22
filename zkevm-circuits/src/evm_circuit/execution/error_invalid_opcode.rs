@@ -81,15 +81,13 @@ mod test {
             vec![0xf6],
             vec![0xfe],
             // Multiple invalid opcodes
-            // TLOAD 0x5c eip-1153
-            // MCOPY 0x5e eip-5656
-            // PUSH0 ox5f eip-3855
-            vec![],
+            vec![0x5c, 0x5e, 0x5f],
         ];
     }
 
     #[test]
     fn invalid_opcode_root() {
+        // Todo(Cecilia): Should pass after changing circuit
         for invalid_code in TESTING_INVALID_CODES.iter() {
             test_root_ok(invalid_code);
         }
@@ -97,6 +95,7 @@ mod test {
 
     #[test]
     fn invalid_opcode_internal() {
+        // Todo(Cecilia): Should pass after changing circuit
         for invalid_code in TESTING_INVALID_CODES.iter() {
             test_internal_ok(0x20, 0x00, invalid_code);
         }
