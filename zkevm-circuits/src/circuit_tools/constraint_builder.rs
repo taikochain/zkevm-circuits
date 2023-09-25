@@ -1,16 +1,19 @@
 //! Circuit utilities
 use std::{
     collections::HashMap,
+    marker::PhantomData,
     ops::{Add, Mul},
-    vec, marker::PhantomData,
+    vec,
 };
 
-use crate::{evm_circuit::util::rlc, table::LookupTable, util::{Expr, query_expression}};
+use crate::{
+    evm_circuit::util::rlc,
+    table::LookupTable,
+    util::{query_expression, Expr},
+};
 use eth_types::Field;
 use gadgets::util::{and, sum, Scalar};
-use halo2_proofs::{
-    plonk::{ConstraintSystem, Expression, Column, Advice, Selector},
-};
+use halo2_proofs::plonk::{Advice, Column, ConstraintSystem, Expression, Selector};
 use itertools::Itertools;
 
 use super::{
@@ -64,7 +67,7 @@ impl<F: Field> TableData<F> {
     }
 }
 
-struct TableMerger<F, C>{
+struct TableMerger<F, C> {
     data: Vec<TableData<F>>,
     _phantom: PhantomData<C>,
 }
@@ -77,7 +80,7 @@ impl<F: Field, C: CellType> TableMerger<F, C> {
         });
     }
 
-    fn merge_unsafe(&self,) -> (Expression<F>, Vec<Expression<F>>) {
+    fn merge_unsafe(&self) -> (Expression<F>, Vec<Expression<F>>) {
         if self.data.is_empty() {
             return (0.expr(), Vec::new());
         }
@@ -86,16 +89,13 @@ impl<F: Field, C: CellType> TableMerger<F, C> {
         let max_length = self.data.iter().map(|t| t.values.len()).max().unwrap();
         let mut merged_values = vec![0.expr(); max_length];
         let default_value = 0.expr();
-        merged_values
-            .iter_mut()
-            .enumerate()
-            .for_each(|(idx, v)| {
-                *v = sum::expr(
-                    self.data
-                        .iter()
-                        .map(|t| t.condition() * t.values.get(idx).unwrap_or(&default_value).expr()),
-                );
-            });
+        merged_values.iter_mut().enumerate().for_each(|(idx, v)| {
+            *v = sum::expr(
+                self.data
+                    .iter()
+                    .map(|t| t.condition() * t.values.get(idx).unwrap_or(&default_value).expr()),
+            );
+        });
         (selector, merged_values)
     }
 
@@ -107,11 +107,8 @@ impl<F: Field, C: CellType> TableMerger<F, C> {
         self.merge_unsafe()
     }
 
-    fn merge_and_select(
-        &self,
-        _cb: &mut ConstraintBuilder<F, C>,
-    ) -> Vec<Expression<F>> {
-        let (selector, v) = self.merge_unsafe(); 
+    fn merge_and_select(&self, _cb: &mut ConstraintBuilder<F, C>) -> Vec<Expression<F>> {
+        let (selector, v) = self.merge_unsafe();
         v.iter().map(|v| selector.expr() * v.expr()).collect()
     }
 }
@@ -203,13 +200,14 @@ impl<F: Field, C: CellType> ConstraintBuilder<F, C> {
     }
 
     pub(crate) fn preload_tables(
-        &mut self, 
+        &mut self,
         meta: &mut ConstraintSystem<F>,
-        tables: &[(C, &dyn LookupTable<F>)]
+        tables: &[(C, &dyn LookupTable<F>)],
     ) {
         query_expression(meta, |meta| {
             for (tag, table) in tables {
-                self.fixed_tables.insert(tag.clone(), table.table_exprs(meta));
+                self.fixed_tables
+                    .insert(tag.clone(), table.table_exprs(meta));
             }
         })
     }
@@ -331,7 +329,7 @@ impl<F: Field, C: CellType> ConstraintBuilder<F, C> {
         self.get_condition().unwrap_or_else(|| 1.expr())
     }
 
-    pub(crate) fn enable_equality(&mut self, column: Column<Advice>){
+    pub(crate) fn enable_equality(&mut self, column: Column<Advice>) {
         self.equalities.push(column);
     }
 
@@ -387,35 +385,34 @@ impl<F: Field, C: CellType> ConstraintBuilder<F, C> {
         }
     }
 
-    pub(crate) fn build_constraints(&self, selector: Option<Expression<F>>) -> Vec<(&'static str, Expression<F>)> {
+    pub(crate) fn build_constraints(
+        &self,
+        selector: Option<Expression<F>>,
+    ) -> Vec<(&'static str, Expression<F>)> {
         if self.constraints.is_empty() {
             return vec![("No constraints", 0.expr())];
         }
-        selector.map_or(
-            self.constraints.clone(), 
-            |s| {
-                    self.constraints
-                        .iter()
-                        .map(|(name, c)| (*name, s.expr() * c.clone()))
-                        .collect()
-                }
-        )
+        selector.map_or(self.constraints.clone(), |s| {
+            self.constraints
+                .iter()
+                .map(|(name, c)| (*name, s.expr() * c.clone()))
+                .collect()
+        })
     }
 
     pub(crate) fn build_equalities(&self, meta: &mut ConstraintSystem<F>) {
         self.equalities
             .iter()
-            .for_each(|c| {
-                meta.enable_equality(c.clone())});
+            .for_each(|c| meta.enable_equality(c.clone()));
     }
 
     pub(crate) fn build_fixed_path(
         &mut self,
         meta: &mut ConstraintSystem<F>,
         cell_managers: &[CellManager<F, C>],
-        tag:&(C, C),
+        tag: &(C, C),
         selector: Option<Selector>,
-    ){
+    ) {
         let (data_tag, table_tag) = tag;
         let challenge = self.lookup_challenge.clone().unwrap();
         if let Some(table) = self.fixed_tables.get(table_tag) {
@@ -423,10 +420,7 @@ impl<F: Field, C: CellType> ConstraintBuilder<F, C> {
             for cm in cell_managers {
                 for col in cm.get_typed_columns(*data_tag) {
                     meta.lookup_any(format!("{:?}", data_tag), |meta| {
-                        let s = selector.map_or_else(
-                            || 1.expr(),
-                             |s| meta.query_selector(s)
-                            );
+                        let s = selector.map_or_else(|| 1.expr(), |s| meta.query_selector(s));
                         vec![(col.expr() * s, table_expr.clone())]
                     });
                 }
@@ -439,7 +433,7 @@ impl<F: Field, C: CellType> ConstraintBuilder<F, C> {
         meta: &mut ConstraintSystem<F>,
         tag: &(C, C),
         selector: Option<Selector>,
-    ){
+    ) {
         let (data_tag, table_tag) = tag;
         if let Some(lookups) = self.lookups.clone().get(data_tag) {
             for data in lookups.iter() {
@@ -482,10 +476,7 @@ impl<F: Field, C: CellType> ConstraintBuilder<F, C> {
                     values.push(0.expr());
                 }
                 meta.lookup_any(description, |meta| {
-                    let s = selector.map_or_else(
-                        || 1.expr(),
-                         |s| meta.query_selector(s)
-                        );
+                    let s = selector.map_or_else(|| 1.expr(), |s| meta.query_selector(s));
                     values
                         .iter()
                         .zip(table.iter())
@@ -493,9 +484,8 @@ impl<F: Field, C: CellType> ConstraintBuilder<F, C> {
                         .collect()
                 });
             }
-        } 
+        }
     }
-
 
     pub(crate) fn build_lookups(
         &mut self,
@@ -580,34 +570,25 @@ impl<F: Field, C: CellType> ConstraintBuilder<F, C> {
         target_cell: Option<Cell<F>>,
         compress: bool,
         reduce: bool,
-    ) -> Vec<Expression<F> >{
-
+    ) -> Vec<Expression<F>> {
         let local_condition = self.get_condition_expr();
         let challenge = self.lookup_challenge.clone().unwrap();
 
-        let mut local_compression = | values: &[Expression<F>]| -> Expression<F> {
+        let mut local_compression = |values: &[Expression<F>]| -> Expression<F> {
             let rlc = rlc::expr(&values, challenge.expr()) * local_condition.expr();
             match reduce {
                 true => {
                     let reduced_rlc = self.split_expression("compression", rlc);
-                    self.store_expression(
-                        name,
-                        reduced_rlc, 
-                        cell_type, 
-                        target_cell.clone()
-                    )
-                },
-                false => rlc
+                    self.store_expression(name, reduced_rlc, cell_type, target_cell.clone())
+                }
+                false => rlc,
             }
         };
 
         match (compress, reduce) {
             (true, true) => vec![local_compression(&values)],
-            (true, false) => vec![local_compression(&values)],            
-            (false, true) => values
-                .iter()
-                .map(|_v| local_compression(&values))
-                .collect(),
+            (true, false) => vec![local_compression(&values)],
+            (false, true) => values.iter().map(|_v| local_compression(&values)).collect(),
             (false, false) => values
                 .iter()
                 .map(|v| v.expr() * local_condition.expr())
@@ -616,11 +597,12 @@ impl<F: Field, C: CellType> ConstraintBuilder<F, C> {
     }
 
     pub(crate) fn dynamic_table_merged(&mut self, tag: C) -> Vec<Expression<F>> {
-        let data = self.dynamic_tables
+        let data = self
+            .dynamic_tables
             .get(&tag)
             .unwrap_or_else(|| panic!("Dynamic table {:?} not found", tag))
             .clone();
-        let table_merger = TableMerger{
+        let table_merger = TableMerger {
             data,
             _phantom: PhantomData,
         };
@@ -1461,7 +1443,8 @@ macro_rules! circuit {
         use $crate::circuit_tools::constraint_builder::{ExprResult, ExprVec};
         #[allow(unused_imports)]
         use $crate::{
-            _ifx, _matchx, _require, _to_and, _to_values_vec, _to_options_vec,  _unreachablex, concat_with_preamble,
+            _ifx, _matchx, _require, _to_and, _to_options_vec, _to_values_vec, _unreachablex,
+            concat_with_preamble,
         };
 
         #[allow(unused_macros)]
@@ -1524,104 +1507,104 @@ macro_rules! circuit {
 
         #[allow(unused_macros)]
         macro_rules! require {
-                ($lhs:expr => bool) => {{
-                    _require!($cb, $lhs => bool);
-                }};
+                    ($lhs:expr => bool) => {{
+                        _require!($cb, $lhs => bool);
+                    }};
 
-                ($lhs:expr => $rhs:expr) => {{
-                    _require!($cb, $lhs => $rhs);
-                }};
+                    ($lhs:expr => $rhs:expr) => {{
+                        _require!($cb, $lhs => $rhs);
+                    }};
 
-                ($name:expr, $lhs:expr => $rhs:expr) => {{
-                    _require!($cb, $name, $lhs => $rhs);
-                }};
+                    ($name:expr, $lhs:expr => $rhs:expr) => {{
+                        _require!($cb, $name, $lhs => $rhs);
+                    }};
 
-                // Lookups build from table
-                // only reduce flag is allowed
-                ($values:tt =>> @$tag:expr, $options:tt) => {{
-                    let values = _to_values_vec!($values);
-                    let options = _to_options_vec!($options);
-                    _require!($cb, values =>> @$tag, options);
-                }};
-                ($values:tt =>> @$tag:expr) => {{
-                    let values = _to_values_vec!($values);
-                    let options = Vec::new();
-                    _require!($cb, values =>> @$tag, options);
-                }};
-                ($descr:expr, $values:tt =>> @$tag:expr, $options:tt) => {{
-                    let values = _to_values_vec!($values);
-                    let options = _to_options_vec!($options);
-                    _require!($cb, $descr, values =>> @$tag, options);
-                }};
-                ($descr:expr, $values:tt =>> @$tag:expr) => {{
-                    let values = _to_values_vec!($values);
-                    let options = Vec::new();
-                    _require!($cb, $descr, values =>> @$tag, options);
-                }};
-
-
-
-                ($values:tt => @$tag:expr, $options:tt) => {{
-                    let values = _to_values_vec!($values);
-                    let options = _to_options_vec!($options);
-                    _require!($cb, values => @$tag, options);
-                }};
-                ($values:tt => @$tag:expr) => {{
-                    let values = _to_values_vec!($values);
-                    let options = Vec::new();
-                    _require!($cb, values => @$tag, options);
-                }};
-                ($descr:expr, $values:tt => @$tag:expr, $options:tt) => {{
-                    let values = _to_values_vec!($values);
-                    let options = _to_options_vec!($options);
-                    _require!($cb, $descr, values => @$tag, options);
-                }};
-                ($descr:expr, $values:tt => @$tag:expr) => {{
-                    let values = _to_values_vec!($values);
-                    let options = Vec::new();
-                    _require!($cb, $descr, values => @$tag, options);
-                }};
+                    // Lookups build from table
+                    // only reduce flag is allowed
+                    ($values:tt =>> @$tag:expr, $options:tt) => {{
+                        let values = _to_values_vec!($values);
+                        let options = _to_options_vec!($options);
+                        _require!($cb, values =>> @$tag, options);
+                    }};
+                    ($values:tt =>> @$tag:expr) => {{
+                        let values = _to_values_vec!($values);
+                        let options = Vec::new();
+                        _require!($cb, values =>> @$tag, options);
+                    }};
+                    ($descr:expr, $values:tt =>> @$tag:expr, $options:tt) => {{
+                        let values = _to_values_vec!($values);
+                        let options = _to_options_vec!($options);
+                        _require!($cb, $descr, values =>> @$tag, options);
+                    }};
+                    ($descr:expr, $values:tt =>> @$tag:expr) => {{
+                        let values = _to_values_vec!($values);
+                        let options = Vec::new();
+                        _require!($cb, $descr, values =>> @$tag, options);
+                    }};
 
 
-                (@$tag:expr, $options:tt => $values:tt) => {{
-                    let values = _to_values_vec!($values);
-                    let options = _to_options_vec!($options);
-                    _require!($cb, @$tag, options => values);
-                }};
-                (@$tag:expr => $values:tt) => {{
-                    let values = _to_values_vec!($values);
-                    let options = Vec::new();
-                    _require!($cb, @$tag, options => values);
-                }};
-                (@$tag:expr, $options:tt =>> $values:tt) => {{
-                    let values = _to_values_vec!($values);
-                    let options = _to_options_vec!($options);
-                    _require!($cb, @$tag, options =>> values);
-                }};
-                (@$tag:expr =>> $values:tt) => {{
-                    let values = _to_values_vec!($values);
-                    let options = Vec::new();
-                    _require!($cb, @$tag, options =>> values);
-                }};
 
-            }
+                    ($values:tt => @$tag:expr, $options:tt) => {{
+                        let values = _to_values_vec!($values);
+                        let options = _to_options_vec!($options);
+                        _require!($cb, values => @$tag, options);
+                    }};
+                    ($values:tt => @$tag:expr) => {{
+                        let values = _to_values_vec!($values);
+                        let options = Vec::new();
+                        _require!($cb, values => @$tag, options);
+                    }};
+                    ($descr:expr, $values:tt => @$tag:expr, $options:tt) => {{
+                        let values = _to_values_vec!($values);
+                        let options = _to_options_vec!($options);
+                        _require!($cb, $descr, values => @$tag, options);
+                    }};
+                    ($descr:expr, $values:tt => @$tag:expr) => {{
+                        let values = _to_values_vec!($values);
+                        let options = Vec::new();
+                        _require!($cb, $descr, values => @$tag, options);
+                    }};
+
+
+                    (@$tag:expr, $options:tt => $values:tt) => {{
+                        let values = _to_values_vec!($values);
+                        let options = _to_options_vec!($options);
+                        _require!($cb, @$tag, options => values);
+                    }};
+                    (@$tag:expr => $values:tt) => {{
+                        let values = _to_values_vec!($values);
+                        let options = Vec::new();
+                        _require!($cb, @$tag, options => values);
+                    }};
+                    (@$tag:expr, $options:tt =>> $values:tt) => {{
+                        let values = _to_values_vec!($values);
+                        let options = _to_options_vec!($options);
+                        _require!($cb, @$tag, options =>> values);
+                    }};
+                    (@$tag:expr =>> $values:tt) => {{
+                        let values = _to_values_vec!($values);
+                        let options = Vec::new();
+                        _require!($cb, @$tag, options =>> values);
+                    }};
+
+                }
 
         #[allow(unused_macros)]
         macro_rules! ifx {
-                ($condition:tt => $when_true:block elsex $when_false:block) => {{
-                    _ifx!($cb, ($condition) => $when_true elsex $when_false)
-                }};
-                ($condition:expr => $when_true:block elsex $when_false:block) => {{
-                    _ifx!($cb, $condition => $when_true elsex $when_false)
-                }};
+                    ($condition:tt => $when_true:block elsex $when_false:block) => {{
+                        _ifx!($cb, ($condition) => $when_true elsex $when_false)
+                    }};
+                    ($condition:expr => $when_true:block elsex $when_false:block) => {{
+                        _ifx!($cb, $condition => $when_true elsex $when_false)
+                    }};
 
-                ($condition:tt => $when_true:block) => {{
-                    _ifx!($cb, $condition => $when_true)
-                }};
-                ($condition:expr => $when_true:block) => {{
-                    _ifx!($cb, $condition => $when_true)
-                }};
-            }
+                    ($condition:tt => $when_true:block) => {{
+                        _ifx!($cb, $condition => $when_true)
+                    }};
+                    ($condition:expr => $when_true:block) => {{
+                        _ifx!($cb, $condition => $when_true)
+                    }};
+                }
 
         #[allow(unused_macros)]
         macro_rules! matchx {

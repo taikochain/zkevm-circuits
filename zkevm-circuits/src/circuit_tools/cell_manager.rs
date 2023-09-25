@@ -235,7 +235,6 @@ impl<F: Field, C: CellType> Expr<F> for CellColumn<F, C> {
     }
 }
 
-
 #[derive(Clone, Debug, Default)]
 pub struct CellManager<F, C: CellType> {
     configs: Vec<CellConfig<C>>,

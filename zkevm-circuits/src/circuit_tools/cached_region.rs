@@ -10,7 +10,10 @@ use std::{
     hash::{Hash, Hasher},
 };
 
-use super::{cell_manager::{CellType, CellColumn}, constraint_builder::ConstraintBuilder};
+use super::{
+    cell_manager::{CellColumn, CellType},
+    constraint_builder::ConstraintBuilder,
+};
 
 pub trait ChallengeSet<F: Field> {
     fn indexed(&self) -> Vec<&Value<F>>;
@@ -45,11 +48,17 @@ impl<'r, 'b, F: Field> CachedRegion<'r, 'b, F> {
 
     pub(crate) fn annotate_columns<C: CellType>(&mut self, col_configs: &[CellColumn<F, C>]) {
         for c in col_configs {
-            self.region
-                .name_column(
-                    || format!("{:?} {:?}: {:?} queried", c.cell_type.clone(), c.index, c.height),
-                     c.column
-                );
+            self.region.name_column(
+                || {
+                    format!(
+                        "{:?} {:?}: {:?} queried",
+                        c.cell_type.clone(),
+                        c.index,
+                        c.height
+                    )
+                },
+                c.column,
+            );
         }
     }
 

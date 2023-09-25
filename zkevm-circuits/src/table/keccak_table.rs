@@ -1,5 +1,3 @@
-
-
 use super::*;
 
 /// Keccak Table, used to verify keccak hashing from RLC'ed input.

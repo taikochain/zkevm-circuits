@@ -169,7 +169,6 @@ macro_rules! impl_scalar {
     };
 }
 
-
 /// Trait that implements functionality to get a constant expression from
 /// commonly used types.
 pub trait Expr<F: Field> {

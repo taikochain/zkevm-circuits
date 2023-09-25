@@ -7,7 +7,9 @@ pub mod test;
 use crate::{
     anchor_tx_circuit::{AnchorTxCircuit, AnchorTxCircuitConfig, AnchorTxCircuitConfigArgs},
     table::{byte_table::ByteTable, BlockTable, KeccakTable, PiTable, TxTable},
-    taiko_pi_circuit::{TaikoPiCircuit, TaikoPiCircuitConfig, TaikoPiCircuitConfigArgs, PublicData},
+    taiko_pi_circuit::{
+        PublicData, TaikoPiCircuit, TaikoPiCircuitConfig, TaikoPiCircuitConfigArgs,
+    },
     util::{log2_ceil, Challenges, SubCircuit, SubCircuitConfig},
     witness::{block_convert, Block, ProtocolInstance},
 };
