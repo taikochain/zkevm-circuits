@@ -52,8 +52,8 @@ impl<F: Field> FieldGadget<F> {
         self.field.iter().map(|f| f.expr()).collect()
     }
 
-    fn acc(&self, r: Expression<F>) -> Expression<F> {
-        // 0.expr()
+    fn rlc_acc(&self, r: Expression<F>) -> Expression<F> {
+        //0.expr()
         self.bytes_expr().rlc_rev(&r)
     }
 
@@ -214,9 +214,7 @@ impl<F: Field> PublicData<F> {
     fn total_acc(&self, r: Value<F>) -> F {
         let mut rand = F::ZERO;
         r.map(|r| rand = r);
-        self.encode_raw()
-            .iter()
-            .fold(F::ZERO, |acc: F, byte| acc * rand + F::from(*byte as u64))
+        rlc::value(self.encode_raw().iter().rev(), rand)
     }
 
     fn assignment(&self, idx: usize) -> Vec<F> {
@@ -235,12 +233,8 @@ impl<F: Field> PublicData<F> {
     fn keccak_hi_low(&self) -> [F; 2] {
         let keccaked_pi = keccak256(self.encode_raw());
         [
-            keccaked_pi.iter().take(16).fold(F::ZERO, |acc: F, byte| {
-                acc * F::from(BYTE_POW_BASE) + F::from(*byte as u64)
-            }),
-            keccaked_pi.iter().skip(16).fold(F::ZERO, |acc: F, byte| {
-                acc * F::from(BYTE_POW_BASE) + F::from(*byte as u64)
-            }),
+            rlc::value(keccaked_pi[0..16].iter().rev(), BYTE_POW_BASE.scalar()),
+            rlc::value(keccaked_pi[16..].iter().rev(), BYTE_POW_BASE.scalar()),
         ]
     }
 
@@ -315,12 +309,12 @@ impl<F: Field> SubCircuitConfig<F> for TaikoPiCircuitConfig<F> {
         let cm = CellManager::new(
             meta,
             vec![
-                (PiCellType::Byte, 7, 1, false),
+                (PiCellType::Byte, 15, 1, false),
                 (PiCellType::StoragePhase1, 1, 1, true),
-                (PiCellType::StoragePhase2, 1, 2, true),
+                (PiCellType::StoragePhase2, 1, 1, true),
             ],
             0,
-            DEFAULT_LEN,
+            15,
         );
         let mut cb: ConstraintBuilder<F, PiCellType> =
             ConstraintBuilder::new(4, Some(cm.clone()), Some(evm_word.expr()));
@@ -354,46 +348,43 @@ impl<F: Field> SubCircuitConfig<F> for TaikoPiCircuitConfig<F> {
         let total_acc = cb.query_one(S2);
         let keccak_bytes = FieldGadget::config(&mut cb, DEFAULT_LEN);
         let keccak_hi_lo = [cb.query_one(S1), cb.query_one(S1)];
-        meta.create_gate("PI acc constraints", |meta| {
-            circuit!([meta, cb], {
-                for (n, b, acc) in [parent_hash.clone(), block_hash.clone()] {
-                    require!(acc.expr() => b.acc(evm_word.expr()));
+        meta.create_gate(
+            "PI acc constraints", 
+            |meta| {
+                circuit!([meta, cb], {
+                    for (block_number, block_hash, block_hash_rlc) in [parent_hash.clone() , block_hash.clone()] {
+                        require!(block_hash_rlc.expr() => block_hash.rlc_acc(evm_word.expr()));
+                        require!(
+                            (
+                                BlockContextFieldTag::BlockHash.expr(), 
+                                block_number.expr(), 
+                                block_hash_rlc.expr()
+                            ) => @PiCellType::Lookup(Table::Block), (TO_FIX)
+                        );
+                    }
+                    let acc_val = [
+                        meta_hash.clone(), 
+                        parent_hash.1.clone(), 
+                        block_hash.1.clone(), 
+                        signal_root.clone(), 
+                        graffiti.clone(), 
+                        prover.clone(), 
+                    ].iter().fold(0.expr(), |acc, gadget| {
+                        let mult = (0..gadget.len).fold(1.expr(), |acc, _| acc * keccak_r.expr());
+                        acc * mult + gadget.rlc_acc(keccak_r.expr())
+                    });
+                    require!(total_acc.expr() => acc_val);
                     require!(
                         (
-                            BlockContextFieldTag::BlockHash.expr(),
-                            n.expr(),
-                            acc.expr()
-                        ) => @PiCellType::Lookup(Table::Block), (TO_FIX)
+                            1.expr(), 
+                            total_acc.expr(), 
+                            evidence.total_len().expr(), 
+                            keccak_bytes.rlc_acc(evm_word.expr())
+                        )
+                        => @PiCellType::Lookup(Table::Keccak), (TO_FIX)
                     );
-                }
-                let acc_val = [
-                    meta_hash.clone(),
-                    parent_hash.1.clone(),
-                    block_hash.1.clone(),
-                    signal_root.clone(),
-                    graffiti.clone(),
-                    prover.clone(),
-                ]
-                .iter()
-                .fold(0.expr(), |acc, gadget| {
-                    let mult = (0..gadget.len).fold(1.expr(), |acc, _| acc * keccak_r.expr());
-                    acc * mult + gadget.acc(keccak_r.expr())
-                });
-                require!(total_acc.expr() => acc_val);
-                require!(
-                    (
-                        1.expr(),
-                        total_acc.expr(),
-                        evidence.total_len().expr(),
-                        keccak_bytes.acc(evm_word.expr())
-                    )
-                    => @PiCellType::Lookup(Table::Keccak), (TO_FIX)
-                );
-                let hi_lo = keccak_bytes.hi_low_field();
-                keccak_hi_lo
-                    .iter()
-                    .zip(hi_lo.iter())
-                    .for_each(|(cell, epxr)| {
+                    let hi_lo = keccak_bytes.hi_low_field();
+                    keccak_hi_lo.iter().zip(hi_lo.iter()).for_each(|(cell, epxr)| {
                         require!(cell.expr() => epxr);
                         cb.enable_equality(cell.column());
                     });
@@ -417,6 +408,8 @@ impl<F: Field> SubCircuitConfig<F> for TaikoPiCircuitConfig<F> {
             Some(q_enable),
         );
         let annotation_configs = cm.columns().to_vec();
+        // println!("#col {:?} + {:?}\n#constraints {:?}\n#lookup {:?}\n#permu {:?}\nrotation {:?}", 
+        //     meta.num_advice_columns(), meta.num_fixed_columns(), meta.gates().len(), meta.lookups().len(), meta.permutation().get_columns().len(), cm.get_height());
         Self {
             q_enable,
             keccak_instance,
@@ -530,7 +523,6 @@ impl<F: Field> SubCircuit<F> for TaikoPiCircuit<F> {
         challenges: &Challenges<Value<F>>,
         layouter: &mut impl Layouter<F>,
     ) -> Result<(), Error> {
-        config.byte_table.load(layouter)?;
         config.assign(layouter, challenges, &self.evidence)
     }
 }
@@ -607,7 +599,9 @@ mod taiko_pi_circuit_test {
     use halo2_proofs::{
         dev::{MockProver, VerifyFailure},
         halo2curves::bn256::Fr,
+        plonk::{create_proof, keygen_pk, keygen_vk, verify_proof},
     };
+    use snark_verifier_sdk::halo2::gen_srs;
     use lazy_static::lazy_static;
     use pretty_assertions::assert_eq;
 
@@ -737,4 +731,34 @@ mod taiko_pi_circuit_test {
 
         assert_eq!(run::<Fr>(k, evidence, None), Ok(()));
     }
+
+    #[ignore = "takes too long"]
+    #[test]
+    fn test_from_integration() {
+        let mut block1 = witness::Block::<Fr>::default();
+
+        block1.eth_block.parent_hash = *LAST_HASH;
+        block1.eth_block.hash = Some(*THIS_HASH);
+        block1.protocol_instance.block_hash = *THIS_HASH;
+        block1.protocol_instance.parent_hash = *LAST_HASH;
+        block1.context.history_hashes = vec![LAST_HASH.to_word()];
+        block1.context.block_hash = Some(THIS_HASH.to_word());
+        block1.context.number = 300.into();
+        let evidence1 = PublicData::new(&block1);
+        let circuit1 = TaikoPiCircuit::new(evidence1);
+
+        let mut block2 = witness::Block::<Fr>::default();
+        block2.protocol_instance.prover = *PROVER_ADDR;
+        let evidence2 = PublicData::new(&block2);
+        let circuit2 = TaikoPiCircuit::new(evidence2);
+        
+        let k = 22;
+        let params = gen_srs(k);
+        let vk1 = keygen_vk(&params, &circuit1).expect("keygen_vk should not fail");
+        let vk2 = keygen_vk(&params, &circuit2).expect("keygen_vk should not fail");
+        let pk1 = keygen_pk(&params, vk1.clone(), &circuit1).unwrap();
+        let pk2 = keygen_pk(&params, vk2.clone(), &circuit2).unwrap();
+        println!("{:?}\n{:?}", vk1, vk2);
+    }
+
 }

@@ -129,7 +129,7 @@ fn write_bytes(name: &str, vec: &[u8]) {
         .unwrap_or_else(|_| panic!("write {}", &path));
 }
 
-pub fn gen_verifier(
+fn gen_verifier(
     params: &ProverParams,
     vk: &VerifyingKey<G1Affine>,
     config: Config,
@@ -164,7 +164,7 @@ pub fn gen_verifier(
     yul
 }
 
-pub fn evm_verify(deployment_code: Vec<u8>, instances: Vec<Vec<Fr>>, proof: Vec<u8>) {
+fn evm_verify(deployment_code: Vec<u8>, instances: Vec<Vec<Fr>>, proof: Vec<u8>) {
     let calldata = encode_calldata(&instances, &proof);
     println!(
         "deploy code size: {} bytes, instances size: [{}][{}], calldata: {}",

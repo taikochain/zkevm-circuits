@@ -8,7 +8,7 @@ pub mod state_circuit;
 #[cfg(feature = "benches")]
 pub mod tx_circuit;
 
-// #[cfg(test)]
+#[cfg(test)]
 //#[cfg(feature = "benches")]
 pub mod super_circuit;
 
@@ -32,6 +32,6 @@ pub mod copy_circuit;
 #[cfg(feature = "benches")]
 pub mod exp_circuit;
 
-// #[cfg(test)]
+#[cfg(test)]
 //#[cfg(feature = "benches")]
 pub mod constants;
