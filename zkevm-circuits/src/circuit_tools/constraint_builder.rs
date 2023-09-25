@@ -1507,104 +1507,104 @@ macro_rules! circuit {
 
         #[allow(unused_macros)]
         macro_rules! require {
-                    ($lhs:expr => bool) => {{
-                        _require!($cb, $lhs => bool);
-                    }};
+                        ($lhs:expr => bool) => {{
+                            _require!($cb, $lhs => bool);
+                        }};
 
-                    ($lhs:expr => $rhs:expr) => {{
-                        _require!($cb, $lhs => $rhs);
-                    }};
+                        ($lhs:expr => $rhs:expr) => {{
+                            _require!($cb, $lhs => $rhs);
+                        }};
 
-                    ($name:expr, $lhs:expr => $rhs:expr) => {{
-                        _require!($cb, $name, $lhs => $rhs);
-                    }};
+                        ($name:expr, $lhs:expr => $rhs:expr) => {{
+                            _require!($cb, $name, $lhs => $rhs);
+                        }};
 
-                    // Lookups build from table
-                    // only reduce flag is allowed
-                    ($values:tt =>> @$tag:expr, $options:tt) => {{
-                        let values = _to_values_vec!($values);
-                        let options = _to_options_vec!($options);
-                        _require!($cb, values =>> @$tag, options);
-                    }};
-                    ($values:tt =>> @$tag:expr) => {{
-                        let values = _to_values_vec!($values);
-                        let options = Vec::new();
-                        _require!($cb, values =>> @$tag, options);
-                    }};
-                    ($descr:expr, $values:tt =>> @$tag:expr, $options:tt) => {{
-                        let values = _to_values_vec!($values);
-                        let options = _to_options_vec!($options);
-                        _require!($cb, $descr, values =>> @$tag, options);
-                    }};
-                    ($descr:expr, $values:tt =>> @$tag:expr) => {{
-                        let values = _to_values_vec!($values);
-                        let options = Vec::new();
-                        _require!($cb, $descr, values =>> @$tag, options);
-                    }};
-
-
-
-                    ($values:tt => @$tag:expr, $options:tt) => {{
-                        let values = _to_values_vec!($values);
-                        let options = _to_options_vec!($options);
-                        _require!($cb, values => @$tag, options);
-                    }};
-                    ($values:tt => @$tag:expr) => {{
-                        let values = _to_values_vec!($values);
-                        let options = Vec::new();
-                        _require!($cb, values => @$tag, options);
-                    }};
-                    ($descr:expr, $values:tt => @$tag:expr, $options:tt) => {{
-                        let values = _to_values_vec!($values);
-                        let options = _to_options_vec!($options);
-                        _require!($cb, $descr, values => @$tag, options);
-                    }};
-                    ($descr:expr, $values:tt => @$tag:expr) => {{
-                        let values = _to_values_vec!($values);
-                        let options = Vec::new();
-                        _require!($cb, $descr, values => @$tag, options);
-                    }};
+                        // Lookups build from table
+                        // only reduce flag is allowed
+                        ($values:tt =>> @$tag:expr, $options:tt) => {{
+                            let values = _to_values_vec!($values);
+                            let options = _to_options_vec!($options);
+                            _require!($cb, values =>> @$tag, options);
+                        }};
+                        ($values:tt =>> @$tag:expr) => {{
+                            let values = _to_values_vec!($values);
+                            let options = Vec::new();
+                            _require!($cb, values =>> @$tag, options);
+                        }};
+                        ($descr:expr, $values:tt =>> @$tag:expr, $options:tt) => {{
+                            let values = _to_values_vec!($values);
+                            let options = _to_options_vec!($options);
+                            _require!($cb, $descr, values =>> @$tag, options);
+                        }};
+                        ($descr:expr, $values:tt =>> @$tag:expr) => {{
+                            let values = _to_values_vec!($values);
+                            let options = Vec::new();
+                            _require!($cb, $descr, values =>> @$tag, options);
+                        }};
 
 
-                    (@$tag:expr, $options:tt => $values:tt) => {{
-                        let values = _to_values_vec!($values);
-                        let options = _to_options_vec!($options);
-                        _require!($cb, @$tag, options => values);
-                    }};
-                    (@$tag:expr => $values:tt) => {{
-                        let values = _to_values_vec!($values);
-                        let options = Vec::new();
-                        _require!($cb, @$tag, options => values);
-                    }};
-                    (@$tag:expr, $options:tt =>> $values:tt) => {{
-                        let values = _to_values_vec!($values);
-                        let options = _to_options_vec!($options);
-                        _require!($cb, @$tag, options =>> values);
-                    }};
-                    (@$tag:expr =>> $values:tt) => {{
-                        let values = _to_values_vec!($values);
-                        let options = Vec::new();
-                        _require!($cb, @$tag, options =>> values);
-                    }};
 
-                }
+                        ($values:tt => @$tag:expr, $options:tt) => {{
+                            let values = _to_values_vec!($values);
+                            let options = _to_options_vec!($options);
+                            _require!($cb, values => @$tag, options);
+                        }};
+                        ($values:tt => @$tag:expr) => {{
+                            let values = _to_values_vec!($values);
+                            let options = Vec::new();
+                            _require!($cb, values => @$tag, options);
+                        }};
+                        ($descr:expr, $values:tt => @$tag:expr, $options:tt) => {{
+                            let values = _to_values_vec!($values);
+                            let options = _to_options_vec!($options);
+                            _require!($cb, $descr, values => @$tag, options);
+                        }};
+                        ($descr:expr, $values:tt => @$tag:expr) => {{
+                            let values = _to_values_vec!($values);
+                            let options = Vec::new();
+                            _require!($cb, $descr, values => @$tag, options);
+                        }};
+
+
+                        (@$tag:expr, $options:tt => $values:tt) => {{
+                            let values = _to_values_vec!($values);
+                            let options = _to_options_vec!($options);
+                            _require!($cb, @$tag, options => values);
+                        }};
+                        (@$tag:expr => $values:tt) => {{
+                            let values = _to_values_vec!($values);
+                            let options = Vec::new();
+                            _require!($cb, @$tag, options => values);
+                        }};
+                        (@$tag:expr, $options:tt =>> $values:tt) => {{
+                            let values = _to_values_vec!($values);
+                            let options = _to_options_vec!($options);
+                            _require!($cb, @$tag, options =>> values);
+                        }};
+                        (@$tag:expr =>> $values:tt) => {{
+                            let values = _to_values_vec!($values);
+                            let options = Vec::new();
+                            _require!($cb, @$tag, options =>> values);
+                        }};
+
+                    }
 
         #[allow(unused_macros)]
         macro_rules! ifx {
-                    ($condition:tt => $when_true:block elsex $when_false:block) => {{
-                        _ifx!($cb, ($condition) => $when_true elsex $when_false)
-                    }};
-                    ($condition:expr => $when_true:block elsex $when_false:block) => {{
-                        _ifx!($cb, $condition => $when_true elsex $when_false)
-                    }};
+                        ($condition:tt => $when_true:block elsex $when_false:block) => {{
+                            _ifx!($cb, ($condition) => $when_true elsex $when_false)
+                        }};
+                        ($condition:expr => $when_true:block elsex $when_false:block) => {{
+                            _ifx!($cb, $condition => $when_true elsex $when_false)
+                        }};
 
-                    ($condition:tt => $when_true:block) => {{
-                        _ifx!($cb, $condition => $when_true)
-                    }};
-                    ($condition:expr => $when_true:block) => {{
-                        _ifx!($cb, $condition => $when_true)
-                    }};
-                }
+                        ($condition:tt => $when_true:block) => {{
+                            _ifx!($cb, $condition => $when_true)
+                        }};
+                        ($condition:expr => $when_true:block) => {{
+                            _ifx!($cb, $condition => $when_true)
+                        }};
+                    }
 
         #[allow(unused_macros)]
         macro_rules! matchx {
