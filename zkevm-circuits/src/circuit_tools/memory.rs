@@ -98,7 +98,7 @@ impl<F: Field, C: CellType, MB: MemoryBank<F, C>> Memory<F, C, MB> {
     }
 
     pub(crate) fn tags(&self) -> Vec<C> {
-        self.banks.iter().map(|(_, bank)| bank.tag().0).collect()
+        self.banks.values().map(|bank| bank.tag().0).collect()
     }
 }
 
@@ -168,9 +168,9 @@ impl<F: Field, C: CellType> MemoryBank<F, C> for RwBank<F, C> {
         let rw: Vec<Column<Advice>> = [tag.0, tag.1]
             .iter()
             .map(|t| {
-                let config = (t.clone(), 1usize, phase, false);
+                let config = (*t, 1usize, phase, false);
                 cm.add_celltype(meta, config, offset);
-                cm.get_typed_columns(t.clone())[0].column
+                cm.get_typed_columns(*t)[0].column
             })
             .collect();
         let key = meta.advice_column();

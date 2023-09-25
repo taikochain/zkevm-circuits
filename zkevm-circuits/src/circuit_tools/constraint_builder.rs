@@ -207,7 +207,7 @@ impl<F: Field, C: CellType> ConstraintBuilder<F, C> {
         query_expression(meta, |meta| {
             for (tag, table) in tables {
                 self.fixed_tables
-                    .insert(tag.clone(), table.table_exprs(meta));
+                    .insert(*tag, table.table_exprs(meta));
             }
         })
     }
@@ -403,7 +403,7 @@ impl<F: Field, C: CellType> ConstraintBuilder<F, C> {
     pub(crate) fn build_equalities(&self, meta: &mut ConstraintSystem<F>) {
         self.equalities
             .iter()
-            .for_each(|c| meta.enable_equality(c.clone()));
+            .for_each(|c| meta.enable_equality(*c));
     }
 
     pub(crate) fn build_fixed_path(
@@ -416,7 +416,7 @@ impl<F: Field, C: CellType> ConstraintBuilder<F, C> {
         let (data_tag, table_tag) = tag;
         let challenge = self.lookup_challenge.clone().unwrap();
         if let Some(table) = self.fixed_tables.get(table_tag) {
-            let table_expr = rlc::expr(&table, challenge.expr());
+            let table_expr = rlc::expr(table, challenge.expr());
             for cm in cell_managers {
                 for col in cm.get_typed_columns(*data_tag) {
                     meta.lookup_any(format!("{:?}", data_tag), |meta| {
@@ -451,10 +451,8 @@ impl<F: Field, C: CellType> ConstraintBuilder<F, C> {
                     // Halo2.
                     self.fixed_tables
                         .get(table_tag)
-                        .expect(&format!(
-                            "Fixed table {:?} not found for dynamic lookup",
-                            table_tag
-                        ))
+                        .unwrap_or_else(|| panic!("Fixed table {:?} not found for dynamic lookup",
+                            table_tag))
                         .clone()
                 } else {
                     // (v1, v2, v3) => cond * (t1, t2, t3)
@@ -575,7 +573,7 @@ impl<F: Field, C: CellType> ConstraintBuilder<F, C> {
         let challenge = self.lookup_challenge.clone().unwrap();
 
         let mut local_compression = |values: &[Expression<F>]| -> Expression<F> {
-            let rlc = rlc::expr(&values, challenge.expr()) * local_condition.expr();
+            let rlc = rlc::expr(values, challenge.expr()) * local_condition.expr();
             match reduce {
                 true => {
                     let reduced_rlc = self.split_expression("compression", rlc);
@@ -586,9 +584,9 @@ impl<F: Field, C: CellType> ConstraintBuilder<F, C> {
         };
 
         match (compress, reduce) {
-            (true, true) => vec![local_compression(&values)],
-            (true, false) => vec![local_compression(&values)],
-            (false, true) => values.iter().map(|_v| local_compression(&values)).collect(),
+            (true, true) => vec![local_compression(values)],
+            (true, false) => vec![local_compression(values)],
+            (false, true) => values.iter().map(|_v| local_compression(values)).collect(),
             (false, false) => values
                 .iter()
                 .map(|v| v.expr() * local_condition.expr())

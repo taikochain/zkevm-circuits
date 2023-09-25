@@ -265,7 +265,7 @@ impl<F: Field, C: CellType> CellManager<F, C> {
         config: (C, usize, u8, bool),
         offset: usize,
     ) {
-        if self.get_typed_columns(config.0).len() != 0 {
+        if !self.get_typed_columns(config.0).is_empty() {
             panic!("CellManager: cell type {:?} already exists", config.0);
         }
         let config = CellConfig::from(config);

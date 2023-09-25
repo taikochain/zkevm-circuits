@@ -1,4 +1,4 @@
-use eth_types::{Field, ToBigEndian, ToWord, H160, H256, U256};
+use eth_types::{Field, ToBigEndian, ToWord, H160, U256};
 use ethers_core::abi::*;
 
 use ethers_core::utils::keccak256;
@@ -495,7 +495,7 @@ pub struct TaikoPiCircuit<F: Field> {
 impl<F: Field> TaikoPiCircuit<F> {
     /// Creates a new TaikoPiCircuit
     pub fn new(evidence: PublicData<F>) -> Self {
-        Self { evidence: evidence }
+        Self { evidence }
     }
 }
 
