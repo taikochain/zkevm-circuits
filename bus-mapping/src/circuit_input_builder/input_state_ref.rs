@@ -62,6 +62,17 @@ impl<'a> CircuitInputStateRef<'a> {
         ))
     }
 
+    /// Create a new InvalidTx step
+    pub fn new_invalid_tx_step(&self) -> ExecStep {
+        // Todo(Cecilia): put useful stuffs in here
+        ExecStep {
+            exec_state: ExecState::InvalidTx,
+            gas_left: Gas(self.tx.gas()),
+            rwc: self.block_ctx.rwc,
+            ..Default::default()
+        }
+    }
+
     /// Create a new BeginTx step
     pub fn new_begin_tx_step(&self) -> ExecStep {
         ExecStep {
@@ -98,6 +109,7 @@ impl<'a> CircuitInputStateRef<'a> {
             ..Default::default()
         }
     }
+
 
     /// Push an [`Operation`](crate::operation::Operation) into the
     /// [`OperationContainer`](crate::operation::OperationContainer) with the

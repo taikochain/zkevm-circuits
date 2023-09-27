@@ -289,29 +289,39 @@ impl<'a> CircuitInputBuilder {
         let mut tx = self.new_tx(eth_block, eth_tx, !geth_trace.failed, geth_trace.invalid)?;
         let mut tx_ctx = TransactionContext::new(eth_tx, geth_trace, is_last_tx)?;
 
-        // Generate BeginTx step
-        let begin_tx_step = gen_associated_steps(
-            &mut self.state_ref(&mut tx, &mut tx_ctx),
-            ExecState::BeginTx,
-        )?;
-        tx.steps_mut().push(begin_tx_step);
-
-        for (index, geth_step) in geth_trace.struct_logs.iter().enumerate() {
-            let mut state_ref = self.state_ref(&mut tx, &mut tx_ctx);
-            log::trace!("handle {}th opcode {:?} ", index, geth_step.op);
-            let exec_steps = gen_associated_ops(
-                &geth_step.op,
-                &mut state_ref,
-                &geth_trace.struct_logs[index..],
+        if tx.invalid_tx {
+            let invalid_tx_step = gen_associated_steps(
+                &mut self.state_ref(&mut tx, &mut tx_ctx),
+                ExecState::InvalidTx,
             )?;
-            tx.steps_mut().extend(exec_steps);
+            tx.steps_mut().push(invalid_tx_step);
+        } else {            
+            // Generate BeginTx step
+            let begin_tx_step = gen_associated_steps(
+                &mut self.state_ref(&mut tx, &mut tx_ctx),
+                ExecState::BeginTx,
+            )?;
+            tx.steps_mut().push(begin_tx_step);
+
+            for (index, geth_step) in geth_trace.struct_logs.iter().enumerate() {
+                let mut state_ref = self.state_ref(&mut tx, &mut tx_ctx);
+                log::trace!("handle {}th opcode {:?} ", index, geth_step.op);
+                let exec_steps = gen_associated_ops(
+                    &geth_step.op,
+                    &mut state_ref,
+                    &geth_trace.struct_logs[index..],
+                )?;
+                tx.steps_mut().extend(exec_steps);
+            }
+
+            // Generate EndTx step
+            let end_tx_step = gen_associated_steps(
+                &mut self.state_ref(&mut tx, &mut tx_ctx), 
+                ExecState::EndTx
+            )?;
+            tx.steps_mut().push(end_tx_step);
+
         }
-
-        // Generate EndTx step
-        let end_tx_step =
-            gen_associated_steps(&mut self.state_ref(&mut tx, &mut tx_ctx), ExecState::EndTx)?;
-        tx.steps_mut().push(end_tx_step);
-
         self.sdb.commit_tx();
         self.block.txs.push(tx);
 
