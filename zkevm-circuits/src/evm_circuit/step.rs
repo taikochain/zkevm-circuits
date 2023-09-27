@@ -306,6 +306,7 @@ impl From<&ExecStep> for ExecutionState {
                 PrecompileCalls::Bn128Pairing => ExecutionState::PrecompileBn256Pairing,
                 PrecompileCalls::Blake2F => ExecutionState::PrecompileBlake2f,
             },
+            ExecState::InvalidTx => ExecutionState::ErrorInvalidTx,
             ExecState::BeginTx => ExecutionState::BeginTx,
             ExecState::EndTx => ExecutionState::EndTx,
             ExecState::EndBlock => ExecutionState::EndBlock,
