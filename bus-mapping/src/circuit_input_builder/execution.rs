@@ -134,6 +134,8 @@ pub enum ExecState {
     Op(OpcodeId),
     /// Precompile call
     Precompile(PrecompileCalls),
+    /// Invalid Tx
+    InvalidTx,
     /// Virtual step Begin Tx
     BeginTx,
     /// Virtual step End Tx
