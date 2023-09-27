@@ -336,8 +336,7 @@ impl ExecutionState {
     pub(crate) fn halts_in_exception(&self) -> bool {
         matches!(
             self,
-            Self::ErrorInvalidTx
-                | Self::ErrorInvalidOpcode
+            Self::ErrorInvalidOpcode
                 | Self::ErrorStack
                 | Self::ErrorWriteProtection
                 | Self::ErrorInvalidCreationCode
