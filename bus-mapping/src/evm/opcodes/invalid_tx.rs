@@ -17,10 +17,28 @@ pub(crate) struct InvalidTx;
 impl TxExecSteps for InvalidTx {
     fn gen_associated_steps(
         state: &mut CircuitInputStateRef,
-        execution_step: ExecState,
+        _execution_step: ExecState,
     ) -> Result<ExecStep, Error> {
         // Todo(Cecilia)
         let mut exec_step = state.new_invalid_tx_step();
+        let caller = state.call()?.caller_address;
+
+        // Read the current nounce to prove mismatch
+        state.account_read(
+            &mut exec_step, 
+            caller, 
+            AccountField::Nonce, 
+            state.sdb.get_account(&caller).1.nonce.into()
+        );
+
+        // Read the current balance to compare with intrinsic gas
+        state.account_read(
+            &mut exec_step, 
+            caller, 
+            AccountField::Balance, 
+            state.sdb.get_account(&caller).1.nonce.into()
+        );
+
         Ok(exec_step)
     }
 }

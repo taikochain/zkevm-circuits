@@ -41,6 +41,8 @@ pub struct Transaction {
     pub call_data_length: usize,
     /// The gas cost for transaction call data
     pub call_data_gas_cost: u64,
+    /// AccessListGasCost
+    pub access_list_gas_cost: u64,
     /// The calls made in the transaction
     pub calls: Vec<Call>,
     /// The steps executioned in the transaction
@@ -144,6 +146,12 @@ impl Transaction {
             ],
             [
                 Value::known(F::from(self.id as u64)),
+                Value::known(F::from(TxContextFieldTag::AccessListGasCost as u64)),
+                Value::known(F::ZERO),
+                Value::known(F::from(self.access_list_gas_cost)),
+            ],
+            [
+                Value::known(F::from(self.id as u64)),
                 Value::known(F::from(TxContextFieldTag::TxSignHash as u64)),
                 Value::known(F::ZERO),
                 challenges.evm_word().map(|challenge| {
@@ -210,6 +218,7 @@ pub(super) fn tx_convert(
         call_data: tx.tx.call_data.to_vec(),
         call_data_length: tx.tx.call_data.len(),
         call_data_gas_cost: tx.tx.call_data_gas_cost(),
+        access_list_gas_cost: tx.access_list_gas_cost,
         calls: tx.calls().to_vec(),
         steps: tx.steps().to_vec(),
         v: tx.tx.v,

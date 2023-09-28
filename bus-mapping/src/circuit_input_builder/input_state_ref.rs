@@ -64,7 +64,6 @@ impl<'a> CircuitInputStateRef<'a> {
 
     /// Create a new InvalidTx step
     pub fn new_invalid_tx_step(&self) -> ExecStep {
-        // Todo(Cecilia): put useful stuffs in here
         ExecStep {
             exec_state: ExecState::InvalidTx,
             gas_left: Gas(self.tx.gas()),
