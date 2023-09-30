@@ -23,8 +23,6 @@ impl TxExecSteps for InvalidTx {
         let mut exec_step = state.new_invalid_tx_step();
         let caller = state.call()?.caller_address;
 
-        
-
         // Read the nounce in db to prove mismatch
         state.account_read(
             &mut exec_step, 

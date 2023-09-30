@@ -18,7 +18,7 @@ use halo2_proofs::{circuit::Value, plonk::Error};
 
 /// Gadget for invalid Tx
 #[derive(Clone, Debug)]
-pub(crate) struct ErrorInvalidTxGadget<F> {
+pub(crate) struct InvalidTxGadget<F> {
     tx_id: Cell<F>,
     tx_nonce: Cell<F>,
     bd_nonce: Cell<F>,
@@ -29,10 +29,10 @@ pub(crate) struct ErrorInvalidTxGadget<F> {
     insufficient_block_gas: LtGadget<F, N_BYTES_GAS>,
 }
 
-impl<F: Field> ExecutionGadget<F> for ErrorInvalidTxGadget<F> {
+impl<F: Field> ExecutionGadget<F> for InvalidTxGadget<F> {
     const NAME: &'static str = "ErrorInvalidTx";
 
-    const EXECUTION_STATE: ExecutionState = ExecutionState::ErrorInvalidTx;
+    const EXECUTION_STATE: ExecutionState = ExecutionState::InvalidTx;
 
     fn configure(cb: &mut EVMConstraintBuilder<F>) -> Self {
         let tx_id = cb.query_cell();

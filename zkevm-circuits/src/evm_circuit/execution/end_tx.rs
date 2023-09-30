@@ -206,7 +206,7 @@ impl<F: Field> ExecutionGadget<F> for EndTxGadget<F> {
         let begin_tx_rw_counter = if cb.is_taiko { 11.expr() } else { 10.expr() };
 
         cb.condition(
-            cb.next.execution_state_selector([ExecutionState::BeginTx]),
+            cb.next.execution_state_selector([ExecutionState::InvalidTx ,ExecutionState::BeginTx]),
             |cb| {
                 cb.call_context_lookup(
                     true.expr(),

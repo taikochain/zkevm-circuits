@@ -45,6 +45,7 @@ impl From<PrecompileCalls> for ExecutionState {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, EnumIter)]
 pub enum ExecutionState {
     // Internal state
+    InvalidTx,
     BeginTx,
     EndTx,
     EndBlock,
@@ -110,7 +111,6 @@ pub enum ExecutionState {
     SELFDESTRUCT,
 
     // Error cases
-    ErrorInvalidTx,
     ErrorInvalidOpcode,
     ErrorStack,
     ErrorWriteProtection,
@@ -162,7 +162,7 @@ impl Display for ExecutionState {
 impl From<&ExecError> for ExecutionState {
     fn from(error: &ExecError) -> Self {
         match error {
-            ExecError::InvalidTx => ExecutionState::ErrorInvalidTx,
+            ExecError::InvalidTx => ExecutionState::InvalidTx,
             ExecError::InvalidOpcode => ExecutionState::ErrorInvalidOpcode,
             ExecError::StackOverflow | ExecError::StackUnderflow => ExecutionState::ErrorStack,
             ExecError::WriteProtection => ExecutionState::ErrorWriteProtection,
@@ -306,7 +306,7 @@ impl From<&ExecStep> for ExecutionState {
                 PrecompileCalls::Bn128Pairing => ExecutionState::PrecompileBn256Pairing,
                 PrecompileCalls::Blake2F => ExecutionState::PrecompileBlake2f,
             },
-            ExecState::InvalidTx => ExecutionState::ErrorInvalidTx,
+            ExecState::InvalidTx => ExecutionState::InvalidTx,
             ExecState::BeginTx => ExecutionState::BeginTx,
             ExecState::EndTx => ExecutionState::EndTx,
             ExecState::EndBlock => ExecutionState::EndBlock,
