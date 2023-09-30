@@ -23,7 +23,9 @@ impl TxExecSteps for InvalidTx {
         let mut exec_step = state.new_invalid_tx_step();
         let caller = state.call()?.caller_address;
 
-        // Read the current nounce to prove mismatch
+        
+
+        // Read the nounce in db to prove mismatch
         state.account_read(
             &mut exec_step, 
             caller, 
@@ -31,12 +33,12 @@ impl TxExecSteps for InvalidTx {
             state.sdb.get_account(&caller).1.nonce.into()
         );
 
-        // Read the current balance to compare with intrinsic gas
+        // Read the balance in db to compare with intrinsic gas
         state.account_read(
             &mut exec_step, 
             caller, 
             AccountField::Balance, 
-            state.sdb.get_account(&caller).1.nonce.into()
+            state.sdb.get_account(&caller).1.balance.into()
         );
 
         Ok(exec_step)
