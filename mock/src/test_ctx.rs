@@ -225,7 +225,7 @@ impl<const NACC: usize, const NTX: usize> TestContext<NACC, NTX> {
         // Don't allow invalid transactions unless explicitely allowed to avoid unrelated tests from
         // passing simply because the test transaction was incorrectly set up.
         for (transaction, geth_trace) in transactions.iter().zip(geth_traces.iter()) {
-            if !transaction.enable_skipping_invalid_tx && geth_trace.invalid {
+            if !transaction.enable_invalid_tx && geth_trace.invalid {
                 panic!(
                     "{:?}",
                     Error::TracingError(geth_trace.return_value.clone()).to_string()
@@ -339,6 +339,8 @@ pub fn gen_geth_traces(
 /// Collection of helper functions which contribute to specific rutines on the
 /// builder pattern used to construct [`TestContext`]s.
 pub mod helpers {
+    use eth_types::evm_types::{OpcodeId, GasCost};
+
     use super::*;
     use crate::MOCK_ACCOUNTS;
 
@@ -361,5 +363,34 @@ pub mod helpers {
     /// first one.
     pub fn tx_from_1_to_0(mut txs: Vec<&mut MockTransaction>, accs: [MockAccount; 2]) {
         txs[0].from(accs[1].address).to(accs[0].address);
+    }
+
+    pub fn gas(call_data: &[u8]) -> Word {
+        Word::from(
+            GasCost::TX.as_u64()
+                + 2 * OpcodeId::PUSH32.constant_gas_cost().as_u64()
+                + call_data
+                    .iter()
+                    .map(|&x| if x == 0 { 4 } else { 16 })
+                    .sum::<u64>(),
+        )
+    }
+
+    pub fn mock_tx_value_gas_calldata(value: Word, gas_price: Word, calldata: Vec<u8>) -> eth_types::Transaction {
+        let from = MOCK_ACCOUNTS[1];
+        let to = MOCK_ACCOUNTS[0];
+
+        let mock_transaction = MockTransaction::default()
+            .from(from)
+            .to(to)
+            .value(value)
+            .gas(gas(&calldata))
+            .gas_price(gas_price)
+            .max_priority_fee_per_gas(gas_price)
+            .max_fee_per_gas(gas_price)
+            .input(calldata.into())
+            .build();
+
+        eth_types::Transaction::from(mock_transaction)
     }
 }

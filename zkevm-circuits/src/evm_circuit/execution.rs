@@ -783,9 +783,9 @@ impl<F: Field> ExecutionConfig<F> {
                             vec![ExecutionState::EndTx],
                         ),
                         (
-                            "Only EndTx can transit to BeginTx",
+                            "Only EndTx and InvalidTx can transit to BeginTx",
                             ExecutionState::BeginTx,
-                            vec![ExecutionState::EndTx],
+                            vec![ExecutionState::EndTx, ExecutionState::InvalidTx],
                         ),
                         (
                             "Only ExecutionState which halts or BeginTx can transit to EndTx",
@@ -796,9 +796,9 @@ impl<F: Field> ExecutionConfig<F> {
                                 .collect(),
                         ),
                         (
-                            "Only EndTx or EndBlock can transit to EndBlock",
+                            "Only InvalidTx, EndTx or EndBlock can transit to EndBlock",
                             ExecutionState::EndBlock,
-                            vec![ExecutionState::EndTx, ExecutionState::EndBlock],
+                            vec![ExecutionState::EndTx, ExecutionState::InvalidTx, ExecutionState::EndBlock],
                         ),
                     ])
                     .filter(move |(_, _, from)| !from.contains(&execution_state))

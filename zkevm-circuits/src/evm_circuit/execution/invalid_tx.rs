@@ -93,7 +93,7 @@ impl<F: Field> ExecutionGadget<F> for InvalidTxGadget<F> {
                 insufficient_block_gas.expr()
                 ]
         );
-        cb.require_zero("Tx is invalid", 1.expr() - invalid_tx);
+        cb.require_zero("Tx is invalid", 1.expr() - insufficient_balance.expr());
 
         Self { 
             tx_id, 
@@ -113,7 +113,7 @@ impl<F: Field> ExecutionGadget<F> for InvalidTxGadget<F> {
         offset: usize,
         block: &Block<F>,
         tx: &Transaction,
-        call: &Call,
+        _call: &Call,
         step: &ExecStep,
     ) -> Result<(), Error> {
         let mut rws = StepRws::new(block, step);
@@ -131,6 +131,7 @@ impl<F: Field> ExecutionGadget<F> for InvalidTxGadget<F> {
         self.is_nonce_match.assign(region, offset, bd_nonce, tx.nonce.scalar())?;
 
         self.bd_balance.assign(region, offset, bd_balance_val)?;
+        println!("bd_balance: {:?}", bd_balance);
         self.block_gas_limit.assign(region, offset, block_gas_limit_val)?;
 
         let intrinsic_gas_cost = select::value::<F>(
@@ -139,6 +140,7 @@ impl<F: Field> ExecutionGadget<F> for InvalidTxGadget<F> {
             GasCost::TX.as_u64().scalar(),
         ) + F::from(tx.call_data_gas_cost)
             + F::from(tx.access_list_gas_cost);
+        println!("intrinsic_gas_cost: {:?}", intrinsic_gas_cost);
             
         self.insufficient_balance.assign(region, offset, bd_balance, intrinsic_gas_cost)?;
         self.insufficient_block_gas.assign(region, offset, block_gas_limit, intrinsic_gas_cost)?;
@@ -150,4 +152,138 @@ impl<F: Field> ExecutionGadget<F> for InvalidTxGadget<F> {
 
 #[cfg(test)]
 mod test {
-}
+    use std::vec;
+
+    use crate::{evm_circuit::test::rand_bytes, test_util::CircuitTestBuilder};
+    use bus_mapping::{evm::OpcodeId, circuit_input_builder::CircuitsParams};
+    use eth_types::{self, bytecode, evm_types::GasCost, word, Bytecode, Word};
+
+    use mock::{
+        eth, gwei, MockTransaction, TestContext, MOCK_ACCOUNTS,
+        test_ctx::helpers::*,
+    };
+
+    #[test]
+    fn begin_tx_invalid_nonce() {
+        // The nonce of the account doing the transaction is not correct
+        // Use the same nonce value for two transactions.
+
+        let to = MOCK_ACCOUNTS[0];
+        let from = MOCK_ACCOUNTS[1];
+
+        let code = bytecode! {
+            STOP
+        };
+
+        let ctx = TestContext::<2, 3>::new(
+            None,
+            |accs| {
+                accs[0].address(to).balance(eth(1)).code(code);
+                accs[1].address(from).balance(eth(1)).nonce(1);
+            },
+            |mut txs, _| {
+                // Work around no payment to the coinbase address
+                txs[0].to(to).from(from).nonce(5);
+                // Tx with wrong nounce is skipped but proved
+                txs[1]
+                    .to(to)
+                    .from(from)
+                    .nonce(1)
+                    .enable_invalid_tx(true);
+                // Tx with the right nonce
+                txs[2].to(to).from(from).nonce(1);
+            },
+            |block, _| block,
+        )
+        .unwrap();
+
+        CircuitTestBuilder::new_from_test_ctx(ctx)
+            .params(CircuitsParams {
+                max_txs: 3,
+                ..Default::default()
+            })
+            .run();
+    }
+
+    #[test]
+    fn begin_tx_not_enough_eth() {
+        // The account does not have enough ETH to pay for eth_value + tx_gas *
+        // tx_gas_price.
+        let to = MOCK_ACCOUNTS[0];
+        let from = MOCK_ACCOUNTS[1];
+
+        let balance = gwei(1);
+        let ctx = TestContext::<2, 2>::new(
+            None,
+            |accs| {
+                accs[0].address(to).balance(balance);
+                accs[1].address(from).balance(balance).nonce(1);
+            },
+            |mut txs, _| {
+                // Work around no payment to the coinbase address
+                txs[0]
+                    .to(to)
+                    .from(from)
+                    .nonce(1)
+                    .gas_price(Word::from(1u64));
+                txs[1]
+                    .to(to)
+                    .from(from)
+                    .nonce(2)
+                    .gas_price(gwei(1))
+                    .gas(Word::from(10u64.pow(5)))
+                    .enable_invalid_tx(true);
+            },
+            |block, _| block,
+        )
+        .unwrap();
+
+        CircuitTestBuilder::new_from_test_ctx(ctx)
+            .params(CircuitsParams {
+                max_txs: 2,
+                ..Default::default()
+            })
+            .run();
+    }
+
+    #[test]
+    fn begin_tx_insufficient_gas() {
+        let to = MOCK_ACCOUNTS[0];
+        let from = MOCK_ACCOUNTS[1];
+
+        let balance =  gwei(0);
+        println!("balance: {:?}", balance);
+        let ctx = TestContext::<2, 2>::new(
+            None,
+            |accs| {
+                accs[0].address(to).balance(balance);
+                accs[1].address(from).balance(balance).nonce(1);
+            },
+            |mut txs, _| {
+                // Work around no payment to the coinbase address
+                txs[0]
+                    .to(to)
+                    .from(from)
+                    .nonce(1)
+                    .gas_price(Word::from(1u64))
+                    .enable_invalid_tx(true);
+                txs[1]
+                    .to(to)
+                    .from(from)
+                    .nonce(2)
+                    .gas_price(gwei(9))
+                    .gas(Word::from(10000))
+                    .enable_invalid_tx(true);
+            },
+            |block, _| block,
+        )
+        .unwrap();
+
+        CircuitTestBuilder::new_from_test_ctx(ctx)
+            .params(CircuitsParams {
+                max_txs: 2,
+                ..Default::default()
+            })
+            .run();
+    }
+}            

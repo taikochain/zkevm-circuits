@@ -58,7 +58,9 @@ impl RwMap {
         let err_msg_first = "first access reads don't change value";
         let err_msg_non_first = "non-first access reads don't change value";
         let rows = self.table_assignments();
+        println!("rows: {:?}", rows);
         let updates = MptUpdates::mock_from(&rows);
+        println!("updates: {:?}", updates);
         let mut errs = Vec::new();
         for idx in 1..rows.len() {
             let row = &rows[idx];
@@ -73,6 +75,7 @@ impl RwMap {
                         row.storage_key().unwrap_or_default(),
                     )
                 };
+                println!("{} {:?} != {:?}", idx, key(prev_row), key(row));
                 key(prev_row) != key(row)
             };
             if !row.is_write() {
@@ -84,6 +87,7 @@ impl RwMap {
                         .map(|u| u.value_assignments(mock_rand).1)
                         .unwrap_or_default();
                     if value != init_value {
+                        println!("{} updates {:?}", is_first, init_value);
                         errs.push((idx, err_msg_first, *row, *prev_row));
                     }
                 } else {

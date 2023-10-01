@@ -361,8 +361,10 @@ fn tracer_invalid_tx_nonce() {
                 .nonce(3);
         },
         |mut txs, accs| {
-            txs[0].to(accs[0].address).from(accs[1].address).nonce(1);
-            txs[0].enable_skipping_invalid_tx = true;
+            txs[0].to(accs[0].address)
+                .from(accs[1].address)
+                .nonce(1)
+                .enable_invalid_tx(true);
         },
         |block, _tx| block.number(0xcafeu64),
     )
@@ -401,7 +403,7 @@ fn tracer_invalid_tx_balance_for_access_list() {
                         ]
                     )
                 );
-            txs[0].enable_skipping_invalid_tx = true;
+            txs[0].enable_invalid_tx(true);
         },
         |block, _tx| block.number(0xcafeu64),
     )
@@ -424,8 +426,10 @@ fn tracer_invalid_tx_balance_for_transfer() {
                 .balance(Word::from(1));
         },
         |mut txs, accs| {
-            txs[0].to(accs[0].address).from(accs[1].address).value(100.into());
-            txs[0].enable_skipping_invalid_tx = true;
+            txs[0].to(accs[0].address)
+            .from(accs[1].address)
+            .value(100.into())
+            .enable_invalid_tx(true);
         },
         |block, _tx| block.number(0xcafeu64),
     )
@@ -448,9 +452,10 @@ fn tracer_invalid_tx_block_gas_limit() {
                 .balance(Word::from(1));
         },
         |mut txs, accs| {
-            txs[0].to(accs[0].address).from(accs[1].address)
-                .gas(1000000.into());
-            txs[0].enable_skipping_invalid_tx = true;
+            txs[0].to(accs[0].address)
+                .from(accs[1].address)
+                .gas(1000000.into())
+                .enable_invalid_tx(true);
         },
         |block, _tx| {
             block.number(0xcafeu64).gas_limit(1.into())

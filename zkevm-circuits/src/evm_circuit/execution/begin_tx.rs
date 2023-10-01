@@ -628,18 +628,10 @@ mod test {
     use bus_mapping::evm::OpcodeId;
     use eth_types::{self, bytecode, evm_types::GasCost, word, Bytecode, Word};
 
-    use mock::{eth, gwei, MockTransaction, TestContext, MOCK_ACCOUNTS};
-
-    fn gas(call_data: &[u8]) -> Word {
-        Word::from(
-            GasCost::TX.as_u64()
-                + 2 * OpcodeId::PUSH32.constant_gas_cost().as_u64()
-                + call_data
-                    .iter()
-                    .map(|&x| if x == 0 { 4 } else { 16 })
-                    .sum::<u64>(),
-        )
-    }
+    use mock::{
+        eth, gwei, MockTransaction, TestContext, MOCK_ACCOUNTS,
+        test_ctx::helpers::*,
+    };
 
     fn code_with_return() -> Bytecode {
         bytecode! {
@@ -686,38 +678,20 @@ mod test {
         CircuitTestBuilder::new_from_test_ctx(ctx).run();
     }
 
-    fn mock_tx(value: Word, gas_price: Word, calldata: Vec<u8>) -> eth_types::Transaction {
-        let from = MOCK_ACCOUNTS[1];
-        let to = MOCK_ACCOUNTS[0];
-
-        let mock_transaction = MockTransaction::default()
-            .from(from)
-            .to(to)
-            .value(value)
-            .gas(gas(&calldata))
-            .gas_price(gas_price)
-            .max_priority_fee_per_gas(gas_price)
-            .max_fee_per_gas(gas_price)
-            .input(calldata.into())
-            .build();
-
-        eth_types::Transaction::from(mock_transaction)
-    }
-
     #[test]
     fn begin_tx_gadget_simple() {
         // Transfer 1 ether to account with empty code, successfully
-        test_ok(mock_tx(eth(1), gwei(2), vec![]), None);
+        test_ok(mock_tx_value_gas_calldata(eth(1), gwei(2), vec![]), None);
 
         // Transfer 1 ether, successfully
-        test_ok(mock_tx(eth(1), gwei(2), vec![]), Some(code_with_return()));
+        test_ok(mock_tx_value_gas_calldata(eth(1), gwei(2), vec![]), Some(code_with_return()));
 
         // Transfer 1 ether, tx reverts
-        test_ok(mock_tx(eth(1), gwei(2), vec![]), Some(code_with_revert()));
+        test_ok(mock_tx_value_gas_calldata(eth(1), gwei(2), vec![]), Some(code_with_revert()));
 
         // Transfer nothing with some calldata
         test_ok(
-            mock_tx(eth(0), gwei(2), vec![1, 2, 3, 4, 0, 0, 0, 0]),
+            mock_tx_value_gas_calldata(eth(0), gwei(2), vec![1, 2, 3, 4, 0, 0, 0, 0]),
             Some(code_with_return()),
         );
     }
@@ -773,7 +747,7 @@ mod test {
             // Transfer nothing with random gas_price, tx reverts
             (eth(0), random_gas_price, vec![], Some(code_with_revert())),
         ] {
-            test_ok(mock_tx(value, gas_price, calldata), code);
+            test_ok(mock_tx_value_gas_calldata(value, gas_price, calldata), code);
         }
     }
 

@@ -313,13 +313,13 @@ impl<'a> CircuitInputBuilder {
                 )?;
                 tx.steps_mut().extend(exec_steps);
             }
+            // Generate EndTx step
+            let end_tx_step = gen_associated_steps(
+                &mut self.state_ref(&mut tx, &mut tx_ctx), 
+                ExecState::EndTx
+            )?;
+            tx.steps_mut().push(end_tx_step);
         }
-        // Generate EndTx step
-        let end_tx_step = gen_associated_steps(
-            &mut self.state_ref(&mut tx, &mut tx_ctx), 
-            ExecState::EndTx
-        )?;
-        tx.steps_mut().push(end_tx_step);
      
         self.sdb.commit_tx();
         self.block.txs.push(tx);
