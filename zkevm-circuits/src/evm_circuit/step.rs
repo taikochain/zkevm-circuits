@@ -162,7 +162,6 @@ impl Display for ExecutionState {
 impl From<&ExecError> for ExecutionState {
     fn from(error: &ExecError) -> Self {
         match error {
-            ExecError::InvalidTx => ExecutionState::InvalidTx,
             ExecError::InvalidOpcode => ExecutionState::ErrorInvalidOpcode,
             ExecError::StackOverflow | ExecError::StackUnderflow => ExecutionState::ErrorStack,
             ExecError::WriteProtection => ExecutionState::ErrorWriteProtection,

@@ -12,8 +12,9 @@ use eth_types::{
     address, bytecode,
     evm_types::{stack::Stack, Gas, OpcodeId},
     geth_types::GethData,
-    word, Bytecode, Hash, ToAddress, ToWord, Word,
+    word, Bytecode, Hash, ToAddress, ToWord, Word, AccessList, H256,
 };
+use ethers_core::types::transaction::eip2930::AccessListItem;
 use lazy_static::lazy_static;
 use mock::{
     test_ctx::{helpers::*, LoggerConfig, TestContext},
@@ -336,6 +337,129 @@ fn tracer_call_success() {
     let error = builder.state_ref().get_step_err(step, next_step);
     // expects no errors detected
     assert_eq!(error.unwrap(), None);
+}
+
+
+#[test]
+fn tracer_invalid_tx_nonce() {
+    let code_a = bytecode! {
+        PUSH1(0x0) // retLength
+        PUSH1(0x0) // retOffset
+        PUSH1(0x0) // argsLength
+        PUSH1(0x0) // argsOffset
+    };
+
+    // Get the execution steps from the external tracer
+    let block: GethData = TestContext::<3, 1>::new(
+        None,
+        |accs| {
+            accs[0]
+                .address(address!("0x0000000000000000000000000000000000000000"))
+                .code(code_a);
+            accs[1]
+                .address(address!("0x000000000000000000000000000000000cafe001"))
+                .nonce(3);
+        },
+        |mut txs, accs| {
+            txs[0].to(accs[0].address).from(accs[1].address).nonce(1);
+            txs[0].enable_skipping_invalid_tx = true;
+        },
+        |block, _tx| block.number(0xcafeu64),
+    )
+    .unwrap()
+    .into();
+
+    assert!(block.geth_traces[0].invalid);
+}
+
+#[test]
+fn tracer_invalid_tx_balance_for_access_list() {
+    // Get the execution steps from the external tracer
+    let block: GethData = TestContext::<3, 1>::new(
+        None,
+        |accs| {
+            accs[0]
+                .address(address!("0x0000000000000000000000000000000000000000"));
+            accs[1]
+                .address(address!("0x000000000000000000000000000000000cafe001"))
+                .balance(Word::from(1));
+        },
+        |mut txs, accs| {
+            txs[0].to(accs[0].address).from(accs[1].address)
+                .access_list(
+                    AccessList::from(
+                        vec![
+                            AccessListItem { address: Address::zero().into(), storage_keys: vec![H256::zero()]},
+                            AccessListItem { 
+                                address: address!("0x0000000000000000000000000000000012345678").into(), 
+                                storage_keys: vec![H256::zero()]
+                            },
+                            AccessListItem { 
+                                address: address!("0x0000000000000000000000000000000999999999").into(), 
+                                storage_keys: vec![H256::zero()]
+                            }
+                        ]
+                    )
+                );
+            txs[0].enable_skipping_invalid_tx = true;
+        },
+        |block, _tx| block.number(0xcafeu64),
+    )
+    .unwrap()
+    .into();
+
+    assert!(block.geth_traces[0].invalid);
+}
+
+#[test]
+fn tracer_invalid_tx_balance_for_transfer() {
+    // Get the execution steps from the external tracer
+    let block: GethData = TestContext::<3, 1>::new(
+        None,
+        |accs| {
+            accs[0]
+                .address(address!("0x0000000000000000000000000000000000000000"));
+            accs[1]
+                .address(address!("0x000000000000000000000000000000000cafe001"))
+                .balance(Word::from(1));
+        },
+        |mut txs, accs| {
+            txs[0].to(accs[0].address).from(accs[1].address).value(100.into());
+            txs[0].enable_skipping_invalid_tx = true;
+        },
+        |block, _tx| block.number(0xcafeu64),
+    )
+    .unwrap()
+    .into();
+
+    assert!(block.geth_traces[0].invalid);
+}
+
+#[test]
+fn tracer_invalid_tx_block_gas_limit() {
+    // Get the execution steps from the external tracer
+    let block: GethData = TestContext::<3, 1>::new(
+        None,
+        |accs| {
+            accs[0]
+                .address(address!("0x0000000000000000000000000000000000000000"));
+            accs[1]
+                .address(address!("0x000000000000000000000000000000000cafe001"))
+                .balance(Word::from(1));
+        },
+        |mut txs, accs| {
+            txs[0].to(accs[0].address).from(accs[1].address)
+                .gas(1000000.into());
+            txs[0].enable_skipping_invalid_tx = true;
+        },
+        |block, _tx| {
+            block.number(0xcafeu64).gas_limit(1.into())
+        },
+    )
+    .unwrap()
+    .into();
+
+    assert!(block.geth_traces[0].invalid);
 }
 
 #[test]

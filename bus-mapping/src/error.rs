@@ -101,8 +101,6 @@ pub enum OogError {
 /// EVM Execution Error
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ExecError {
-    /// Invalid Tx
-    InvalidTx,
     /// Invalid Opcode
     InvalidOpcode,
     /// For opcodes who push more than pop
