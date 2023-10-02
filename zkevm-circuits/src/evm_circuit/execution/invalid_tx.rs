@@ -331,7 +331,7 @@ mod test {
         // total cost = 30000 * 2 gwei = 6 * 10^13 
 
         // Enough balance but not enough gas limit
-        let balance =  gwei(1) /10000; //Word::from(500); // < total cost
+        let balance =  gwei(1) /100000; // < total cost
         let tx_gas_limit = Word::from(30000); // > intrinsic gas
         let gas_price = gwei(2);
 
@@ -380,14 +380,14 @@ mod test {
             None,
             |accs| {
                 accs[0].address(to).balance(balance);
-                accs[1].address(from).balance(balance).nonce(1);
+                accs[1].address(from).balance(balance);
             },
             |mut txs, _| {
                 // Work around no payment to the coinbase address
                 txs[0]
                     .to(to)
                     .from(from)
-                    .nonce(2)
+                    .nonce(1)
                     .gas_price(gwei(1))
                     .gas(tx_gas_limit)
                     .enable_invalid_tx(true);
