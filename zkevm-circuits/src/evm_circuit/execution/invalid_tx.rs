@@ -1,3 +1,5 @@
+use std::ops::Add;
+
 use crate::{
     evm_circuit::{
         execution::ExecutionGadget,
@@ -5,28 +7,156 @@ use crate::{
         table::{FixedTableTag, Lookup},
         util::{
             common_gadget::CommonErrorGadget, constraint_builder::{EVMConstraintBuilder, ConstrainBuilderCommon}, CachedRegion,
-            Cell, math_gadget::{IsEqualGadget, LtGadget}, StepRws,
+            Cell, math_gadget::{IsEqualGadget, LtGadget, LtWordGadget, MulWordByU64Gadget, AddWordsGadget}, StepRws, Word, RandomLinearCombination,
         },
         witness::{Block, Call, ExecStep, Transaction}, param::N_BYTES_GAS,
     }, 
     table::{TxFieldTag, TxContextFieldTag, AccountFieldTag, BlockContextFieldTag}
 };
-use eth_types::{Field, evm_types::GasCost, ToScalar};
+use eth_types::{Field, evm_types::GasCost, ToScalar, Address, H160, ToLittleEndian};
 use gadgets::util::{Expr, Scalar, select, not, or};
-use halo2_proofs::{circuit::Value, plonk::Error};
+use halo2_proofs::{circuit::Value, plonk::{Error, Expression}};
 
 
 /// Gadget for invalid Tx
 #[derive(Clone, Debug)]
+pub(crate) struct TxCostGadget<F> {
+    id: Cell<F>,
+    nonce: Cell<F>,
+    caller: Cell<F>,
+    is_create: Cell<F>,
+    gas_limit: Cell<F>,
+    call_data_gas_cost: Cell<F>,
+    access_list_gas_cost: Cell<F>,
+
+    gas_price: Word<F>,
+    value: Word<F>,
+
+    gas_mul_gas_price: MulWordByU64Gadget<F>,
+    gas_mul_gas_price_plus_value: AddWordsGadget<F, 2, false>,
+    cost_sum: Word<F>,
+}
+
+impl<F: Field> TxCostGadget<F> {
+    fn configure(cb: &mut EVMConstraintBuilder<F>) -> Self {
+        let id = cb.query_cell();
+        let [nonce, caller, is_create, gas_limit, call_data_gas_cost, access_list_gas_cost] =
+            [
+                TxContextFieldTag::Nonce,
+                TxContextFieldTag::CallerAddress,
+                TxContextFieldTag::IsCreate,
+                TxContextFieldTag::Gas,
+                TxContextFieldTag::CallDataGasCost,
+                TxContextFieldTag::AccessListGasCost,
+            ]
+            .map(|field_tag| cb.tx_context(id.expr(), field_tag, None));
+
+        let [gas_price, value] = [
+                TxContextFieldTag::GasPrice, 
+                TxContextFieldTag::Value
+            ]
+            .map(|field_tag| cb.tx_context_as_word(id.expr(), field_tag, None));
+       
+        let gas_mul_gas_price = 
+            MulWordByU64Gadget::construct(cb,  gas_price.clone(), gas_limit.expr());
+        let cost_sum = cb.query_word_rlc();
+        let gas_mul_gas_price_plus_value = AddWordsGadget::construct(
+            cb,
+            [gas_mul_gas_price.product().clone(), value.clone()],
+            cost_sum.clone(),
+        );
+        Self { 
+            id, 
+            nonce, 
+            caller,
+            is_create,
+            gas_limit,
+            call_data_gas_cost,
+            access_list_gas_cost,
+            gas_price,
+            value,
+            gas_mul_gas_price,
+            gas_mul_gas_price_plus_value,
+            cost_sum
+        }
+    }
+
+    fn intrinsic_gas(&self) -> Expression<F> {
+        select::expr(
+            self.is_create.expr(),
+            GasCost::CREATION_TX.0.expr(),
+            GasCost::TX.0.expr(),
+        ) + self.call_data_gas_cost.expr() + self.access_list_gas_cost.expr()
+    }
+
+    fn total_gas_provided(&self) -> Word<F> {
+        self.gas_mul_gas_price.product().clone()
+    }
+
+    fn total_cost(&self) -> Word<F> {
+        self.gas_mul_gas_price_plus_value.sum().clone()
+    }
+
+    fn assign(
+        &self,
+        region: &mut CachedRegion<'_, '_, F>,
+        offset: usize,
+        Transaction {
+            id,
+            caller_address,
+            nonce,
+            is_create,
+            gas,
+            access_list_gas_cost,
+            call_data_gas_cost,
+            gas_price,
+            value,
+            ..
+        }: &Transaction,
+    ) -> Result<(), Error> {
+        let caller = caller_address
+            .to_scalar()
+            .expect("unexpected Address -> Scalar conversion failure");
+
+        self.id.assign(region, offset, Value::known(id.scalar()))?;
+        self.nonce.assign(region, offset, Value::known(nonce.scalar()))?;
+        self.caller.assign(region, offset, Value::known(caller))?;
+        self.is_create.assign(region, offset, Value::known(is_create.scalar()))?;
+        self.gas_limit.assign(region, offset, Value::known(gas.scalar()))?;
+        self.call_data_gas_cost.assign(region, offset, Value::known(call_data_gas_cost.scalar()))?;
+        self.access_list_gas_cost.assign(region, offset, Value::known(access_list_gas_cost.scalar()))?;
+        self.gas_price.assign(region, offset, Some(gas_price.to_le_bytes()))?;
+        self.value.assign(region, offset, Some(value.to_le_bytes()))?;
+
+        self.gas_mul_gas_price.assign(
+            region, 
+            offset, 
+            *gas_price
+            , *gas, 
+            gas_price * gas
+        )?;
+        let sum = gas_price * gas + *value;
+        self.cost_sum.assign(region, offset, Some(sum.to_le_bytes()))?;
+        self.gas_mul_gas_price_plus_value.assign(
+            region,
+            offset,
+            [gas_price * gas, *value],
+            sum
+        )?;
+
+        Ok(())
+    }
+}
+
+/// Gadget for invalid Tx
+#[derive(Clone, Debug)]
 pub(crate) struct InvalidTxGadget<F> {
-    tx_id: Cell<F>,
-    tx_nonce: Cell<F>,
+    tx: TxCostGadget<F>,
     bd_nonce: Cell<F>,
     is_nonce_match: IsEqualGadget<F>,
-    bd_balance: Cell<F>,
-    block_gas_limit: Cell<F>,
-    insufficient_balance: LtGadget<F, N_BYTES_GAS>, 
-    insufficient_block_gas: LtGadget<F, N_BYTES_GAS>,
+    bd_balance: Word<F>,
+    insufficient_gas_limit: LtGadget<F, N_BYTES_GAS>,
+    insufficient_balance: LtWordGadget<F>, 
 }
 
 impl<F: Field> ExecutionGadget<F> for InvalidTxGadget<F> {
@@ -35,75 +165,54 @@ impl<F: Field> ExecutionGadget<F> for InvalidTxGadget<F> {
     const EXECUTION_STATE: ExecutionState = ExecutionState::InvalidTx;
 
     fn configure(cb: &mut EVMConstraintBuilder<F>) -> Self {
-        let tx_id = cb.query_cell();
-        let [tx_nonce, caller, is_create, call_data_gas_cost, access_list_gas_cost] =
-            [
-                TxContextFieldTag::Nonce,
-                TxContextFieldTag::CallerAddress,
-                TxContextFieldTag::IsCreate,
-                TxContextFieldTag::CallDataGasCost,
-                TxContextFieldTag::AccessListGasCost,
-            ]
-            .map(|field_tag| cb.tx_context(tx_id.expr(), field_tag, None));
-        
+        let tx = TxCostGadget::configure(cb);
         // Read the current nounce to prove mismatch
-        let bd_nonce = cb.query_cell();
+        let bd_nonce = cb.query_cell_phase2();
         cb.account_read(
-            caller.expr(),
+            tx.caller.expr(),
              AccountFieldTag::Nonce, 
              bd_nonce.expr()
         );
         let nonce_match = IsEqualGadget::construct(
             cb, 
-            tx_nonce.expr(), 
+            tx.nonce.expr(), 
             bd_nonce.expr()
         );
-
         // Read the current balance to compare with intrinsic gas
-        let bd_balance = cb.query_cell_phase2();
+        let bd_balance = cb.query_word_rlc();
         cb.account_read(
-            caller.expr(), 
+            tx.caller.expr(), 
             AccountFieldTag::Balance, 
             bd_balance.expr()
         );
-        // Read the block gas limit
-        let block_gas_limit = cb.query_cell();
-        cb.block_lookup(BlockContextFieldTag::GasLimit.expr(), None, block_gas_limit.expr());
 
-        // Calculate the intrinsic gas cost
-        let intrinsic_gas_cost = select::expr(
-            is_create.expr(),
-            GasCost::CREATION_TX.0.expr(),
-            GasCost::TX.0.expr(),
-        ) + call_data_gas_cost.expr() + access_list_gas_cost.expr();
-
-        let [insufficient_balance, insufficient_block_gas] = [bd_balance.clone(), block_gas_limit.clone()]
-            .map(|v| {
-                LtGadget::<F, N_BYTES_GAS>::construct(
-                    cb,
-                    v.expr(), 
-                    intrinsic_gas_cost.clone()
-                )
-            });
+        let insufficient_gas_limit = LtGadget::<F, N_BYTES_GAS>::construct(
+            cb,
+            tx.gas_limit.expr(), 
+            tx.intrinsic_gas()
+        );
+        let insufficient_balance = LtWordGadget::construct(
+            cb,
+            &bd_balance, 
+            &tx.total_cost()
+        );
         
         let invalid_tx = or::expr(
             [
                 not::expr(nonce_match.expr()), 
+                insufficient_gas_limit.expr(),
                 insufficient_balance.expr(), 
-                insufficient_block_gas.expr()
-                ]
+            ]
         );
-        cb.require_zero("Tx is invalid", 1.expr() - insufficient_balance.expr());
+        cb.require_zero("Tx is invalid", 1.expr() - invalid_tx.expr());
 
         Self { 
-            tx_id, 
-            tx_nonce, 
+            tx,
             bd_nonce, 
             is_nonce_match: nonce_match, 
             bd_balance, 
-            block_gas_limit, 
             insufficient_balance, 
-            insufficient_block_gas 
+            insufficient_gas_limit 
         }
     }
 
@@ -117,33 +226,39 @@ impl<F: Field> ExecutionGadget<F> for InvalidTxGadget<F> {
         step: &ExecStep,
     ) -> Result<(), Error> {
         let mut rws = StepRws::new(block, step);
-        let bd_nonce = rws.next().account_value_pair().0.to_scalar().unwrap();
-        let bd_balance = rws.next().account_value_pair().0.to_scalar().unwrap();
-        let block_gas_limit = block.eth_block.gas_limit.to_scalar().unwrap();
+        let bd_nonce = rws.next().account_value_pair().0
+            .to_scalar()
+            .expect("unexpected U256 -> Scalar conversion failure");
+        let bd_balance = rws.next().account_value_pair().0;
 
-        let bd_nonce_val = Value::known(bd_nonce);
-        let tx_nonce_val = Value::known(tx.nonce.scalar());
-        let bd_balance_val = Value::known(bd_balance);
-        let block_gas_limit_val = Value::known(block_gas_limit);
+        self.tx.assign(region, offset, tx)?;
 
-        self.bd_nonce.assign(region, offset, bd_nonce_val)?;
-        self.tx_nonce.assign(region, offset, tx_nonce_val)?;
+        self.bd_nonce.assign(region, offset, Value::known(bd_nonce))?;
         self.is_nonce_match.assign(region, offset, bd_nonce, tx.nonce.scalar())?;
-
-        self.bd_balance.assign(region, offset, bd_balance_val)?;
+        println!("bd_nonce: {:?}", bd_nonce);
+        
         println!("bd_balance: {:?}", bd_balance);
-        self.block_gas_limit.assign(region, offset, block_gas_limit_val)?;
+        self.bd_balance.assign(region, offset, Some(bd_balance.to_le_bytes()))?;
 
-        let intrinsic_gas_cost = select::value::<F>(
-            tx.is_create.scalar(),
-            GasCost::CREATION_TX.as_u64().scalar(),
-            GasCost::TX.as_u64().scalar(),
-        ) + F::from(tx.call_data_gas_cost)
-            + F::from(tx.access_list_gas_cost);
-        println!("intrinsic_gas_cost: {:?}", intrinsic_gas_cost);
+        let is_create = tx.is_create as u64;
+        let intrinsic_gas = 
+            is_create * GasCost::CREATION_TX.as_u64() + (1 - is_create) * GasCost::TX.as_u64() 
+            + tx.call_data_gas_cost 
+            + tx.access_list_gas_cost;
+        println!("intrinsic_gas_cost: {:?}", intrinsic_gas);
             
-        self.insufficient_balance.assign(region, offset, bd_balance, intrinsic_gas_cost)?;
-        self.insufficient_block_gas.assign(region, offset, block_gas_limit, intrinsic_gas_cost)?;
+        self.insufficient_gas_limit.assign(
+            region, 
+            offset, 
+            tx.gas.scalar(), 
+            intrinsic_gas.scalar()
+        )?;
+        self.insufficient_balance.assign(
+            region, 
+            offset, 
+            bd_balance, 
+            tx.gas_price * tx.gas + tx.value
+        )?;
 
         Ok(())
     }
@@ -251,7 +366,7 @@ mod test {
         let to = MOCK_ACCOUNTS[0];
         let from = MOCK_ACCOUNTS[1];
 
-        let balance =  gwei(0);
+        let balance =  gwei(1);
         println!("balance: {:?}", balance);
         let ctx = TestContext::<2, 2>::new(
             None,

@@ -184,8 +184,7 @@ func Trace(config TraceConfig) ([]*ExecutionResult, error) {
 		txsGasLimit += uint64(tx.GasLimit)
 	}
 	if txsGasLimit > blockGasLimit {
-		// Note (Cecilia): Allow txsGasLimit > blockGasLimit and make InvalidTx
-		// return nil, fmt.Errorf("txs total gas: %d Exceeds block gas limit: %d", txsGasLimit, blockGasLimit)
+		return nil, fmt.Errorf("txs total gas: %d Exceeds block gas limit: %d", txsGasLimit, blockGasLimit)
 	}
 
 	blockCtx := vm.BlockContext{
@@ -228,7 +227,7 @@ func Trace(config TraceConfig) ([]*ExecutionResult, error) {
 		evm := vm.NewEVM(blockCtx, core.NewEVMTxContext(&message), stateDB, &chainConfig, vm.Config{Tracer: tracer, NoBaseFee: true})
 
 		result, err := core.ApplyMessage(evm, &message, new(core.GasPool).AddGas(message.GasLimit))
-		if err != nil || message.GasLimit > blockGasLimit {
+		if err != nil {
 			executionResults[i] = &ExecutionResult{
 				Invalid:     true,
 				Gas:         0,
