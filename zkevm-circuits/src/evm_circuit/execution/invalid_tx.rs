@@ -321,32 +321,33 @@ mod test {
     }
 
     #[test]
-    fn begin_tx_not_enough_eth() {
-        // The account does not have enough ETH to pay for eth_value + tx_gas *
-        // tx_gas_price.
+    fn tx_not_enough_balance() {
         let to = MOCK_ACCOUNTS[0];
         let from = MOCK_ACCOUNTS[1];
 
-        let balance = gwei(1);
-        let ctx = TestContext::<2, 2>::new(
+        // Invalid if gas_limit < intrinsic gas
+        // intrinsic gas = GasCost::TX = 21000
+        // gas limit = 30000
+        // total cost = 30000 * 2 gwei = 6 * 10^13 
+
+        // Enough balance but not enough gas limit
+        let balance =  gwei(1) /10000; //Word::from(500); // < total cost
+        let tx_gas_limit = Word::from(30000); // > intrinsic gas
+        let gas_price = gwei(2);
+
+        let ctx = TestContext::<2, 1>::new(
             None,
             |accs| {
                 accs[0].address(to).balance(balance);
                 accs[1].address(from).balance(balance).nonce(1);
             },
             |mut txs, _| {
-                // Work around no payment to the coinbase address
                 txs[0]
                     .to(to)
                     .from(from)
                     .nonce(1)
-                    .gas_price(Word::from(1u64));
-                txs[1]
-                    .to(to)
-                    .from(from)
-                    .nonce(2)
-                    .gas_price(gwei(1))
-                    .gas(Word::from(10u64.pow(5)))
+                    .gas_price(gas_price)
+                    .gas(tx_gas_limit)
                     .enable_invalid_tx(true);
             },
             |block, _| block,
@@ -355,20 +356,27 @@ mod test {
 
         CircuitTestBuilder::new_from_test_ctx(ctx)
             .params(CircuitsParams {
-                max_txs: 2,
+                max_txs: 1,
                 ..Default::default()
             })
             .run();
     }
 
     #[test]
-    fn begin_tx_insufficient_gas() {
+    fn tx_insufficient_gas() {
         let to = MOCK_ACCOUNTS[0];
         let from = MOCK_ACCOUNTS[1];
 
-        let balance =  gwei(1);
-        println!("balance: {:?}", balance);
-        let ctx = TestContext::<2, 2>::new(
+        // Invalid if gas_limit < intrinsic gas
+        // intrinsic gas = GasCost::TX = 21000
+        // gas limit = 100
+        // total cost = 100 * 1 gwei = 10^11 
+
+        // Enough balance but not enough gas limit
+        let balance =  eth(1); // > total cost
+        let tx_gas_limit = Word::from(100); // < intrinsic gas
+
+        let ctx = TestContext::<2, 1>::new(
             None,
             |accs| {
                 accs[0].address(to).balance(balance);
@@ -379,15 +387,9 @@ mod test {
                 txs[0]
                     .to(to)
                     .from(from)
-                    .nonce(1)
-                    .gas_price(Word::from(1u64))
-                    .enable_invalid_tx(true);
-                txs[1]
-                    .to(to)
-                    .from(from)
                     .nonce(2)
-                    .gas_price(gwei(9))
-                    .gas(Word::from(10000))
+                    .gas_price(gwei(1))
+                    .gas(tx_gas_limit)
                     .enable_invalid_tx(true);
             },
             |block, _| block,
@@ -396,7 +398,7 @@ mod test {
 
         CircuitTestBuilder::new_from_test_ctx(ctx)
             .params(CircuitsParams {
-                max_txs: 2,
+                max_txs: 1,
                 ..Default::default()
             })
             .run();
