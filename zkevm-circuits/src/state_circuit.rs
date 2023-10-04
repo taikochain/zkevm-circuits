@@ -10,7 +10,7 @@ mod random_linear_combination;
 mod dev;
 #[cfg(any(feature = "test", test))]
 mod test;
-use bus_mapping::operation::Target;
+use bus_mapping::operation::{Target, CallContextField};
 #[cfg(any(feature = "test", test, feature = "test-circuits"))]
 pub use dev::StateCircuit as TestStateCircuit;
 
@@ -20,7 +20,7 @@ use self::{
 };
 use crate::{
     evm_circuit::{param::N_BYTES_WORD, util::rlc},
-    table::{AccountFieldTag, LookupTable, MPTProofType, MptTable, RwTable},
+    table::{AccountFieldTag, LookupTable, MPTProofType, MptTable, RwTable, CallContextFieldTag},
     util::{Challenges, Expr, SubCircuit, SubCircuitConfig},
     witness::{self, MptUpdates, Rw, RwMap},
 };
@@ -277,7 +277,10 @@ impl<F: Field> StateCircuitConfig<F> {
                                 state_root = new_root;
                             }
                             if matches!(row.tag(), Target::CallContext) && !row.is_write() {
-                                // assert_eq!(row.value_assignment(randomness), F::ZERO, "{:?}", row);
+                                // Work-arounds for InvalidTx case in EndBlock's first call_context_read                
+                                row.field_tag().map(|tag| if tag != CallContextFieldTag::TxId as u64 {
+                                    assert_eq!(row.value_assignment(randomness), F::ZERO, "{:?}", row);
+                                });
                             }
                             state_root
                         });
