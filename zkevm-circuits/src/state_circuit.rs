@@ -277,10 +277,7 @@ impl<F: Field> StateCircuitConfig<F> {
                                 state_root = new_root;
                             }
                             if matches!(row.tag(), Target::CallContext) && !row.is_write() {
-                                // Work-arounds for InvalidTx case in EndBlock's first call_context_read                
-                                row.field_tag().map(|tag| if tag != CallContextFieldTag::TxId as u64 {
-                                    assert_eq!(row.value_assignment(randomness), F::ZERO, "{:?}", row);
-                                });
+                                assert_eq!(row.value_assignment(randomness), F::ZERO, "{:?}", row);
                             }
                             state_root
                         });

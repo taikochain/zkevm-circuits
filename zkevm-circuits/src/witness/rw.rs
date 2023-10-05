@@ -81,7 +81,7 @@ impl RwMap {
                 let value = row.value_assignment::<Fr>(mock_rand);
                 if is_first {
                     // value == init_value
-                    if let Some(init_value) = updates
+                    let init_value = updates
                         .get(row)
                         .map(|u| u.value_assignments(mock_rand).1)
                         .unwrap_or_default();
