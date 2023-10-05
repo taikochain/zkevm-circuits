@@ -170,6 +170,9 @@ impl<'a> CircuitInputBuilder {
                 0,
             ),
         );
+        if is_invalid {
+            self.block_ctx.invalid_tx_num += 1;
+        }
 
         Transaction::new(
             call_id,
@@ -292,7 +295,6 @@ impl<'a> CircuitInputBuilder {
 
         if tx.invalid_tx {
             // Cecilia: ?
-            tx_ctx.call_is_success = vec![false];
             let invalid_tx_step = gen_associated_steps(
                 &mut self.state_ref(&mut tx, &mut tx_ctx),
                 ExecState::InvalidTx,

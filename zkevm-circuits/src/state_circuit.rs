@@ -10,7 +10,7 @@ mod random_linear_combination;
 mod dev;
 #[cfg(any(feature = "test", test))]
 mod test;
-use bus_mapping::operation::Target;
+use bus_mapping::operation::{Target, CallContextField};
 #[cfg(any(feature = "test", test, feature = "test-circuits"))]
 pub use dev::StateCircuit as TestStateCircuit;
 
