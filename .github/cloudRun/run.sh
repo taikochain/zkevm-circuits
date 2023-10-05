@@ -15,7 +15,7 @@ cd "$target_dir" || exit 1
 
 # ENTER YOUR TEST COMMAND BELOW
 cd zkevm-circuits/fuzz
-cargo fuzz run -v -j 128 evm -- -rss_limit_mb=9999999999 -max_len=99999999
+cargo fuzz run -v -j 64 evm -- -rss_limit_mb=9999999999 -max_len=99999999
 # ENTER YOUR TEST COMMAND ABOVE
 
 RESULT=$?
