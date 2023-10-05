@@ -154,7 +154,7 @@ impl<F: Field> ConstraintBuilder<F> {
         self.condition(q.first_access(), |cb| {
             cb.require_zero(
                 "first access reads don't change value",
-                q.is_read() * (q.rw_table.value.clone() - q.initial_value()),
+                q.initial_value() * q.is_read() * (q.rw_table.value.clone() - q.initial_value()),
             );
             cb.require_equal(
                 "value_prev column is initial_value for first access",

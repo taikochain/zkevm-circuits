@@ -6,12 +6,15 @@ use crate::{
         step::ExecutionState,
         table::{FixedTableTag, Lookup},
         util::{
-            common_gadget::CommonErrorGadget, constraint_builder::{EVMConstraintBuilder, ConstrainBuilderCommon}, CachedRegion,
+            common_gadget::CommonErrorGadget, constraint_builder::{
+                Transition::*,
+                EVMConstraintBuilder, ConstrainBuilderCommon, StepStateTransition,
+            }, CachedRegion,
             Cell, math_gadget::{IsEqualGadget, LtGadget, LtWordGadget, MulWordByU64Gadget, AddWordsGadget}, StepRws, Word, RandomLinearCombination,
         },
         witness::{Block, Call, ExecStep, Transaction}, param::N_BYTES_GAS,
     }, 
-    table::{TxFieldTag, TxContextFieldTag, AccountFieldTag, BlockContextFieldTag}
+    table::{TxFieldTag, TxContextFieldTag, AccountFieldTag, BlockContextFieldTag, CallContextFieldTag}
 };
 use eth_types::{Field, evm_types::GasCost, ToScalar, Address, H160, ToLittleEndian};
 use gadgets::util::{Expr, Scalar, select, not, or};
@@ -173,10 +176,10 @@ impl<F: Field> ExecutionGadget<F> for InvalidTxGadget<F> {
              AccountFieldTag::Nonce, 
              bd_nonce.expr()
         );
-        let nonce_match = IsEqualGadget::construct(
+        let is_nonce_match = IsEqualGadget::construct(
             cb, 
+            bd_nonce.expr(),
             tx.nonce.expr(), 
-            bd_nonce.expr()
         );
         // Read the current balance to compare with intrinsic gas
         let bd_balance = cb.query_word_rlc();
@@ -199,20 +202,54 @@ impl<F: Field> ExecutionGadget<F> for InvalidTxGadget<F> {
         
         let invalid_tx = or::expr(
             [
-                not::expr(nonce_match.expr()), 
+                not::expr(is_nonce_match.expr()), 
                 insufficient_gas_limit.expr(),
                 insufficient_balance.expr(), 
             ]
         );
         cb.require_zero("Tx is invalid", 1.expr() - invalid_tx.expr());
 
+        let begin_tx_rw_counter = if cb.is_taiko { 11.expr() } else { 10.expr() };
+        let invalid_tx_rw_counter = 3.expr(); // Cecilia: ?
+        let end_block_rw_counter = if cb.is_taiko { 10.expr() } else { 2.expr() };
+
+        [ExecutionState::BeginTx, ExecutionState::InvalidTx, ExecutionState::EndBlock].iter()
+            .zip([begin_tx_rw_counter, invalid_tx_rw_counter, end_block_rw_counter].iter())
+            .for_each(|(state, rw_counter)| {
+                cb.condition(
+                    cb.next.execution_state_selector([*state]),
+                    |cb| {
+                        if state == &ExecutionState::EndBlock {
+                            println!("transtion ExecutionState::EndBlock");
+                            cb.require_step_state_transition(StepStateTransition {
+                                rw_counter:  Delta(rw_counter.clone()),
+                                call_id: Same,
+                                ..StepStateTransition::any()
+                            });
+                        } else {
+                            cb.call_context_lookup(
+                                true.expr(),
+                                Some(cb.next.state.rw_counter.expr()),
+                                CallContextFieldTag::TxId,
+                                tx.id.expr() + 1.expr(),
+                            );
+                            cb.require_step_state_transition(StepStateTransition {
+                                rw_counter:  Delta(rw_counter.clone()),
+                                ..StepStateTransition::any()
+                            });
+                        }
+                    },
+                );
+            });
+
+        
         Self { 
             tx,
             bd_nonce, 
-            is_nonce_match: nonce_match, 
+            is_nonce_match, 
             bd_balance, 
             insufficient_balance, 
-            insufficient_gas_limit 
+            insufficient_gas_limit,
         }
     }
 
@@ -225,6 +262,7 @@ impl<F: Field> ExecutionGadget<F> for InvalidTxGadget<F> {
         _call: &Call,
         step: &ExecStep,
     ) -> Result<(), Error> {
+        println!("-->InvalidTx rwc {:?}", step.rwc.0);
         let mut rws = StepRws::new(block, step);
         let bd_nonce = rws.next().account_value_pair().0
             .to_scalar()
@@ -259,6 +297,7 @@ impl<F: Field> ExecutionGadget<F> for InvalidTxGadget<F> {
             bd_balance, 
             tx.gas_price * tx.gas + tx.value
         )?;
+        println!("tx.id: {:?}", tx.id);
 
         Ok(())
     }
@@ -376,7 +415,7 @@ mod test {
         let balance =  eth(1); // > total cost
         let tx_gas_limit = Word::from(100); // < intrinsic gas
 
-        let ctx = TestContext::<2, 1>::new(
+        let ctx = TestContext::<2, 3>::new(
             None,
             |accs| {
                 accs[0].address(to).balance(balance);
@@ -391,14 +430,29 @@ mod test {
                     .gas_price(gwei(1))
                     .gas(tx_gas_limit)
                     .enable_invalid_tx(true);
-            },
+                txs[1]
+                    .to(to)
+                    .from(from)
+                    .nonce(1)
+                    .gas_price(gwei(1))
+                    .gas(tx_gas_limit)
+                    .enable_invalid_tx(true); 
+                txs[2]
+                .to(to)
+                .from(from)
+                .nonce(1)
+                .gas_price(gwei(1))
+                .gas(Word::from(300000))
+                .enable_invalid_tx(true); 
+
+                },
             |block, _| block,
         )
         .unwrap();
 
         CircuitTestBuilder::new_from_test_ctx(ctx)
             .params(CircuitsParams {
-                max_txs: 1,
+                max_txs: 3,
                 ..Default::default()
             })
             .run();

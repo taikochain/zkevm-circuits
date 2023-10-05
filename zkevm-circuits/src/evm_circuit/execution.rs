@@ -778,9 +778,9 @@ impl<F: Field> ExecutionConfig<F> {
                 .chain(
                     IntoIterator::into_iter([
                         (
-                            "Only EndTx can transit to InvalidTx",
+                            "Only EndTx and InvalidTx can transit to InvalidTx",
                             ExecutionState::InvalidTx,
-                            vec![ExecutionState::EndTx],
+                            vec![ExecutionState::EndTx, ExecutionState::InvalidTx],
                         ),
                         (
                             "Only EndTx and InvalidTx can transit to BeginTx",
@@ -943,10 +943,12 @@ impl<F: Field> ExecutionConfig<F> {
 
                 let evm_rows = block.circuits_params.max_evm_rows;
                 let no_padding = evm_rows == 0;
-
                 // part1: assign real steps
+                steps.clone().for_each(|(tx, c, s)| 
+                    println!("Step tx_id {:?}, s {:?}", tx.id, s.exec_state));
                 loop {
                     let (transaction, call, step) = steps.next().expect("should not be empty");
+                    println!("Step {:?}", step.exec_state);
                     let next = steps.peek();
                     if next.is_none() {
                         break;

@@ -75,7 +75,6 @@ impl RwMap {
                         row.storage_key().unwrap_or_default(),
                     )
                 };
-                println!("{} {:?} != {:?}", idx, key(prev_row), key(row));
                 key(prev_row) != key(row)
             };
             if !row.is_write() {
@@ -87,7 +86,6 @@ impl RwMap {
                         .map(|u| u.value_assignments(mock_rand).1)
                         .unwrap_or_default();
                     if value != init_value {
-                        println!("{} updates {:?} -> {:?}", is_first, value, init_value);
                         errs.push((idx, err_msg_first, *row, *prev_row));
                     }
                 } else {

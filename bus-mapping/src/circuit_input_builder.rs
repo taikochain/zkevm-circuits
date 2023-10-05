@@ -232,6 +232,7 @@ impl<'a> CircuitInputBuilder {
         let mut end_block_last = self.block.block_steps.end_block_last.clone();
         end_block_not_last.rwc = self.block_ctx.rwc;
         end_block_last.rwc = self.block_ctx.rwc;
+        println!("set_end_block {:?}", self.block_ctx.rwc.0);
 
         let mut dummy_tx = Transaction::default();
         let mut dummy_tx_ctx = TransactionContext::default();

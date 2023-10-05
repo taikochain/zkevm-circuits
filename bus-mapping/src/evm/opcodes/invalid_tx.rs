@@ -19,9 +19,12 @@ impl TxExecSteps for InvalidTx {
         state: &mut CircuitInputStateRef,
         _execution_step: ExecState,
     ) -> Result<ExecStep, Error> {
+        println!("gen_associated_steps InvalidTx {:?}", state.block_ctx.rwc.0);
+
         // Todo(Cecilia)
         let mut exec_step = state.new_invalid_tx_step();
-        let caller = state.call()?.caller_address;
+        let call = state.call()?.clone();
+        let caller = call.caller_address;
 
         // Read the nounce in db to prove mismatch
         state.account_read(
@@ -38,6 +41,15 @@ impl TxExecSteps for InvalidTx {
             AccountField::Balance, 
             state.sdb.get_account(&caller).1.balance.into()
         );
+
+        if !state.tx_ctx.is_last_tx() {
+            state.call_context_write(
+                &mut exec_step,
+                state.block_ctx.rwc.0 + 1,
+                CallContextField::TxId,
+                (state.tx_ctx.id() + 1).into(),
+            );
+        }
 
         Ok(exec_step)
     }
