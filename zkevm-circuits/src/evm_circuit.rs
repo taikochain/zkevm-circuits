@@ -12,7 +12,7 @@ pub mod step;
 pub mod table;
 pub mod util;
 
-#[cfg(any(feature = "test", test))]
+// #[cfg(any(feature = "test", test))]
 pub(crate) mod test;
 use self::step::HasExecutionState;
 #[cfg(any(feature = "test", test, feature = "test-circuits"))]

@@ -21,8 +21,12 @@ mock = { path = "../../mock" }
 bus-mapping = { path = "../../bus-mapping" }
 rand = "0.8.5"
 rand_chacha = "0.3.1"
+num-bigint = "0.4.4"
+num-traits = "0.2.16"
+nonzero = "0.2.0"
 [dependencies.zkevm-circuits]
 path = "../"
+
 
 
 # Prevent this from interfering with workspaces

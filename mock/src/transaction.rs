@@ -257,7 +257,7 @@ impl MockTransaction {
     }
 
     /// Set gas field for the MockTransaction.
-    pub fn gas(&mut self, gas: Word) -> &mut Self {
+    pub fn  gas(&mut self, gas: Word) -> &mut Self {
         self.gas = gas;
         self
     }

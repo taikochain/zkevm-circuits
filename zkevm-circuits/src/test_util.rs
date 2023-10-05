@@ -74,10 +74,11 @@ const NUM_BLINDING_ROWS: usize = 64;
 ///     .state_checks(Box::new(|prover, evm_rows, lookup_rows| assert!(prover.verify_at_rows_par(evm_rows.iter().cloned(), lookup_rows.iter().cloned()).is_err())))
 ///     .run();
 /// ```
+
 pub struct CircuitTestBuilder<const NACC: usize, const NTX: usize> {
     test_ctx: Option<TestContext<NACC, NTX>>,
     circuits_params: Option<CircuitsParams>,
-    block: Option<Block<Fr>>,
+    pub block: Option<Block<Fr>>,
     evm_checks: Box<dyn Fn(MockProver<Fr>, &Vec<usize>, &Vec<usize>)>,
     state_checks: Box<dyn Fn(MockProver<Fr>, &Vec<usize>, &Vec<usize>)>,
     block_modifiers: Vec<Box<dyn Fn(&mut Block<Fr>)>>,
@@ -180,7 +181,7 @@ impl<const NACC: usize, const NTX: usize> CircuitTestBuilder<NACC, NTX> {
     /// Triggers the `CircuitTestBuilder` to convert the [`TestContext`] if any,
     /// into a [`Block`] and apply the default or provided block_modifiers or
     /// circuit checks to the provers generated for the State and EVM circuits.
-    pub fn run(self) {
+    pub fn run(mut self) -> Self {
         let params = if let Some(block) = self.block.as_ref() {
             block.circuits_params
         } else {
@@ -188,9 +189,9 @@ impl<const NACC: usize, const NTX: usize> CircuitTestBuilder<NACC, NTX> {
         };
 
         let block: Block<Fr> = if self.block.is_some() {
-            self.block.unwrap()
+            self.block.clone().unwrap()
         } else if self.test_ctx.is_some() {
-            let block: GethData = self.test_ctx.unwrap().into();
+            let block: GethData = self.test_ctx.clone().unwrap().into();
             let mut builder = BlockData::new_from_geth_data_with_params(block.clone(), params)
                 .new_circuit_input_builder();
             builder
@@ -200,7 +201,7 @@ impl<const NACC: usize, const NTX: usize> CircuitTestBuilder<NACC, NTX> {
             let mut block =
                 crate::witness::block_convert(&builder.block, &builder.code_db).unwrap();
 
-            for modifier_fn in self.block_modifiers {
+            for modifier_fn in self.block_modifiers.iter() {
                 modifier_fn.as_ref()(&mut block);
             }
             block
@@ -226,7 +227,7 @@ impl<const NACC: usize, const NTX: usize> CircuitTestBuilder<NACC, NTX> {
         {
             let rows_needed = StateCircuit::<Fr>::min_num_rows_block(&block).1;
             let k = cmp::max(log2_ceil(rows_needed + NUM_BLINDING_ROWS), 18);
-            let state_circuit = StateCircuit::<Fr>::new(block.rws, params.max_rws);
+            let state_circuit = StateCircuit::<Fr>::new(block.clone().rws, params.max_rws);
             let instance = state_circuit.instance();
             let prover = MockProver::<Fr>::run(k, &state_circuit, instance).unwrap();
             // Skip verification of Start rows to accelerate testing
@@ -239,5 +240,8 @@ impl<const NACC: usize, const NTX: usize> CircuitTestBuilder<NACC, NTX> {
 
             self.state_checks.as_ref()(prover, &rows, &rows);
         }
+
+        self.block = Some(block.clone());
+        self
     }
 }

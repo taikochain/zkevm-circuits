@@ -2217,6 +2217,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "nonzero"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0d9b9acd66930a3f7754cac98e17dbb17eb8018ad2c0b2e9ccccfbf23330127e"
+dependencies = [
+ "num-traits",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.29",
+]
+
+[[package]]
 name = "num"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4277,6 +4289,9 @@ dependencies = [
  "libfuzzer-sys",
  "log",
  "mock",
+ "nonzero",
+ "num-bigint",
+ "num-traits",
  "rand",
  "rand_chacha",
  "secp256k1-sys 0.6.1",
