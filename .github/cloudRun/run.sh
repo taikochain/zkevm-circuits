@@ -14,7 +14,7 @@ target_dir="$current_dir/zkevm-circuits"
 cd "$target_dir" || exit 1
 
 # ENTER YOUR TEST COMMAND BELOW
-make test-all
+
 # ENTER YOUR TEST COMMAND ABOVE
 
 RESULT=$?

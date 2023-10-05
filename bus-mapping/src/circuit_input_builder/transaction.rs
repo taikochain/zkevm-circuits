@@ -1,5 +1,4 @@
 //! Transaction & TransactionContext utility module.
-
 use std::collections::BTreeMap;
 
 use eth_types::{evm_types::Memory, geth_types, GethExecTrace};
