@@ -64,7 +64,7 @@ impl<const NTX: usize> TransactionMember<NTX> {
             TransactionMember::GasPrice,
             TransactionMember::Gas,
             TransactionMember::Input,
-            TransactionMember::SigData,
+            // TransactionMember::SigData,
             TransactionMember::TransactionType,
             // TransactionMember::EnableSkippingInvalidTx,
             // TransactionMember::AccessList,
@@ -139,15 +139,16 @@ impl<const NTX: usize> TransactionMember<NTX> {
                 dbg!(mock_transaction.input(input));
             }
             TransactionMember::SigData => {
-                let v_bytes: [u8; 8] = random_input[0..8].try_into().unwrap();
-                let r_bytes: [u8; 32] = random_input[8..40].try_into().unwrap();
-                let s_bytes: [u8; 32] = random_input[40..72].try_into().unwrap();
-                let (v, r, s) = (
-                    u64::from_be_bytes(v_bytes),
-                    Word::from(r_bytes),
-                    Word::from(s_bytes),
-                );
-                dbg!(mock_transaction.sig_data((v, r, s)));
+                // let v_bytes: [u8; 8] = random_input[0..8].try_into().unwrap();
+                // let r_bytes: [u8; 32] = random_input[8..40].try_into().unwrap();
+                // let s_bytes: [u8; 32] = random_input[40..72].try_into().unwrap();
+                // let (v, r, s) = (
+                //     u64::from_be_bytes(v_bytes),
+                //     Word::from(r_bytes),
+                //     Word::from(s_bytes),
+                // );
+                // dbg!(mock_transaction.sig_data((v, r, s)));
+                unimplemented!();
             }
             TransactionMember::TransactionType => {
                 let transaction_type_bytes: [u8; 8] = random_input[..8].try_into().unwrap();
