@@ -83,11 +83,12 @@ impl RwMap {
                     // value == init_value
                     if let Some(init_value) = updates
                         .get(row)
-                        .map(|u| u.value_assignments(mock_rand).1)
-                        .unwrap_or_default();
-                    if value != init_value {
-                        errs.push((idx, err_msg_first, *row, *prev_row));
-                    }
+                        .map(|u| u.value_assignments(mock_rand).1) {
+                            if value != init_value {
+                                println!("{} updates {:?}", is_first, updates.get(row));
+                                errs.push((idx, err_msg_first, *row, *prev_row));
+                            }
+                        };
                 } else {
                     // value == prev_value
                     let prev_value = prev_row.value_assignment::<Fr>(mock_rand);

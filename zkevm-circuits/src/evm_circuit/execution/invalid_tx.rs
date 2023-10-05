@@ -211,7 +211,7 @@ impl<F: Field> ExecutionGadget<F> for InvalidTxGadget<F> {
 
         let begin_tx_rw_counter = if cb.is_taiko { 11.expr() } else { 10.expr() };
         let invalid_tx_rw_counter = 3.expr(); // Cecilia: ?
-        let end_block_rw_counter = if cb.is_taiko { 10.expr() } else { 2.expr() };
+        let end_block_rw_counter = 2.expr();
 
         [ExecutionState::BeginTx, ExecutionState::InvalidTx, ExecutionState::EndBlock].iter()
             .zip([begin_tx_rw_counter, invalid_tx_rw_counter, end_block_rw_counter].iter())
@@ -274,7 +274,8 @@ impl<F: Field> ExecutionGadget<F> for InvalidTxGadget<F> {
         self.bd_nonce.assign(region, offset, Value::known(bd_nonce))?;
         self.is_nonce_match.assign(region, offset, bd_nonce, tx.nonce.scalar())?;
         println!("bd_nonce: {:?}", bd_nonce);
-        
+        println!("tx.nonce: {:?}", tx.nonce);
+
         println!("bd_balance: {:?}", bd_balance);
         self.bd_balance.assign(region, offset, Some(bd_balance.to_le_bytes()))?;
 
@@ -437,15 +438,16 @@ mod test {
                     .gas_price(gwei(1))
                     .gas(tx_gas_limit)
                     .enable_invalid_tx(true); 
+                // The last Tx is valid
                 txs[2]
-                .to(to)
-                .from(from)
-                .nonce(1)
-                .gas_price(gwei(1))
-                .gas(Word::from(300000))
-                .enable_invalid_tx(true); 
-
-                },
+                    .to(to)
+                    .from(from)
+                    .nonce(1)
+                    .gas_price(gwei(1))
+                    .gas(Word::from(300000))
+                    .enable_invalid_tx(true);
+                
+            },
             |block, _| block,
         )
         .unwrap();
