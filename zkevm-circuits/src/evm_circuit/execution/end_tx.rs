@@ -204,7 +204,7 @@ impl<F: Field> ExecutionGadget<F> for EndTxGadget<F> {
         );
 
         let begin_tx_rw_counter = if cb.is_taiko { 11.expr() } else { 10.expr() };
-        let invalid_tx_rw_counter = 2.expr(); // Cecilia: ?
+        let invalid_tx_rw_counter = 4.expr();
         let end_block_rw_counter = if cb.is_taiko { 10.expr() } else { 9.expr() };
 
         [ExecutionState::BeginTx, ExecutionState::InvalidTx, ExecutionState::EndBlock].iter()

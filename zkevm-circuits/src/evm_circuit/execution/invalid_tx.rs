@@ -13,7 +13,7 @@ use crate::{
             Cell, math_gadget::{IsEqualGadget, LtGadget, LtWordGadget, MulWordByU64Gadget, AddWordsGadget}, StepRws, Word, RandomLinearCombination,
         },
         witness::{Block, Call, ExecStep, Transaction}, param::N_BYTES_GAS,
-    }, 
+    },
     table::{TxFieldTag, TxContextFieldTag, AccountFieldTag, BlockContextFieldTag, CallContextFieldTag}
 };
 use eth_types::{Field, evm_types::GasCost, ToScalar, Address, H160, ToLittleEndian};
@@ -42,7 +42,16 @@ pub(crate) struct TxCostGadget<F> {
 
 impl<F: Field> TxCostGadget<F> {
     fn configure(cb: &mut EVMConstraintBuilder<F>) -> Self {
+        // Use rw_counter of the step which triggers next call as its call_id.
+        let call_id: Cell<F> = cb.curr.state.rw_counter.clone();
+
         let id = cb.query_cell();
+        cb.call_context_lookup(
+            1.expr(),
+            Some(call_id.expr()),
+            CallContextFieldTag::TxId,
+            id.expr(),
+        ); // rwc_delta += 1
         let [nonce, caller, is_create, gas_limit, call_data_gas_cost, access_list_gas_cost] =
             [
                 TxContextFieldTag::Nonce,
@@ -55,12 +64,12 @@ impl<F: Field> TxCostGadget<F> {
             .map(|field_tag| cb.tx_context(id.expr(), field_tag, None));
 
         let [gas_price, value] = [
-                TxContextFieldTag::GasPrice, 
+                TxContextFieldTag::GasPrice,
                 TxContextFieldTag::Value
             ]
             .map(|field_tag| cb.tx_context_as_word(id.expr(), field_tag, None));
-       
-        let gas_mul_gas_price = 
+
+        let gas_mul_gas_price =
             MulWordByU64Gadget::construct(cb,  gas_price.clone(), gas_limit.expr());
         let cost_sum = cb.query_word_rlc();
         let gas_mul_gas_price_plus_value = AddWordsGadget::construct(
@@ -68,9 +77,9 @@ impl<F: Field> TxCostGadget<F> {
             [gas_mul_gas_price.product().clone(), value.clone()],
             cost_sum.clone(),
         );
-        Self { 
-            id, 
-            nonce, 
+        Self {
+            id,
+            nonce,
             caller,
             is_create,
             gas_limit,
@@ -132,10 +141,10 @@ impl<F: Field> TxCostGadget<F> {
         self.value.assign(region, offset, Some(value.to_le_bytes()))?;
 
         self.gas_mul_gas_price.assign(
-            region, 
-            offset, 
+            region,
+            offset,
             *gas_price
-            , *gas, 
+            , *gas,
             gas_price * gas
         )?;
         let sum = gas_price * gas + *value;
@@ -159,7 +168,7 @@ pub(crate) struct InvalidTxGadget<F> {
     is_nonce_match: IsEqualGadget<F>,
     bd_balance: Word<F>,
     insufficient_gas_limit: LtGadget<F, N_BYTES_GAS>,
-    insufficient_balance: LtWordGadget<F>, 
+    insufficient_balance: LtWordGadget<F>,
 }
 
 impl<F: Field> ExecutionGadget<F> for InvalidTxGadget<F> {
@@ -173,46 +182,45 @@ impl<F: Field> ExecutionGadget<F> for InvalidTxGadget<F> {
         let bd_nonce = cb.query_cell_phase2();
         cb.account_read(
             tx.caller.expr(),
-             AccountFieldTag::Nonce, 
+             AccountFieldTag::Nonce,
              bd_nonce.expr()
         );
         let is_nonce_match = IsEqualGadget::construct(
-            cb, 
+            cb,
             bd_nonce.expr(),
-            tx.nonce.expr(), 
+            tx.nonce.expr(),
         );
         // Read the current balance to compare with intrinsic gas
         let bd_balance = cb.query_word_rlc();
         cb.account_read(
-            tx.caller.expr(), 
-            AccountFieldTag::Balance, 
+            tx.caller.expr(),
+            AccountFieldTag::Balance,
             bd_balance.expr()
         );
 
         let insufficient_gas_limit = LtGadget::<F, N_BYTES_GAS>::construct(
             cb,
-            tx.gas_limit.expr(), 
+            tx.gas_limit.expr(),
             tx.intrinsic_gas()
         );
         let insufficient_balance = LtWordGadget::construct(
             cb,
-            &bd_balance, 
+            &bd_balance,
             &tx.total_cost()
         );
-        
+
         let invalid_tx = or::expr(
             [
-                not::expr(is_nonce_match.expr()), 
+                not::expr(is_nonce_match.expr()),
                 insufficient_gas_limit.expr(),
-                insufficient_balance.expr(), 
+                insufficient_balance.expr(),
             ]
         );
-        cb.require_zero("Tx is invalid", 1.expr() - invalid_tx.expr());
+        cb.require_equal("Tx is invalid", invalid_tx.expr(), 1.expr());
 
-        let begin_tx_rw_counter = if cb.is_taiko { 11.expr() } else { 10.expr() };
-        let invalid_tx_rw_counter = 3.expr(); // Cecilia: ?
-        let end_block_rw_counter = if cb.is_taiko { 10.expr() } else { 2.expr() };
-
+        let begin_tx_rw_counter = 4.expr();
+        let invalid_tx_rw_counter = 4.expr();
+        let end_block_rw_counter = 3.expr();
         [ExecutionState::BeginTx, ExecutionState::InvalidTx, ExecutionState::EndBlock].iter()
             .zip([begin_tx_rw_counter, invalid_tx_rw_counter, end_block_rw_counter].iter())
             .for_each(|(state, rw_counter)| {
@@ -222,7 +230,7 @@ impl<F: Field> ExecutionGadget<F> for InvalidTxGadget<F> {
                         if state == &ExecutionState::EndBlock {
                             println!("transtion ExecutionState::EndBlock");
                             cb.require_step_state_transition(StepStateTransition {
-                                rw_counter:  Delta(rw_counter.clone()),
+                                rw_counter: Delta(rw_counter.clone()),
                                 call_id: Same,
                                 ..StepStateTransition::any()
                             });
@@ -242,13 +250,13 @@ impl<F: Field> ExecutionGadget<F> for InvalidTxGadget<F> {
                 );
             });
 
-        
-        Self { 
+
+        Self {
             tx,
-            bd_nonce, 
-            is_nonce_match, 
-            bd_balance, 
-            insufficient_balance, 
+            bd_nonce,
+            is_nonce_match,
+            bd_balance,
+            insufficient_balance,
             insufficient_gas_limit,
         }
     }
@@ -264,6 +272,8 @@ impl<F: Field> ExecutionGadget<F> for InvalidTxGadget<F> {
     ) -> Result<(), Error> {
         println!("-->InvalidTx rwc {:?}", step.rwc.0);
         let mut rws = StepRws::new(block, step);
+        rws.offset_add(1);
+
         let bd_nonce = rws.next().account_value_pair().0
             .to_scalar()
             .expect("unexpected U256 -> Scalar conversion failure");
@@ -274,27 +284,27 @@ impl<F: Field> ExecutionGadget<F> for InvalidTxGadget<F> {
         self.bd_nonce.assign(region, offset, Value::known(bd_nonce))?;
         self.is_nonce_match.assign(region, offset, bd_nonce, tx.nonce.scalar())?;
         println!("bd_nonce: {:?}", bd_nonce);
-        
+
         println!("bd_balance: {:?}", bd_balance);
         self.bd_balance.assign(region, offset, Some(bd_balance.to_le_bytes()))?;
 
         let is_create = tx.is_create as u64;
-        let intrinsic_gas = 
-            is_create * GasCost::CREATION_TX.as_u64() + (1 - is_create) * GasCost::TX.as_u64() 
-            + tx.call_data_gas_cost 
+        let intrinsic_gas =
+            is_create * GasCost::CREATION_TX.as_u64() + (1 - is_create) * GasCost::TX.as_u64()
+            + tx.call_data_gas_cost
             + tx.access_list_gas_cost;
         println!("intrinsic_gas_cost: {:?}", intrinsic_gas);
-            
+
         self.insufficient_gas_limit.assign(
-            region, 
-            offset, 
-            tx.gas.scalar(), 
+            region,
+            offset,
+            tx.gas.scalar(),
             intrinsic_gas.scalar()
         )?;
         self.insufficient_balance.assign(
-            region, 
-            offset, 
-            bd_balance, 
+            region,
+            offset,
+            bd_balance,
             tx.gas_price * tx.gas + tx.value
         )?;
         println!("tx.id: {:?}", tx.id);
@@ -318,7 +328,7 @@ mod test {
     };
 
     #[test]
-    fn begin_tx_invalid_nonce() {
+    fn invalid_tx_invalid_nonce() {
         // The nonce of the account doing the transaction is not correct
         // Use the same nonce value for two transactions.
 
@@ -360,21 +370,21 @@ mod test {
     }
 
     #[test]
-    fn tx_not_enough_balance() {
+    fn invalid_tx_not_enough_balance() {
         let to = MOCK_ACCOUNTS[0];
         let from = MOCK_ACCOUNTS[1];
 
         // Invalid if gas_limit < intrinsic gas
         // intrinsic gas = GasCost::TX = 21000
         // gas limit = 30000
-        // total cost = 30000 * 2 gwei = 6 * 10^13 
+        // total cost = 30000 * 2 gwei = 6 * 10^13
 
         // Enough balance but not enough gas limit
-        let balance =  gwei(1) /100000; // < total cost
+        /*let balance =  gwei(1) /100000; // < total cost
         let tx_gas_limit = Word::from(30000); // > intrinsic gas
         let gas_price = gwei(2);
 
-        let ctx = TestContext::<2, 1>::new(
+        let ctx = TestContext::<2, 3>::new(
             None,
             |accs| {
                 accs[0].address(to).balance(balance);
@@ -388,6 +398,20 @@ mod test {
                     .gas_price(gas_price)
                     .gas(tx_gas_limit)
                     .enable_invalid_tx(true);
+                txs[1]
+                    .to(to)
+                    .from(from)
+                    .nonce(1)
+                    .gas_price(gas_price)
+                    .gas(tx_gas_limit)
+                    .enable_invalid_tx(true);
+                txs[2]
+                    .to(to)
+                    .from(from)
+                    .nonce(1)
+                    .gas_price(gas_price)
+                    .gas(tx_gas_limit)
+                    .enable_invalid_tx(true);
             },
             |block, _| block,
         )
@@ -395,21 +419,60 @@ mod test {
 
         CircuitTestBuilder::new_from_test_ctx(ctx)
             .params(CircuitsParams {
-                max_txs: 1,
+                max_txs: 3,
                 ..Default::default()
             })
-            .run();
+            .run();*/
+
+            let to = MOCK_ACCOUNTS[0];
+            let from = MOCK_ACCOUNTS[1];
+
+            // Invalid if gas_limit < intrinsic gas
+            // intrinsic gas = GasCost::TX = 21000
+            // gas limit = 30000
+            // total cost = 30000 * 2 gwei = 6 * 10^13
+
+            // Enough balance but not enough gas limit
+            let balance =  gwei(1) /100000; // < total cost
+            let tx_gas_limit = Word::from(30000); // > intrinsic gas
+            let gas_price = gwei(2);
+
+            let ctx = TestContext::<2, 1>::new(
+                None,
+                |accs| {
+                    accs[0].address(to).balance(balance);
+                    accs[1].address(from).balance(balance).nonce(1);
+                },
+                |mut txs, _| {
+                    txs[0]
+                        .to(to)
+                        .from(from)
+                        .nonce(1)
+                        .gas_price(gas_price)
+                        .gas(tx_gas_limit)
+                        .enable_invalid_tx(true);
+                },
+                |block, _| block,
+            )
+            .unwrap();
+
+            CircuitTestBuilder::new_from_test_ctx(ctx)
+                .params(CircuitsParams {
+                    max_txs: 1,
+                    ..Default::default()
+                })
+                .run();
     }
 
     #[test]
-    fn tx_insufficient_gas() {
+    fn invalid_tx_insufficient_gas() {
         let to = MOCK_ACCOUNTS[0];
         let from = MOCK_ACCOUNTS[1];
 
         // Invalid if gas_limit < intrinsic gas
         // intrinsic gas = GasCost::TX = 21000
         // gas limit = 100
-        // total cost = 100 * 1 gwei = 10^11 
+        // total cost = 100 * 1 gwei = 10^11
 
         // Enough balance but not enough gas limit
         let balance =  eth(1); // > total cost
@@ -436,14 +499,14 @@ mod test {
                     .nonce(1)
                     .gas_price(gwei(1))
                     .gas(tx_gas_limit)
-                    .enable_invalid_tx(true); 
+                    .enable_invalid_tx(true);
                 txs[2]
                 .to(to)
                 .from(from)
                 .nonce(1)
                 .gas_price(gwei(1))
                 .gas(Word::from(300000))
-                .enable_invalid_tx(true); 
+                .enable_invalid_tx(true);
 
                 },
             |block, _| block,
@@ -457,4 +520,4 @@ mod test {
             })
             .run();
     }
-}            
+}
