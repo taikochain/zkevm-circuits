@@ -287,7 +287,7 @@ mod test {
                     .to(accs[0].address)
                     .input(call_data.into());
             },
-            |block, _tx| block.number(0xcafeu64),
+            |block, _tx| block.number(0xcafeu64), falses
         )
         .unwrap();
 
@@ -334,7 +334,7 @@ mod test {
             |mut txs, accs| {
                 txs[0].to(accs[1].address).from(accs[2].address);
             },
-            |block, _tx| block,
+            |block, _tx| block,false
         )
         .unwrap();
 

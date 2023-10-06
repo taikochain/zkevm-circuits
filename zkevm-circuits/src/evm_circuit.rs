@@ -525,7 +525,7 @@ mod evm_circuit_stats {
     #[test]
     pub fn empty_evm_circuit_no_padding() {
         CircuitTestBuilder::new_from_test_ctx(
-            TestContext::<0, 0>::new(None, |_| {}, |_, _| {}, |b, _| b).unwrap(),
+            TestContext::<0, 0>::new(None, |_| {}, |_, _| {}, |b, _| b, false).unwrap(),
         )
         .run();
     }
@@ -533,7 +533,7 @@ mod evm_circuit_stats {
     #[test]
     pub fn empty_evm_circuit_with_padding() {
         CircuitTestBuilder::new_from_test_ctx(
-            TestContext::<0, 0>::new(None, |_| {}, |_, _| {}, |b, _| b).unwrap(),
+            TestContext::<0, 0>::new(None, |_| {}, |_, _| {}, |b, _| b, false).unwrap(),
         )
         .block_modifier(Box::new(|block| {
             block.circuits_params.max_evm_rows = (1 << 18) - 100
@@ -548,7 +548,7 @@ mod evm_circuit_stats {
             ..Default::default()
         };
         // Empty
-        let block: GethData = TestContext::<0, 0>::new(None, |_| {}, |_, _| {}, |b, _| b)
+        let block: GethData = TestContext::<0, 0>::new(None, |_| {}, |_, _| {}, |b, _| b, false)
             .unwrap()
             .into();
         let mut builder = BlockData::new_from_geth_data_with_params(block.clone(), params)
@@ -570,6 +570,7 @@ mod evm_circuit_stats {
             account_0_code_account_1_no_code(code),
             tx_from_1_to_0,
             |b, _| b,
+            false
         )
         .unwrap()
         .into();

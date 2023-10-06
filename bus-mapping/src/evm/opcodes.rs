@@ -63,7 +63,7 @@ mod precompiles;
 #[cfg(test)]
 mod memory_expansion_test;
 
-use self::{sha3::Sha3, invalid_tx::InvalidTx};
+use self::{invalid_tx::InvalidTx, sha3::Sha3};
 use address::Address;
 use balance::Balance;
 use begin_end_tx::BeginEndTx;

@@ -175,7 +175,7 @@ mod test {
             |mut txs, accs| {
                 txs[0].to(accs[0].address).from(accs[2].address);
             },
-            |block, _tx| block.number(0xcafeu64),
+            |block, _tx| block.number(0xcafeu64), false
         )
         .unwrap();
 

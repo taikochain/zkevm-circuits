@@ -184,7 +184,7 @@ mod test {
                     .input(tx.input)
                     .value(tx.value);
             },
-            |block, _tx| block.number(0xcafeu64),
+            |block, _tx| block.number(0xcafeu64), false
         )
         .unwrap();
 
@@ -276,7 +276,7 @@ mod test {
                     .to(accs[1].address)
                     .gas(24000.into());
             },
-            |block, _tx| block.number(0xcafeu64),
+            |block, _tx| block.number(0xcafeu64), false
         )
         .unwrap();
 

@@ -1089,7 +1089,7 @@ mod test {
                     // Set a non-zero value could test if DELEGATECALL use value of current call.
                     .value(1000.into());
             },
-            |block, _tx| block.number(0xcafeu64),
+            |block, _tx| block.number(0xcafeu64), false
         )
         .unwrap();
 
@@ -1197,7 +1197,7 @@ mod test {
                     .from(accs[1].address)
                     .gas(word!("0x2386F26FC10000"));
             },
-            |block, _tx| block.number(0xcafeu64),
+            |block, _tx| block.number(0xcafeu64), falses
         )
         .unwrap();
 

@@ -112,7 +112,7 @@ mod test {
                     .to(accs[0].address)
                     .gas_price(two_gwei);
             },
-            |block, _tx| block.number(0xcafeu64),
+            |block, _tx| block.number(0xcafeu64), false
         )
         .unwrap();
 

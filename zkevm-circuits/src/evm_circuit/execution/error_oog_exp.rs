@@ -226,6 +226,7 @@ mod tests {
                 txs[0].from(accs[2].address).to(accs[1].address);
             },
             |block, _tx| block,
+            false,
         )
         .unwrap();
 

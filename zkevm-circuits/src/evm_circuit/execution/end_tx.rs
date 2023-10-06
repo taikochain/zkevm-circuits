@@ -207,34 +207,43 @@ impl<F: Field> ExecutionGadget<F> for EndTxGadget<F> {
         let invalid_tx_rw_counter = 4.expr();
         let end_block_rw_counter = if cb.is_taiko { 10.expr() } else { 9.expr() };
 
-        [ExecutionState::BeginTx, ExecutionState::InvalidTx, ExecutionState::EndBlock].iter()
-            .zip([begin_tx_rw_counter, invalid_tx_rw_counter, end_block_rw_counter].iter())
-            .for_each(|(state, rw_counter)| {
-                cb.condition(
-                    cb.next.execution_state_selector([*state]),
-                    |cb| {
-                        if state == &ExecutionState::EndBlock {
-                            cb.require_step_state_transition(StepStateTransition {
-                                rw_counter:  Delta(rw_counter.clone() - is_first_tx.expr()),
-                                call_id: Same,
-                                ..StepStateTransition::any()
-                            });
-                        } else {
-                            cb.call_context_lookup(
-                                true.expr(),
-                                Some(cb.next.state.rw_counter.expr()),
-                                CallContextFieldTag::TxId,
-                                tx_id.expr() + 1.expr(),
-                            );
-                            cb.require_step_state_transition(StepStateTransition {
-                                // Cecilia: is_first_tx?
-                                rw_counter:  Delta(rw_counter.clone() - is_first_tx.expr()),
-                                ..StepStateTransition::any()
-                            });
-                        }
-                    },
-                );
+        [
+            ExecutionState::BeginTx,
+            ExecutionState::InvalidTx,
+            ExecutionState::EndBlock,
+        ]
+        .iter()
+        .zip(
+            [
+                begin_tx_rw_counter,
+                invalid_tx_rw_counter,
+                end_block_rw_counter,
+            ]
+            .iter(),
+        )
+        .for_each(|(state, rw_counter)| {
+            cb.condition(cb.next.execution_state_selector([*state]), |cb| {
+                if state == &ExecutionState::EndBlock {
+                    cb.require_step_state_transition(StepStateTransition {
+                        rw_counter: Delta(rw_counter.clone() - is_first_tx.expr()),
+                        call_id: Same,
+                        ..StepStateTransition::any()
+                    });
+                } else {
+                    cb.call_context_lookup(
+                        true.expr(),
+                        Some(cb.next.state.rw_counter.expr()),
+                        CallContextFieldTag::TxId,
+                        tx_id.expr() + 1.expr(),
+                    );
+                    cb.require_step_state_transition(StepStateTransition {
+                        // Cecilia: is_first_tx?
+                        rw_counter: Delta(rw_counter.clone() - is_first_tx.expr()),
+                        ..StepStateTransition::any()
+                    });
+                }
             });
+        });
 
         Self {
             tx_id,
@@ -480,7 +489,7 @@ mod test {
                         .from(accs[1].address)
                         .value(eth(1));
                 },
-                |block, _tx| block.number(0xcafeu64),
+                |block, _tx| block.number(0xcafeu64), false
             )
             .unwrap(),
         );

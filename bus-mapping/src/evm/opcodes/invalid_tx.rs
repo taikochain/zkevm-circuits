@@ -1,9 +1,10 @@
 use super::TxExecSteps;
 use crate::{
     circuit_input_builder::{CircuitInputStateRef, ExecState, ExecStep},
+    exec_trace,
     operation::{AccountField, AccountOp, CallContextField, TxReceiptField, TxRefundOp, RW},
     state_db::CodeDB,
-    Error, exec_trace,
+    Error,
 };
 use eth_types::{
     evm_types::{GasCost, MAX_REFUND_QUOTIENT_OF_GAS_USED},
@@ -39,7 +40,7 @@ impl TxExecSteps for InvalidTx {
             &mut exec_step,
             caller,
             AccountField::Nonce,
-            state.sdb.get_account(&caller).1.nonce.into()
+            state.sdb.get_account(&caller).1.nonce.into(),
         );
 
         // Read the balance in db to compare with intrinsic gas
@@ -47,7 +48,7 @@ impl TxExecSteps for InvalidTx {
             &mut exec_step,
             caller,
             AccountField::Balance,
-            state.sdb.get_account(&caller).1.balance.into()
+            state.sdb.get_account(&caller).1.balance.into(),
         );
 
         if !state.tx_ctx.is_last_tx() {

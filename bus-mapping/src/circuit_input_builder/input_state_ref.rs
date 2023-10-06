@@ -109,7 +109,6 @@ impl<'a> CircuitInputStateRef<'a> {
         }
     }
 
-
     /// Push an [`Operation`](crate::operation::Operation) into the
     /// [`OperationContainer`](crate::operation::OperationContainer) with the
     /// next [`RWCounter`](crate::operation::RWCounter) and then adds a

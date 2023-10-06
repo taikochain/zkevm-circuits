@@ -10,7 +10,7 @@ mod random_linear_combination;
 mod dev;
 #[cfg(any(feature = "test", test))]
 mod test;
-use bus_mapping::operation::{Target, CallContextField};
+use bus_mapping::operation::{CallContextField, Target};
 #[cfg(any(feature = "test", test, feature = "test-circuits"))]
 pub use dev::StateCircuit as TestStateCircuit;
 
@@ -20,7 +20,7 @@ use self::{
 };
 use crate::{
     evm_circuit::{param::N_BYTES_WORD, util::rlc},
-    table::{AccountFieldTag, LookupTable, MPTProofType, MptTable, RwTable, CallContextFieldTag},
+    table::{AccountFieldTag, CallContextFieldTag, LookupTable, MPTProofType, MptTable, RwTable},
     util::{Challenges, Expr, SubCircuit, SubCircuitConfig},
     witness::{self, MptUpdates, Rw, RwMap},
 };

@@ -62,7 +62,6 @@ mod dummy;
 mod dup;
 mod end_block;
 mod end_tx;
-mod invalid_tx;
 mod error_invalid_jump;
 mod error_invalid_opcode;
 mod error_oog_call;
@@ -81,6 +80,7 @@ mod extcodehash;
 mod extcodesize;
 mod gas;
 mod gasprice;
+mod invalid_tx;
 mod is_zero;
 mod jump;
 mod jumpdest;
@@ -138,9 +138,9 @@ use dup::DupGadget;
 use end_block::EndBlockGadget;
 use end_tx::EndTxGadget;
 
-use invalid_tx::InvalidTxGadget;
 use error_invalid_jump::ErrorInvalidJumpGadget;
 use error_invalid_opcode::ErrorInvalidOpcodeGadget;
+use invalid_tx::InvalidTxGadget;
 
 use error_oog_call::ErrorOOGCallGadget;
 use error_oog_constant::ErrorOOGConstantGadget;
@@ -297,7 +297,7 @@ pub struct ExecutionConfig<F> {
     error_oog_memory_copy: Box<ErrorOOGMemoryCopyGadget<F>>,
     error_oog_sload_sstore: Box<ErrorOOGSloadSstoreGadget<F>>,
     error_oog_static_memory_gadget:
-        Box<DummyGadget<F, 0, 0, { ExecutionState::ErrorOutOfGasStaticMemoryExpansion }>>,    
+        Box<DummyGadget<F, 0, 0, { ExecutionState::ErrorOutOfGasStaticMemoryExpansion }>>,
     error_stack: Box<ErrorStackGadget<F>>,
     error_write_protection: Box<ErrorWriteProtectionGadget<F>>,
     error_oog_dynamic_memory_gadget:
@@ -312,7 +312,7 @@ pub struct ExecutionConfig<F> {
         Box<DummyGadget<F, 0, 0, { ExecutionState::ErrorOutOfGasSELFDESTRUCT }>>,
     error_oog_code_store: Box<DummyGadget<F, 0, 0, { ExecutionState::ErrorOutOfGasCodeStore }>>,
     error_invalid_jump: Box<ErrorInvalidJumpGadget<F>>,
-    
+
     invalid_tx: Box<InvalidTxGadget<F>>,
     error_invalid_opcode: Box<ErrorInvalidOpcodeGadget<F>>,
     error_depth: Box<DummyGadget<F, 0, 0, { ExecutionState::ErrorDepth }>>,
@@ -379,9 +379,11 @@ impl<F: Field> ExecutionConfig<F> {
 
             // NEW: Enabled, this will break hand crafted tests, maybe we can remove them?
             let first_step_check = {
-                let begin_tx_end_block_selector = step_curr
-                    .execution_state_selector(
-                        [ExecutionState::InvalidTx, ExecutionState::BeginTx, ExecutionState::EndBlock]);
+                let begin_tx_end_block_selector = step_curr.execution_state_selector([
+                    ExecutionState::InvalidTx,
+                    ExecutionState::BeginTx,
+                    ExecutionState::EndBlock,
+                ]);
                 iter::once((
                     "First step should be BeginTx or EndBlock",
                     q_step_first * (1.expr() - begin_tx_end_block_selector),
@@ -764,7 +766,11 @@ impl<F: Field> ExecutionConfig<F> {
                         (
                             "EndTx can only transit to InvalidTx, BeginTx or EndBlock",
                             ExecutionState::EndTx,
-                            vec![ExecutionState::InvalidTx, ExecutionState::BeginTx, ExecutionState::EndBlock],
+                            vec![
+                                ExecutionState::InvalidTx,
+                                ExecutionState::BeginTx,
+                                ExecutionState::EndBlock,
+                            ],
                         ),
                         (
                             "EndBlock can only transit to EndBlock",
@@ -798,7 +804,11 @@ impl<F: Field> ExecutionConfig<F> {
                         (
                             "Only InvalidTx, EndTx or EndBlock can transit to EndBlock",
                             ExecutionState::EndBlock,
-                            vec![ExecutionState::EndTx, ExecutionState::InvalidTx, ExecutionState::EndBlock],
+                            vec![
+                                ExecutionState::EndTx,
+                                ExecutionState::InvalidTx,
+                                ExecutionState::EndBlock,
+                            ],
                         ),
                     ])
                     .filter(move |(_, _, from)| !from.contains(&execution_state))
@@ -944,8 +954,9 @@ impl<F: Field> ExecutionConfig<F> {
                 let evm_rows = block.circuits_params.max_evm_rows;
                 let no_padding = evm_rows == 0;
                 // part1: assign real steps
-                steps.clone().for_each(|(tx, c, s)| 
-                    println!("Step tx_id {:?}, s {:?}", tx.id, s.exec_state));
+                steps.clone().for_each(|(tx, c, s)| {
+                    println!("Step tx_id {:?}, s {:?}", tx.id, s.exec_state)
+                });
                 loop {
                     let (transaction, call, step) = steps.next().expect("should not be empty");
                     println!("Step {:?}", step.exec_state);
@@ -1193,7 +1204,7 @@ impl<F: Field> ExecutionConfig<F> {
 
         match step.execution_state() {
             // internal states
-            ExecutionState::InvalidTx =>  assign_exec_step!(self.invalid_tx),
+            ExecutionState::InvalidTx => assign_exec_step!(self.invalid_tx),
             ExecutionState::BeginTx => assign_exec_step!(self.begin_tx_gadget),
             ExecutionState::EndTx => assign_exec_step!(self.end_tx_gadget),
             ExecutionState::EndBlock => assign_exec_step!(self.end_block_gadget),

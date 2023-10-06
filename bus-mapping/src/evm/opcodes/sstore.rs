@@ -165,7 +165,7 @@ mod sstore_tests {
                     .balance(Word::from(10u64.pow(19)));
             },
             tx_from_1_to_0,
-            |block, _tx| block.number(0xcafeu64),
+            |block, _tx| block.number(0xcafeu64), false
         )
         .unwrap()
         .into();

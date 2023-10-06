@@ -120,7 +120,7 @@ mod test {
                         .input(rand_bytes(call_data_size).into())
                         .gas(Word::from(40000));
                 },
-                |block, _tx| block.number(0xcafeu64),
+                |block, _tx| block.number(0xcafeu64), false
             )
             .unwrap();
 
@@ -162,7 +162,7 @@ mod test {
                         .to(accs[1].address)
                         .gas(Word::from(30000));
                 },
-                |block, _tx| block.number(0xcafeu64),
+                |block, _tx| block.number(0xcafeu64), false
             )
             .unwrap();
 

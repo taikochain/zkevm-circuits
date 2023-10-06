@@ -121,7 +121,7 @@ pub enum ExecutionState {
     ErrorMaxCodeSizeExceeded,
     ErrorInvalidJump,
     ErrorReturnDataOutOfBound,
-    
+
     ErrorOutOfGasConstant,
     ErrorOutOfGasStaticMemoryExpansion,
     ErrorOutOfGasDynamicMemoryExpansion,
@@ -707,7 +707,7 @@ impl<F: Field> Step<F> {
     ) -> Self {
         let height = if is_next {
             STEP_STATE_HEIGHT // Query only the state of the next step.
-        } else { 
+        } else {
             MAX_STEP_HEIGHT // Query the entire current step.
         };
         let mut cell_manager = CellManager::new(meta, height, &advices, offset);
@@ -759,7 +759,11 @@ impl<F: Field> Step<F> {
         self.state
             .rw_counter
             .assign(region, offset, Value::known(F::from(step.rwc.into())))?;
-        println!("assign_exec_step {:?}: rw_counter: {}", step.execution_state(), step.rwc.0);
+        println!(
+            "assign_exec_step {:?}: rw_counter: {}",
+            step.execution_state(),
+            step.rwc.0
+        );
         self.state
             .call_id
             .assign(region, offset, Value::known(F::from(call.call_id as u64)))?;

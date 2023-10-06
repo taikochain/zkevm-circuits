@@ -112,7 +112,7 @@ mod test {
                 .unwrap();
             for trace in trace.iter() {
                 assert!(!trace.invalid);
-            }        
+            }
         }
     }
 

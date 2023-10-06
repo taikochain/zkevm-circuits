@@ -527,6 +527,7 @@ mod test {
                 },
                 tx_from_1_to_0,
                 |block, _txs| block,
+                false
             )
             .unwrap();
 

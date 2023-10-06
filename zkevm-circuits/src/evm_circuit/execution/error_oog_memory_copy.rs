@@ -354,7 +354,7 @@ mod tests {
                     .to(accs[0].address)
                     .gas((GasCost::TX.0 + testing_data.gas_cost - 1).into());
             },
-            |block, _tx| block.number(0xcafe_u64),
+            |block, _tx| block.number(0xcafe_u64),false
         )
         .unwrap();
 
@@ -397,7 +397,7 @@ mod tests {
             |mut txs, accs| {
                 txs[0].from(accs[2].address).to(accs[1].address);
             },
-            |block, _tx| block,
+            |block, _tx| block,false
         )
         .unwrap();
 

@@ -630,10 +630,7 @@ mod test {
     use bus_mapping::evm::OpcodeId;
     use eth_types::{self, bytecode, evm_types::GasCost, word, Bytecode, Word};
 
-    use mock::{
-        eth, gwei, MockTransaction, TestContext, MOCK_ACCOUNTS,
-        test_ctx::helpers::*,
-    };
+    use mock::{eth, gwei, test_ctx::helpers::*, MockTransaction, TestContext, MOCK_ACCOUNTS};
 
     fn code_with_return() -> Bytecode {
         bytecode! {
@@ -673,7 +670,7 @@ mod test {
                     .input(tx.input)
                     .value(tx.value);
             },
-            |block, _tx| block.number(0xcafeu64),
+            |block, _tx| block.number(0xcafeu64), false
         )
         .unwrap();
 
@@ -721,7 +718,7 @@ mod test {
             |mut txs, _| {
                 txs[0].to(to).from(from).nonce(multibyte_nonce);
             },
-            |block, _| block,
+            |block, _| block,false
         )
         .unwrap();
 
@@ -769,7 +766,7 @@ mod test {
                     .gas(Word::from(0x10000))
                     .value(eth(2));
             },
-            |block, _tx| block.number(0xcafeu64),
+            |block, _tx| block.number(0xcafeu64), false
         )
         .unwrap();
 
@@ -791,7 +788,7 @@ mod test {
                     .gas(Word::from(0x10000))
                     .value(eth(2));
             },
-            |block, _tx| block.number(0xcafeu64),
+            |block, _tx| block.number(0xcafeu64), false
         )
         .unwrap();
 
@@ -826,7 +823,7 @@ mod test {
                     .value(eth(2))
                     .input(code.into());
             },
-            |block, _tx| block.number(0xcafeu64),
+            |block, _tx| block.number(0xcafeu64), false
         )
         .unwrap();
 

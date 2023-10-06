@@ -25,6 +25,8 @@ pub struct TraceConfig {
     pub logger_config: LoggerConfig,
     /// taiko
     pub taiko: bool,
+    /// enable invalid tx
+    pub enbalbe_invalid_tx: bool,
 }
 
 /// Configuration structure for `logger.Config`
@@ -73,16 +75,25 @@ pub fn trace(config: &TraceConfig) -> Result<Vec<GethExecTrace>, Error> {
     let trace: Vec<GethExecTrace> =
         serde_json::from_str(&trace_string).map_err(Error::SerdeError)?;
     // Don't throw only for specific invalid transactions we support.
-    for trace in trace.iter() {
-        if trace.invalid
-            && !(trace.return_value.starts_with("nonce too low")
+
+    if config.enbalbe_invalid_tx {
+        for trace in trace.iter() {
+            let allowed_cases = trace.return_value.starts_with("nonce too low")
                 || trace.return_value.starts_with("nonce too high")
                 || trace.return_value.starts_with("intrinsic gas too low")
                 || trace
                     .return_value
-                    .starts_with("insufficient funds for gas * price + value"))
-        {
-            return Err(Error::TracingError(trace.return_value.clone()));
+                    .starts_with("insufficient funds for gas * price + value");
+            if trace.invalid && !allowed_cases {
+                return Err(Error::TracingError(trace.return_value.clone()));
+            }
         }
-    }    Ok(trace)
+    } else {
+        for trace in trace.iter() {
+            if trace.invalid {
+                return Err(Error::TracingError(trace.return_value.clone()));
+            }
+        }
+    }
+    Ok(trace)
 }

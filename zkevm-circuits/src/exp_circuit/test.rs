@@ -113,7 +113,7 @@ fn exp_circuit_multiple() {
 fn variadic_size_check() {
     let k = 20;
     // Empty
-    let block: GethData = TestContext::<0, 0>::new(None, |_| {}, |_, _| {}, |b, _| b)
+    let block: GethData = TestContext::<0, 0>::new(None, |_| {}, |_, _| {}, |b, _| b,false)
         .unwrap()
         .into();
     let mut builder =

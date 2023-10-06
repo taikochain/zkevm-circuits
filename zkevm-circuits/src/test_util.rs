@@ -68,7 +68,7 @@ const NUM_BLINDING_ROWS: usize = 64;
 ///             .value(eth(2))
 ///             .input(code.into());
 ///     },
-///     |block, _tx| block.number(0xcafeu64),
+///     |block, _tx| block.number(0xcafeu64), false
 /// )
 /// .unwrap();
 ///

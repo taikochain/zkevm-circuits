@@ -300,7 +300,7 @@ impl<'a> CircuitInputBuilder {
                 ExecState::InvalidTx,
             )?;
             tx.steps_mut().push(invalid_tx_step);
-        } else {            
+        } else {
             // Generate BeginTx step
             let begin_tx_step = gen_associated_steps(
                 &mut self.state_ref(&mut tx, &mut tx_ctx),
@@ -319,13 +319,11 @@ impl<'a> CircuitInputBuilder {
                 tx.steps_mut().extend(exec_steps);
             }
             // Generate EndTx step
-            let end_tx_step = gen_associated_steps(
-                &mut self.state_ref(&mut tx, &mut tx_ctx), 
-                ExecState::EndTx
-            )?;
+            let end_tx_step =
+                gen_associated_steps(&mut self.state_ref(&mut tx, &mut tx_ctx), ExecState::EndTx)?;
             tx.steps_mut().push(end_tx_step);
         }
-     
+
         self.sdb.commit_tx();
         self.block.txs.push(tx);
 

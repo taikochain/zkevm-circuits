@@ -234,7 +234,7 @@ mod test {
             |mut txs, accs| {
                 txs[0].to(accs[0].address).from(accs[2].address);
             },
-            |block, _tx| block,
+            |block, _tx| block,false
         )
         .unwrap();
 
@@ -293,7 +293,7 @@ mod test {
             |mut txs, accs| {
                 txs[0].to(accs[1].address).from(accs[3].address);
             },
-            |block, _tx| block,
+            |block, _tx| block,false
         )
         .unwrap();
 
