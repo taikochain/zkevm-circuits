@@ -1,16 +1,11 @@
 use super::TxExecSteps;
 use crate::{
     circuit_input_builder::{CircuitInputStateRef, ExecState, ExecStep},
-    exec_trace,
-    operation::{AccountField, AccountOp, CallContextField, TxReceiptField, TxRefundOp, RW},
-    state_db::CodeDB,
+    operation::{AccountField, CallContextField},
     Error,
 };
-use eth_types::{
-    evm_types::{GasCost, MAX_REFUND_QUOTIENT_OF_GAS_USED},
-    evm_unimplemented, ToWord, Word,
-};
-use ethers_core::utils::get_contract_address;
+
+
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct InvalidTx;
@@ -48,7 +43,7 @@ impl TxExecSteps for InvalidTx {
             &mut exec_step,
             caller,
             AccountField::Balance,
-            state.sdb.get_account(&caller).1.balance.into(),
+            state.sdb.get_account(&caller).1.balance,
         );
 
         if !state.tx_ctx.is_last_tx() {

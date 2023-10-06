@@ -1197,7 +1197,7 @@ mod test {
                     .from(accs[1].address)
                     .gas(word!("0x2386F26FC10000"));
             },
-            |block, _tx| block.number(0xcafeu64), falses
+            |block, _tx| block.number(0xcafeu64), false
         )
         .unwrap();
 

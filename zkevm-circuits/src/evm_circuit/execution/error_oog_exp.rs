@@ -191,7 +191,7 @@ mod tests {
                     .to(accs[0].address)
                     .gas((GasCost::TX.0 + testing_data.gas_cost - 1).into());
             },
-            |block, _tx| block.number(0xcafe_u64),
+            |block, _tx| block.number(0xcafe_u64), false
         )
         .unwrap();
 

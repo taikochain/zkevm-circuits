@@ -30,7 +30,7 @@ mod chainid_tests {
             None,
             account_0_code_account_1_no_code(code),
             tx_from_1_to_0,
-            |block, _tx| block,
+            |block, _tx| block, false
         )
         .unwrap()
         .into();

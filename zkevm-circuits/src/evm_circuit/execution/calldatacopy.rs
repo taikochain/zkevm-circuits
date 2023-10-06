@@ -287,7 +287,7 @@ mod test {
                     .to(accs[0].address)
                     .input(call_data.into());
             },
-            |block, _tx| block.number(0xcafeu64), falses
+            |block, _tx| block.number(0xcafeu64), false
         )
         .unwrap();
 
