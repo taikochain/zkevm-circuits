@@ -26,19 +26,27 @@ impl TxExecSteps for InvalidTx {
         let call = state.call()?.clone();
         let caller = call.caller_address;
 
+        // Write the transaction id
+        state.call_context_write(
+            &mut exec_step,
+            call.call_id,
+            CallContextField::TxId,
+            state.tx_ctx.id().into(),
+        );
+
         // Read the nounce in db to prove mismatch
         state.account_read(
-            &mut exec_step, 
-            caller, 
-            AccountField::Nonce, 
+            &mut exec_step,
+            caller,
+            AccountField::Nonce,
             state.sdb.get_account(&caller).1.nonce.into()
         );
 
         // Read the balance in db to compare with intrinsic gas
         state.account_read(
-            &mut exec_step, 
-            caller, 
-            AccountField::Balance, 
+            &mut exec_step,
+            caller,
+            AccountField::Balance,
             state.sdb.get_account(&caller).1.balance.into()
         );
 
