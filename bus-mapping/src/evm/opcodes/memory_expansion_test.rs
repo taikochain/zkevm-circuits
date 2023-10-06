@@ -27,6 +27,7 @@ where
         tx_from_1_to_0,
         |block, _tx| block.number(0xcafeu64), false,
         LoggerConfig::enable_memory(),
+        false,
     )
     .unwrap()
     .into();

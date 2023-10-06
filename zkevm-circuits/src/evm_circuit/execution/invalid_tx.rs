@@ -1,28 +1,26 @@
-use std::ops::Add;
+
 
 use crate::{
     evm_circuit::{
         execution::ExecutionGadget,
         param::N_BYTES_GAS,
         step::ExecutionState,
-        table::{FixedTableTag, Lookup},
         util::{
-            common_gadget::CommonErrorGadget,
             constraint_builder::{
                 ConstrainBuilderCommon, EVMConstraintBuilder, StepStateTransition, Transition::*,
             },
             math_gadget::{
                 AddWordsGadget, IsEqualGadget, LtGadget, LtWordGadget, MulWordByU64Gadget,
             },
-            CachedRegion, Cell, RandomLinearCombination, StepRws, Word,
+            CachedRegion, Cell, StepRws, Word,
         },
         witness::{Block, Call, ExecStep, Transaction},
     },
     table::{
-        AccountFieldTag, BlockContextFieldTag, CallContextFieldTag, TxContextFieldTag, TxFieldTag,
+        AccountFieldTag, CallContextFieldTag, TxContextFieldTag,
     },
 };
-use eth_types::{evm_types::GasCost, Address, Field, ToLittleEndian, ToScalar, H160};
+use eth_types::{evm_types::GasCost, Field, ToLittleEndian, ToScalar};
 use gadgets::util::{not, or, select, Expr, Scalar};
 use halo2_proofs::{
     circuit::Value,
@@ -323,13 +321,13 @@ impl<F: Field> ExecutionGadget<F> for InvalidTxGadget<F> {
 
 #[cfg(test)]
 mod test {
-    use std::vec;
+    
 
-    use crate::{evm_circuit::test::rand_bytes, test_util::CircuitTestBuilder};
-    use bus_mapping::{circuit_input_builder::CircuitsParams, evm::OpcodeId};
-    use eth_types::{self, bytecode, evm_types::GasCost, word, Bytecode, Word};
+    use crate::{test_util::CircuitTestBuilder};
+    use bus_mapping::{circuit_input_builder::CircuitsParams};
+    use eth_types::{self, bytecode, Word};
 
-    use mock::{eth, gwei, test_ctx::helpers::*, MockTransaction, TestContext, MOCK_ACCOUNTS};
+    use mock::{eth, gwei, TestContext, MOCK_ACCOUNTS};
 
     #[test]
     fn invalid_tx_invalid_nonce() {

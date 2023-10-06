@@ -954,7 +954,7 @@ impl<F: Field> ExecutionConfig<F> {
                 let evm_rows = block.circuits_params.max_evm_rows;
                 let no_padding = evm_rows == 0;
                 // part1: assign real steps
-                steps.clone().for_each(|(tx, c, s)| {
+                steps.clone().for_each(|(tx, _c, s)| {
                     println!("Step tx_id {:?}, s {:?}", tx.id, s.exec_state)
                 });
                 loop {

@@ -627,10 +627,10 @@ mod test {
     use std::vec;
 
     use crate::{evm_circuit::test::rand_bytes, test_util::CircuitTestBuilder};
-    use bus_mapping::evm::OpcodeId;
-    use eth_types::{self, bytecode, evm_types::GasCost, word, Bytecode, Word};
+    
+    use eth_types::{self, bytecode, word, Bytecode, Word};
 
-    use mock::{eth, gwei, test_ctx::helpers::*, MockTransaction, TestContext, MOCK_ACCOUNTS};
+    use mock::{eth, gwei, test_ctx::helpers::*, TestContext, MOCK_ACCOUNTS};
 
     fn code_with_return() -> Bytecode {
         bytecode! {
