@@ -40,7 +40,7 @@ mod evm_circ_benches {
             .parse()
             .expect("Cannot parse DEGREE env var as u32");
 
-        let empty_data: GethData = TestContext::<0, 0>::new(None, |_| {}, |_, _| {}, |b, _| b)
+        let empty_data: GethData = TestContext::<0, 0>::new(None, |_| {}, |_, _| {}, |b, _| b, false)
             .unwrap()
             .into();
 

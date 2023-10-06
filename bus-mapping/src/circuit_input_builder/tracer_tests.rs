@@ -371,7 +371,7 @@ fn tracer_invalid_tx_nonce() {
             txs[0].to(accs[0].address).from(accs[1].address).nonce(1);
         },
         |block, _tx| block.number(0xcafeu64),
-        false,
+        true,
     )
     .unwrap()
     .into();
@@ -410,7 +410,7 @@ fn tracer_invalid_tx_balance_for_access_list() {
                 ]));
         },
         |block, _tx| block.number(0xcafeu64),
-        false,
+        true,
     )
     .unwrap()
     .into();
@@ -436,7 +436,7 @@ fn tracer_invalid_tx_balance_for_transfer() {
                 .value(100.into());
         },
         |block, _tx| block.number(0xcafeu64),
-        false,
+        true,
     )
     .unwrap()
     .into();
@@ -446,6 +446,7 @@ fn tracer_invalid_tx_balance_for_transfer() {
 
 #[test]
 fn tracer_invalid_tx_block_gas_limit() {
+    // Todo(Cecilia): this is not supported in InvalidTx
     // Get the execution steps from the external tracer
     let block: GethData = TestContext::<3, 1>::new(
         None,
@@ -462,7 +463,7 @@ fn tracer_invalid_tx_block_gas_limit() {
                 .gas(1000000.into());
         },
         |block, _tx| block.number(0xcafeu64).gas_limit(1.into()),
-        false,
+        true,
     )
     .unwrap()
     .into();
