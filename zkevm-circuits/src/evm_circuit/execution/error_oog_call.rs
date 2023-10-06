@@ -311,7 +311,8 @@ mod test {
                     .to(accs[1].address)
                     .gas(tx_gas.into());
             },
-            |block, _tx| block.number(0xcafeu64), false
+            |block, _tx| block.number(0xcafeu64),
+            false,
         )
         .unwrap();
 

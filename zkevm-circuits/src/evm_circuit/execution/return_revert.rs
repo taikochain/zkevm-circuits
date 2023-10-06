@@ -445,7 +445,8 @@ mod test {
                         .to(accs[1].address)
                         .gas(100000u64.into());
                 },
-                |block, _tx| block.number(0xcafeu64), false
+                |block, _tx| block.number(0xcafeu64),
+                false,
             )
             .unwrap();
 
@@ -468,7 +469,8 @@ mod test {
                 |mut txs, accs| {
                     txs[0].from(accs[0].address).input(tx_input.into());
                 },
-                |block, _| block,false
+                |block, _| block,
+                false,
             )
             .unwrap();
 
@@ -514,7 +516,8 @@ mod test {
                         .to(accs[1].address)
                         .gas(100000u64.into());
                 },
-                |block, _| block,false
+                |block, _| block,
+                false,
             )
             .unwrap();
 
@@ -565,7 +568,8 @@ mod test {
                     .to(accs[1].address)
                     .gas(100000u64.into());
             },
-            |block, _| block,false
+            |block, _| block,
+            false,
         )
         .unwrap();
 

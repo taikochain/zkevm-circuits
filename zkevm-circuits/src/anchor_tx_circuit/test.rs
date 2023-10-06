@@ -82,7 +82,8 @@ fn gen_block<const NUM_TXS: usize>(
         None,
         |_accs| {},
         |_txs, _accs| {},
-        |block, _tx| block, false
+        |block, _tx| block,
+        false,
     )
     .unwrap()
     .into();

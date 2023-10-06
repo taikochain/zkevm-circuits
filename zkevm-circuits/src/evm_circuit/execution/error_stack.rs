@@ -209,7 +209,8 @@ mod test {
                     .to(accs[1].address)
                     .gas(23800.into());
             },
-            |block, _tx| block.number(0xcafeu64), false
+            |block, _tx| block.number(0xcafeu64),
+            false,
         )
         .unwrap();
 

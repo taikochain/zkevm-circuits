@@ -183,9 +183,9 @@ fn tracer_err_depth() {
                 .from(accs[1].address)
                 .gas(Word::from(10u64.pow(15)));
         },
-        |block, _tx| block.number(0xcafeu64), 
+        |block, _tx| block.number(0xcafeu64),
         LoggerConfig::enable_memory(),
-        false
+        false,
     )
     .unwrap()
     .into();
@@ -260,9 +260,9 @@ fn tracer_err_insufficient_balance() {
             txs[0].to(accs[0].address).from(accs[2].address);
             txs[1].to(accs[1].address).from(accs[2].address).nonce(1);
         },
-        |block, _tx| block.number(0xcafeu64), 
+        |block, _tx| block.number(0xcafeu64),
         LoggerConfig::enable_memory(),
-        false
+        false,
     )
     .unwrap()
     .into();
@@ -322,8 +322,8 @@ fn tracer_call_success() {
         |mut txs, accs| {
             txs[0].to(accs[0].address).from(accs[2].address);
         },
-        |block, _tx| block.number(0xcafeu64), 
-        false
+        |block, _tx| block.number(0xcafeu64),
+        false,
     )
     .unwrap()
     .into();
@@ -368,13 +368,10 @@ fn tracer_invalid_tx_nonce() {
                 .nonce(3);
         },
         |mut txs, accs| {
-            txs[0]
-                .to(accs[0].address)
-                .from(accs[1].address)
-                .nonce(1);
+            txs[0].to(accs[0].address).from(accs[1].address).nonce(1);
         },
-        |block, _tx| block.number(0xcafeu64), 
-        false
+        |block, _tx| block.number(0xcafeu64),
+        false,
     )
     .unwrap()
     .into();
@@ -412,8 +409,8 @@ fn tracer_invalid_tx_balance_for_access_list() {
                     },
                 ]));
         },
-        |block, _tx| block.number(0xcafeu64), 
-        false
+        |block, _tx| block.number(0xcafeu64),
+        false,
     )
     .unwrap()
     .into();
@@ -438,8 +435,8 @@ fn tracer_invalid_tx_balance_for_transfer() {
                 .from(accs[1].address)
                 .value(100.into());
         },
-        |block, _tx| block.number(0xcafeu64), 
-        false
+        |block, _tx| block.number(0xcafeu64),
+        false,
     )
     .unwrap()
     .into();
@@ -464,7 +461,8 @@ fn tracer_invalid_tx_block_gas_limit() {
                 .from(accs[1].address)
                 .gas(1000000.into());
         },
-        |block, _tx| block.number(0xcafeu64).gas_limit(1.into()),false
+        |block, _tx| block.number(0xcafeu64).gas_limit(1.into()),
+        false,
     )
     .unwrap()
     .into();
@@ -540,9 +538,9 @@ fn tracer_err_address_collision() {
             txs[0].to(accs[0].address).from(accs[2].address);
             txs[1].to(accs[1].address).from(accs[2].address).nonce(1);
         },
-        |block, _tx| block.number(0xcafeu64), 
+        |block, _tx| block.number(0xcafeu64),
         LoggerConfig::enable_memory(),
-        false
+        false,
     )
     .unwrap()
     .into();
@@ -661,9 +659,9 @@ fn tracer_create_collision_free() {
             txs[0].to(accs[0].address).from(accs[2].address);
             txs[1].to(accs[1].address).from(accs[2].address).nonce(1);
         },
-        |block, _tx| block.number(0xcafeu64), 
+        |block, _tx| block.number(0xcafeu64),
         LoggerConfig::enable_memory(),
-        false
+        false,
     )
     .unwrap()
     .into();
@@ -792,9 +790,9 @@ fn tracer_err_code_store_out_of_gas() {
             txs[0].to(accs[0].address).from(accs[2].address);
             txs[1].to(accs[1].address).from(accs[2].address).nonce(1);
         },
-        |block, _tx| block.number(0xcafeu64), 
+        |block, _tx| block.number(0xcafeu64),
         LoggerConfig::enable_memory(),
-        false
+        false,
     )
     .unwrap()
     .into();
@@ -846,7 +844,7 @@ fn tracer_err_code_store_out_of_gas_tx_deploy() {
         },
         |block, _tx| block.number(0x0264),
         LoggerConfig::enable_memory(),
-        false
+        false,
     )
     .unwrap()
     .into();
@@ -943,9 +941,9 @@ fn tracer_err_invalid_code() {
             txs[0].to(accs[0].address).from(accs[2].address);
             txs[1].to(accs[1].address).from(accs[2].address).nonce(1);
         },
-        |block, _tx| block.number(0xcafeu64), 
+        |block, _tx| block.number(0xcafeu64),
         LoggerConfig::enable_memory(),
-        false
+        false,
     )
     .unwrap()
     .into();
@@ -1041,9 +1039,9 @@ fn tracer_err_max_code_size_exceeded() {
             txs[0].to(accs[0].address).from(accs[2].address);
             txs[1].to(accs[1].address).from(accs[2].address).nonce(1);
         },
-        |block, _tx| block.number(0xcafeu64), 
+        |block, _tx| block.number(0xcafeu64),
         LoggerConfig::enable_memory(),
-        false
+        false,
     )
     .unwrap()
     .into();
@@ -1095,7 +1093,7 @@ fn tracer_err_max_code_size_exceeded_tx_deploy() {
         },
         |block, _tx| block.number(0x0264),
         LoggerConfig::enable_memory(),
-        false
+        false,
     )
     .unwrap()
     .into();
@@ -1184,9 +1182,9 @@ fn tracer_create_stop() {
             txs[0].to(accs[0].address).from(accs[2].address);
             txs[1].to(accs[1].address).from(accs[2].address).nonce(1);
         },
-        |block, _tx| block.number(0xcafeu64), 
+        |block, _tx| block.number(0xcafeu64),
         LoggerConfig::enable_memory(),
-        false
+        false,
     )
     .unwrap()
     .into();
@@ -1254,9 +1252,9 @@ fn tracer_err_invalid_jump() {
         |mut txs, accs| {
             txs[0].to(accs[0].address).from(accs[1].address);
         },
-        |block, _tx| block.number(0xcafeu64), 
+        |block, _tx| block.number(0xcafeu64),
         LoggerConfig::enable_memory(),
-        false
+        false,
     )
     .unwrap()
     .into();
@@ -1304,9 +1302,9 @@ fn tracer_err_invalid_jump() {
             txs[0].to(accs[0].address).from(accs[2].address);
             txs[1].to(accs[1].address).from(accs[2].address).nonce(1);
         },
-        |block, _tx| block.number(0xcafeu64), 
+        |block, _tx| block.number(0xcafeu64),
         LoggerConfig::enable_memory(),
-        false
+        false,
     )
     .unwrap()
     .into();
@@ -1355,9 +1353,9 @@ fn tracer_err_execution_reverted() {
         |mut txs, accs| {
             txs[0].to(accs[0].address).from(accs[1].address);
         },
-        |block, _tx| block.number(0xcafeu64), 
+        |block, _tx| block.number(0xcafeu64),
         LoggerConfig::enable_memory(),
-        false
+        false,
     )
     .unwrap()
     .into();
@@ -1406,9 +1404,9 @@ fn tracer_err_execution_reverted() {
             txs[0].to(accs[0].address).from(accs[2].address);
             txs[1].to(accs[1].address).from(accs[2].address).nonce(1);
         },
-        |block, _tx| block.number(0xcafeu64), 
+        |block, _tx| block.number(0xcafeu64),
         LoggerConfig::enable_memory(),
-        false
+        false,
     )
     .unwrap()
     .into();
@@ -1466,9 +1464,9 @@ fn tracer_stop() {
             txs[0].to(accs[0].address).from(accs[2].address);
             txs[1].to(accs[1].address).from(accs[2].address).nonce(1);
         },
-        |block, _tx| block.number(0xcafeu64), 
+        |block, _tx| block.number(0xcafeu64),
         LoggerConfig::enable_memory(),
-        false
+        false,
     )
     .unwrap()
     .into();
@@ -1535,9 +1533,9 @@ fn tracer_err_return_data_out_of_bounds() {
             txs[0].to(accs[0].address).from(accs[2].address);
             txs[1].to(accs[1].address).from(accs[2].address).nonce(1);
         },
-        |block, _tx| block.number(0xcafeu64), 
+        |block, _tx| block.number(0xcafeu64),
         LoggerConfig::enable_memory(),
-        false
+        false,
     )
     .unwrap()
     .into();
@@ -1585,9 +1583,9 @@ fn tracer_err_gas_uint_overflow() {
         |mut txs, accs| {
             txs[0].to(accs[0].address).from(accs[1].address);
         },
-        |block, _tx| block.number(0xcafeu64), 
+        |block, _tx| block.number(0xcafeu64),
         LoggerConfig::enable_memory(),
-        false
+        false,
     )
     .unwrap()
     .into();
@@ -1625,9 +1623,9 @@ fn tracer_err_invalid_opcode() {
         |mut txs, accs| {
             txs[0].to(accs[0].address).from(accs[1].address);
         },
-        |block, _tx| block.number(0xcafeu64), 
+        |block, _tx| block.number(0xcafeu64),
         LoggerConfig::enable_memory(),
-        false
+        false,
     )
     .unwrap()
     .into();
@@ -1691,9 +1689,9 @@ fn tracer_err_write_protection(is_call: bool) {
             txs[0].to(accs[0].address).from(accs[2].address);
             txs[1].to(accs[1].address).from(accs[2].address).nonce(1);
         },
-        |block, _tx| block.number(0xcafeu64), 
+        |block, _tx| block.number(0xcafeu64),
         LoggerConfig::enable_memory(),
-        false
+        false,
     )
     .unwrap()
     .into();
@@ -1758,9 +1756,9 @@ fn tracer_err_out_of_gas() {
                 .from(accs[1].address)
                 .gas(Word::from(21004u64));
         },
-        |block, _tx| block.number(0xcafeu64), 
+        |block, _tx| block.number(0xcafeu64),
         LoggerConfig::enable_memory(),
-        false
+        false,
     )
     .unwrap()
     .into();
@@ -1780,9 +1778,9 @@ fn tracer_err_stack_overflow() {
         None,
         account_0_code_account_1_no_code(code),
         tx_from_1_to_0,
-        |block, _tx| block.number(0xcafeu64), 
+        |block, _tx| block.number(0xcafeu64),
         LoggerConfig::enable_memory(),
-        false
+        false,
     )
     .unwrap()
     .into();
@@ -1812,9 +1810,9 @@ fn tracer_err_stack_underflow() {
         None,
         account_0_code_account_1_no_code(code),
         tx_from_1_to_0,
-        |block, _tx| block.number(0xcafeu64), 
+        |block, _tx| block.number(0xcafeu64),
         LoggerConfig::enable_memory(),
-        false
+        false,
     )
     .unwrap()
     .into();
@@ -1897,9 +1895,9 @@ fn create2_address() {
             txs[0].to(accs[0].address).from(accs[2].address);
             txs[1].to(accs[1].address).from(accs[2].address).nonce(1);
         },
-        |block, _tx| block.number(0xcafeu64), 
+        |block, _tx| block.number(0xcafeu64),
         LoggerConfig::enable_memory(),
-        false
+        false,
     )
     .unwrap()
     .into();
@@ -1996,9 +1994,9 @@ fn create_address() {
             txs[0].to(accs[0].address).from(accs[2].address);
             txs[1].to(accs[1].address).from(accs[2].address).nonce(1);
         },
-        |block, _tx| block.number(0xcafeu64), 
+        |block, _tx| block.number(0xcafeu64),
         LoggerConfig::enable_memory(),
-        false
+        false,
     )
     .unwrap()
     .into();
@@ -2081,9 +2079,9 @@ fn test_gen_access_trace() {
             txs[0].to(accs[0].address).from(accs[2].address);
             txs[1].to(accs[1].address).from(accs[2].address).nonce(1);
         },
-        |block, _tx| block.number(0xcafeu64), 
+        |block, _tx| block.number(0xcafeu64),
         LoggerConfig::enable_memory(),
-        false
+        false,
     )
     .unwrap()
     .into();
@@ -2169,9 +2167,9 @@ fn test_gen_access_trace_call_EOA_no_new_stack_frame() {
             accs[1].address(*ADDR_B).balance(Word::from(1u64 << 30));
         },
         tx_from_1_to_0,
-        |block, _tx| block.number(0xcafeu64), 
+        |block, _tx| block.number(0xcafeu64),
         LoggerConfig::enable_memory(),
-        false
+        false,
     )
     .unwrap()
     .into();
@@ -2305,9 +2303,9 @@ fn test_gen_access_trace_create_push_call_stack() {
             txs[0].to(accs[0].address).from(accs[2].address);
             txs[1].to(accs[1].address).from(accs[2].address).nonce(1);
         },
-        |block, _tx| block.number(0xcafeu64), 
+        |block, _tx| block.number(0xcafeu64),
         LoggerConfig::enable_memory(),
-        false
+        false,
     )
     .unwrap()
     .into();

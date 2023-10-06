@@ -570,7 +570,7 @@ mod evm_circuit_stats {
             account_0_code_account_1_no_code(code),
             tx_from_1_to_0,
             |b, _| b,
-            false
+            false,
         )
         .unwrap()
         .into();

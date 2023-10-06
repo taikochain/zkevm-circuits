@@ -77,7 +77,8 @@ fn gen_calldatacopy_data() -> CircuitInputBuilder {
                 .to(accs[0].address)
                 .input(calldata.into());
         },
-        |block, _txs| block.number(0xcafeu64), false
+        |block, _txs| block.number(0xcafeu64),
+        false,
     )
     .unwrap();
     let block: GethData = test_ctx.into();
@@ -139,7 +140,8 @@ fn gen_extcodecopy_data() -> CircuitInputBuilder {
         |mut txs, accs| {
             txs[0].to(accs[0].address).from(accs[2].address);
         },
-        |block, _tx| block.number(0xcafeu64), false
+        |block, _tx| block.number(0xcafeu64),
+        false,
     )
     .unwrap();
     let block: GethData = test_ctx.into();

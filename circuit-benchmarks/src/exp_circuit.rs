@@ -133,7 +133,8 @@ mod tests {
             None,
             account_0_code_account_1_no_code(code),
             tx_from_1_to_0,
-            |block, _txs| block.number(0xcafeu64), false
+            |block, _txs| block.number(0xcafeu64),
+            false,
         )
         .unwrap();
         let block: GethData = test_ctx.into();

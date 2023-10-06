@@ -275,7 +275,7 @@ impl<const NACC: usize, const NTX: usize> TestContext<NACC, NTX> {
         acc_fns: FAcc,
         func_tx: FTx,
         func_block: Fb,
-        enbalbe_invalid_tx: bool
+        enbalbe_invalid_tx: bool,
     ) -> Result<Self, Error>
     where
         FTx: FnOnce(Vec<&mut MockTransaction>, [MockAccount; NACC]),

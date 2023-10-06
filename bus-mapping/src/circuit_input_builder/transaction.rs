@@ -198,6 +198,7 @@ pub struct Transaction {
 
 impl Transaction {
     /// Create a new Self.
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         call_id: usize,
         sdb: &StateDB,

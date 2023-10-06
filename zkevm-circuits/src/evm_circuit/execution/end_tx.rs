@@ -489,7 +489,8 @@ mod test {
                         .from(accs[1].address)
                         .value(eth(1));
                 },
-                |block, _tx| block.number(0xcafeu64), false
+                |block, _tx| block.number(0xcafeu64),
+                false,
             )
             .unwrap(),
         );

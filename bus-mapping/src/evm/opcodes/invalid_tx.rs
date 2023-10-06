@@ -5,8 +5,6 @@ use crate::{
     Error,
 };
 
-
-
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct InvalidTx;
 

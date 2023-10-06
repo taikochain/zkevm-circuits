@@ -300,7 +300,8 @@ mod test {
                     .from(accs[1].address)
                     .gas(1_000_000.into());
             },
-            |block, _tx| block.number(0x1111111), false
+            |block, _tx| block.number(0x1111111),
+            false,
         )
         .unwrap();
 

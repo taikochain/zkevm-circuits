@@ -1,5 +1,3 @@
-
-
 use crate::{
     evm_circuit::{
         execution::ExecutionGadget,
@@ -16,9 +14,7 @@ use crate::{
         },
         witness::{Block, Call, ExecStep, Transaction},
     },
-    table::{
-        AccountFieldTag, CallContextFieldTag, TxContextFieldTag,
-    },
+    table::{AccountFieldTag, CallContextFieldTag, TxContextFieldTag},
 };
 use eth_types::{evm_types::GasCost, Field, ToLittleEndian, ToScalar};
 use gadgets::util::{not, or, select, Expr, Scalar};
@@ -321,10 +317,9 @@ impl<F: Field> ExecutionGadget<F> for InvalidTxGadget<F> {
 
 #[cfg(test)]
 mod test {
-    
 
-    use crate::{test_util::CircuitTestBuilder};
-    use bus_mapping::{circuit_input_builder::CircuitsParams};
+    use crate::test_util::CircuitTestBuilder;
+    use bus_mapping::circuit_input_builder::CircuitsParams;
     use eth_types::{self, bytecode, Word};
 
     use mock::{eth, gwei, TestContext, MOCK_ACCOUNTS};

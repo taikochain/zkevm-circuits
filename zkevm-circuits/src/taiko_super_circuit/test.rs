@@ -76,7 +76,8 @@ pub fn block_1tx() -> GethData {
             let sig = wallet_a.sign_transaction_sync(&req.chain_id(chain_id).into());
             txs[0].sig_data((sig.v, sig.r, sig.s));
         },
-        |block, _tx| block.number(0xcafeu64), false
+        |block, _tx| block.number(0xcafeu64),
+        false,
     )
     .unwrap()
     .into();
@@ -128,7 +129,8 @@ fn block_2tx() -> GethData {
             let sig = wallet_a.sign_transaction_sync(&req.chain_id(chain_id).into());
             txs[1].sig_data((sig.v, sig.r, sig.s));
         },
-        |block, _tx| block.number(0xcafeu64), false
+        |block, _tx| block.number(0xcafeu64),
+        false,
     )
     .unwrap()
     .into();

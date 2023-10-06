@@ -478,7 +478,8 @@ mod test {
                     .to(accs[0].address)
                     .gas((GasCost::TX.0 + testing_data.gas_cost - 1).into());
             },
-            |block, _tx| block.number(0xcafe_u64),false
+            |block, _tx| block.number(0xcafe_u64),
+            false,
         )
         .unwrap();
 
@@ -518,7 +519,8 @@ mod test {
             |mut txs, accs| {
                 txs[0].from(accs[2].address).to(accs[1].address);
             },
-            |block, _tx| block,false
+            |block, _tx| block,
+            false,
         )
         .unwrap();
 

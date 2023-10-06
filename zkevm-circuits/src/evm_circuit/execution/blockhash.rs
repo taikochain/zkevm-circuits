@@ -160,7 +160,8 @@ mod test {
             Some(history_hashes),
             account_0_code_account_1_no_code(code),
             tx_from_1_to_0,
-            |block, _tx| block.number(current_block_number),false
+            |block, _tx| block.number(current_block_number),
+            false,
         )
         .unwrap();
 

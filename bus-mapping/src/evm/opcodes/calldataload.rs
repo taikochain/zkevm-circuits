@@ -168,7 +168,8 @@ mod calldataload_tests {
             |mut txs, accs| {
                 txs[0].to(accs[1].address).from(accs[2].address);
             },
-            |block, _tx| block,false
+            |block, _tx| block,
+            false,
         )
         .unwrap()
         .into();
@@ -279,7 +280,8 @@ mod calldataload_tests {
                     .from(accs[1].address)
                     .input(calldata.clone().into());
             },
-            |block, _tx| block,false
+            |block, _tx| block,
+            false,
         )
         .unwrap()
         .into();

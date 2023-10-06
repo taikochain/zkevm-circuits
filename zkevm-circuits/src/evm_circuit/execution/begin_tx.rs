@@ -627,7 +627,7 @@ mod test {
     use std::vec;
 
     use crate::{evm_circuit::test::rand_bytes, test_util::CircuitTestBuilder};
-    
+
     use eth_types::{self, bytecode, word, Bytecode, Word};
 
     use mock::{eth, gwei, test_ctx::helpers::*, TestContext, MOCK_ACCOUNTS};
@@ -670,7 +670,8 @@ mod test {
                     .input(tx.input)
                     .value(tx.value);
             },
-            |block, _tx| block.number(0xcafeu64), false
+            |block, _tx| block.number(0xcafeu64),
+            false,
         )
         .unwrap();
 
@@ -718,7 +719,8 @@ mod test {
             |mut txs, _| {
                 txs[0].to(to).from(from).nonce(multibyte_nonce);
             },
-            |block, _| block,false
+            |block, _| block,
+            false,
         )
         .unwrap();
 
@@ -766,7 +768,8 @@ mod test {
                     .gas(Word::from(0x10000))
                     .value(eth(2));
             },
-            |block, _tx| block.number(0xcafeu64), false
+            |block, _tx| block.number(0xcafeu64),
+            false,
         )
         .unwrap();
 
@@ -788,7 +791,8 @@ mod test {
                     .gas(Word::from(0x10000))
                     .value(eth(2));
             },
-            |block, _tx| block.number(0xcafeu64), false
+            |block, _tx| block.number(0xcafeu64),
+            false,
         )
         .unwrap();
 
@@ -823,7 +827,8 @@ mod test {
                     .value(eth(2))
                     .input(code.into());
             },
-            |block, _tx| block.number(0xcafeu64), false
+            |block, _tx| block.number(0xcafeu64),
+            false,
         )
         .unwrap();
 

@@ -136,7 +136,8 @@ mod test {
                     .from(accs[1].address)
                     .gas(Word::from(1_000_000u64));
             },
-            |block, _tx| block.number(0xcafeu64), false
+            |block, _tx| block.number(0xcafeu64),
+            false,
         )
         .unwrap();
 
