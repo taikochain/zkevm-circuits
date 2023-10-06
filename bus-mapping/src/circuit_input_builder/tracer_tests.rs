@@ -371,8 +371,7 @@ fn tracer_invalid_tx_nonce() {
             txs[0]
                 .to(accs[0].address)
                 .from(accs[1].address)
-                .nonce(1)
-                .enable_invalid_tx(true);
+                .nonce(1);
         },
         |block, _tx| block.number(0xcafeu64), 
         false
@@ -400,19 +399,18 @@ fn tracer_invalid_tx_balance_for_access_list() {
                 .from(accs[1].address)
                 .access_list(AccessList::from(vec![
                     AccessListItem {
-                        address: Address::zero().into(),
+                        address: Address::zero(),
                         storage_keys: vec![H256::zero()],
                     },
                     AccessListItem {
-                        address: address!("0x0000000000000000000000000000000012345678").into(),
+                        address: address!("0x0000000000000000000000000000000012345678"),
                         storage_keys: vec![H256::zero()],
                     },
                     AccessListItem {
-                        address: address!("0x0000000000000000000000000000000999999999").into(),
+                        address: address!("0x0000000000000000000000000000000999999999"),
                         storage_keys: vec![H256::zero()],
                     },
                 ]));
-            txs[0].enable_invalid_tx(true);
         },
         |block, _tx| block.number(0xcafeu64), 
         false
@@ -438,13 +436,11 @@ fn tracer_invalid_tx_balance_for_transfer() {
             txs[0]
                 .to(accs[0].address)
                 .from(accs[1].address)
-                .value(100.into())
-                .enable_invalid_tx(true);
+                .value(100.into());
         },
         |block, _tx| block.number(0xcafeu64), 
         false
-    );
-    false
+    )
     .unwrap()
     .into();
 
@@ -466,8 +462,7 @@ fn tracer_invalid_tx_block_gas_limit() {
             txs[0]
                 .to(accs[0].address)
                 .from(accs[1].address)
-                .gas(1000000.into())
-                .enable_invalid_tx(true);
+                .gas(1000000.into());
         },
         |block, _tx| block.number(0xcafeu64).gas_limit(1.into()),false
     )
