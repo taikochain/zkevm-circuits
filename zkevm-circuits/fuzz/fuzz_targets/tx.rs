@@ -1,39 +1,41 @@
 #![no_main]
 
+use halo2_proofs::halo2curves::bn256::Fr;
 use libfuzzer_sys::fuzz_target;
-use halo2_proofs::{
-    // dev::{MockProver, VerifyFailure},
-    halo2curves::bn256::Fr,
-};
-use zkevm_circuits::tx_circuit::test::run;
-use eth_types::{
-    geth_types::Transaction, word, Bytes,
-};
-use mock::MockTransaction;
-use rand_chacha::ChaCha20Rng;
 use rand::SeedableRng;
-// use zkevm_circuits::tx_circuit::TxCircuit;
-// use halo2_proofs::dev::MockProver;
 
-fuzz_target!(|_data: &[u8]| {
-    // fuzzed code goes here
-    const MAX_TXS: usize = 1;
+use eth_types::geth_types::Transaction;
+use mock::MockTransaction;
+use zkevm_circuits::tx_circuit::test::run;
+
+use crate::lib::TransactionMember;
+
+mod lib;
+
+
+#[derive(Clone, Debug, libfuzzer_sys::arbitrary::Arbitrary)]
+pub struct TxRandomInput {
+    pub transactions_random_input: Vec<[u8; 128]>,
+}
+
+fuzz_target!(|tx_random_input: TxRandomInput| {
+
+    println!("tx random input count: {:?}", tx_random_input.transactions_random_input.len());
+    if tx_random_input.transactions_random_input.len() != 1 {
+        return;
+    }
+
     const MAX_CALLDATA: usize = 32;
-
+    const NTX: usize = 1;
     let chain_id: u64 = mock::MOCK_CHAIN_ID.as_u64();
 
-    let mut rng = ChaCha20Rng::seed_from_u64(2u64);
+    let mut transactions = vec![MockTransaction::default(); NTX];
+    transactions = TransactionMember::<NTX>::randomize_transactions_vec_one_random_member(transactions, tx_random_input.transactions_random_input);
+    let  transactions: Vec<Transaction>=
+            transactions.iter_mut().map(|tx| {
+                tx.build();
+                tx
+    }).map(|tx| tx.clone().into()).collect();
 
-    // let tx: Transaction = mock::CORRECT_MOCK_TXS[0].clone().into();
-    let tx: Transaction = MockTransaction::default()
-        .from(mock::AddrOrWallet::random(&mut rng))
-        .to(mock::AddrOrWallet::random(&mut rng))
-        // .nonce(0x103u64)
-        // .value(word!("0x3e8"))
-        // .gas_price(word!("0x4d2"))
-        // .input(Bytes::from(b"hello"))
-        .build()
-        .into();
-
-    assert_eq!(run::<Fr>(vec![tx], chain_id, MAX_TXS, MAX_CALLDATA), Ok(()));
+    assert_eq!(run::<Fr>(transactions, chain_id, NTX, MAX_CALLDATA), Ok(()));
 });
