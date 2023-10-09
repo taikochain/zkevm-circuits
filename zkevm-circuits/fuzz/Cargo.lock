@@ -4277,7 +4277,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "zkevm-circuits-fuzz"
+name = "zkevm_circuits_fuzz"
 version = "0.0.0"
 dependencies = [
  "arbitrary",
