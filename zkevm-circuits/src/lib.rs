@@ -29,6 +29,7 @@ pub mod super_circuit;
 pub mod table;
 pub mod taiko_pi_circuit;
 pub mod taiko_super_circuit;
+pub mod circuit_tools;
 
 #[cfg(any(feature = "test", test))]
 pub mod test_util;
