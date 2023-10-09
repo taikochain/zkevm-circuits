@@ -11,7 +11,7 @@ use crate::{
         BlockTable, ByteTable, BytecodeTable, CopyTable, ExpTable, KeccakTable, PiTable, RwTable,
         TxTable,
     },
-    taiko_pi_circuit::{TaikoPiCircuit, TaikoPiCircuitConfig, TaikoPiCircuitConfigArgs},
+    taiko_pi_circuit::{TaikoPiCircuit, TaikoPiCircuitConfig, TaikoPiCircuitConfigArgs, PublicData},
     util::{log2_ceil, Challenges, SubCircuit, SubCircuitConfig},
     witness::{block_convert, Block},
 };
@@ -73,6 +73,7 @@ impl<F: Field> SubCircuitConfig<F> for SuperCircuitConfig<F> {
         let pi_circuit = TaikoPiCircuitConfig::new(
             meta,
             TaikoPiCircuitConfigArgs {
+                evidence: PublicData::default(),
                 block_table: block_table.clone(),
                 keccak_table: keccak_table.clone(),
                 byte_table: byte_table.clone(),
@@ -249,7 +250,7 @@ impl<F: Field> Circuit<F> for SuperCircuit<F> {
             self.block
                 .sha3_inputs
                 .iter()
-                .chain(std::iter::once(&self.pi_circuit.public_data.rpi_bytes())),
+                .chain(std::iter::once(&self.pi_circuit.evidence.encode_raw())),
             &challenges,
         )?;
         config.byte_table.load(&mut layouter)?;
