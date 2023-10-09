@@ -40,12 +40,19 @@ impl<const NTX: usize> TransactionMember<NTX> {
     pub fn randomize_transactions_vec_one_random_member(
         mut transactions: Vec<MockTransaction>,
         transactions_random_input: Vec<[u8; 128]>,
+        transactions_random_from: [u8; 20],
+        transactions_random_to: [u8; 20],
+        transactions_random_value: [u8; 32],
     ) -> Vec<MockTransaction> {
         if transactions.len() != transactions_random_input.len() {
             panic!("Mismatched lengths of transactions and random input");
         }
 
         for (transaction, random_input) in transactions.iter_mut().zip(transactions_random_input) {
+            Self::randomize_transaction_at_member(TransactionMember::From, &transactions_random_from, transaction);
+            Self::randomize_transaction_at_member(TransactionMember::To, &transactions_random_to, transaction);
+            Self::randomize_transaction_at_member(TransactionMember::Value, &transactions_random_value, transaction);
+            Self::randomize_transaction_at_member(TransactionMember::GasPrice, , transaction);
             let random_member = TransactionMember::random_member();
             Self::randomize_transaction_at_member(random_member, &random_input, transaction);
         }
@@ -71,8 +78,8 @@ impl<const NTX: usize> TransactionMember<NTX> {
             TransactionMember::BlockHash,
             TransactionMember::BlockNumber,
             TransactionMember::TransactionIdx,
-            TransactionMember::From,
-            TransactionMember::To,
+            // TransactionMember::From,
+            // TransactionMember::To,
             TransactionMember::Value,
             TransactionMember::GasPrice,
             TransactionMember::Gas,
