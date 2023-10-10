@@ -29,6 +29,7 @@ pub struct CachedRegion<'r, 'b, F: Field> {
     region: &'r mut Region<'b, F>,
     pub advice: HashMap<(usize, usize), F>,
     pub fixed: HashMap<(usize, usize), F>,
+    disable_description: bool,
     regions: Vec<(usize, usize)>,
 }
 
@@ -38,28 +39,13 @@ impl<'r, 'b, F: Field> CachedRegion<'r, 'b, F> {
             region,
             advice: HashMap::new(),
             fixed: HashMap::new(),
+            disable_description: false,
             regions: Vec::new(),
         }
     }
 
-    pub(crate) fn inner(&mut self) -> &mut Region<'b, F> {
-        self.region
-    }
-
-    pub(crate) fn annotate_columns<C: CellType>(&mut self, col_configs: &[CellColumn<F, C>]) {
-        for c in col_configs {
-            self.region.name_column(
-                || {
-                    format!(
-                        "{:?} {:?}: {:?} queried",
-                        c.cell_type.clone(),
-                        c.index,
-                        c.height
-                    )
-                },
-                c.column,
-            );
-        }
+    pub(crate) fn set_disable_description(&mut self, disable_description: bool) {
+        self.disable_description = disable_description;
     }
 
     pub(crate) fn push_region(&mut self, offset: usize, region_id: usize) {
@@ -81,6 +67,22 @@ impl<'r, 'b, F: Field> CachedRegion<'r, 'b, F> {
             }
         }
         Ok(())
+    }
+
+    pub(crate) fn annotate_columns<C: CellType>(&mut self, cell_columns: &[CellColumn<F, C>]) {
+        for c in cell_columns {
+            self.region.name_column(
+                || {
+                    format!(
+                        "{:?} {:?}: {:?} queried",
+                        c.cell_type.clone(),
+                        c.index,
+                        c.height
+                    )
+                },
+                c.column,
+            );
+        }
     }
 
     /// Assign an advice column value (witness).

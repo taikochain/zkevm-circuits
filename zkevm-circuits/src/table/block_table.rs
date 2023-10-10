@@ -67,7 +67,6 @@ impl BlockTable {
                     )?;
                 }
                 offset += 1;
-
                 let block_table_columns = <BlockTable as LookupTable<F>>::advice_columns(self);
                 for row in block.table_assignments(randomness) {
                     for (&column, value) in block_table_columns.iter().zip_eq(row) {

@@ -1,10 +1,11 @@
 //! Cell manager
+use super::constraint_builder::ConstraintBuilder;
 use crate::{
     circuit_tools::cached_region::CachedRegion,
-    util::{query_expression, Expr},
+    evm_circuit::util::rlc,
+    table::LookupTable,
+    util::{query_expression, word::Word, Expr},
 };
-
-use crate::table::LookupTable;
 use eth_types::Field;
 use halo2_proofs::{
     circuit::{AssignedCell, Value},
@@ -102,50 +103,50 @@ impl<F: Field> Expr<F> for &Cell<F> {
     }
 }
 
+pub(crate) type WordCell<F> = Word<Cell<F>>;
+
+impl<F: Field> WordCell<F> {
+    pub fn expr(&self) -> Word<Expression<F>> {
+        Word::new([self.lo().expr(), self.hi().expr()])
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct CellConfig<C: CellType> {
     pub cell_type: C,
-    pub num_columns: usize,
     pub phase: u8,
     pub is_permute: bool,
 }
 
-impl<C: CellType> From<(C, usize, u8, bool)> for CellConfig<C> {
-    fn from((cell_type, num_columns, phase, is_permute): (C, usize, u8, bool)) -> Self {
+impl<C: CellType> CellConfig<C> {
+    fn new(cell_type: C, phase: u8, is_permute: bool) -> Self {
         Self {
             cell_type,
-            num_columns,
             phase,
             is_permute,
         }
     }
-}
 
-impl<C: CellType> CellConfig<C> {
-    pub fn init_columns<F: Field>(&self, meta: &mut ConstraintSystem<F>) -> Vec<Column<Advice>> {
-        let mut columns = Vec::with_capacity(self.num_columns);
-        for _ in 0..self.num_columns {
-            let tmp = match self.phase {
-                1 => meta.advice_column_in(FirstPhase),
-                2 => meta.advice_column_in(SecondPhase),
-                3 => meta.advice_column_in(ThirdPhase),
-                _ => unreachable!(),
-            };
-            columns.push(tmp);
-        }
+    pub fn init_column<F: Field>(&self, meta: &mut ConstraintSystem<F>) -> Column<Advice> {
+        let column = match self.phase {
+            0 => meta.advice_column_in(FirstPhase),
+            1 => meta.advice_column_in(SecondPhase),
+            2 => meta.advice_column_in(ThirdPhase),
+            _ => unreachable!(),
+        };
         if self.is_permute {
-            let _ = columns
-                .iter()
-                .map(|c| meta.enable_equality(*c))
-                .collect::<Vec<()>>();
+            meta.enable_equality(column);
         }
-        columns
+        column
     }
 }
 
 pub trait CellType:
     Clone + Copy + Debug + PartialEq + Eq + PartialOrd + Ord + Hash + Default
 {
+    /// This is the table type for lookups
+    type TableType: Clone + Copy + Debug + PartialEq + Eq + PartialOrd + Ord + Hash;
+
     fn byte_type() -> Option<Self>;
 
     // The phase that given `Expression` becomes evaluateable.
@@ -163,6 +164,12 @@ pub trait CellType:
     /// Return the storage phase of phase
     fn storage_for_phase(phase: u8) -> Self;
 
+    /// Creates a type from a unique id
+    fn create_type(id: usize) -> Self;
+
+    /// Returns the table type of the lookup (if it's a lookup)
+    fn lookup_table_type(&self) -> Option<Self::TableType>;
+
     /// Return the storage cell of the expression
     fn storage_for_expr<F: Field>(expr: &Expression<F>) -> Self {
         Self::storage_for_phase(Self::expr_phase::<F>(expr))
@@ -176,6 +183,9 @@ pub enum DefaultCellType {
     StoragePhase3,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum DefaultLookupType {}
+
 impl Default for DefaultCellType {
     fn default() -> Self {
         Self::StoragePhase1
@@ -183,17 +193,27 @@ impl Default for DefaultCellType {
 }
 
 impl CellType for DefaultCellType {
+    type TableType = DefaultLookupType;
+
     fn byte_type() -> Option<Self> {
         Some(DefaultCellType::StoragePhase1)
     }
 
     fn storage_for_phase(phase: u8) -> Self {
         match phase {
-            1 => DefaultCellType::StoragePhase1,
-            2 => DefaultCellType::StoragePhase2,
-            3 => DefaultCellType::StoragePhase3,
+            0 => DefaultCellType::StoragePhase1,
+            1 => DefaultCellType::StoragePhase2,
+            2 => DefaultCellType::StoragePhase3,
             _ => unreachable!(),
         }
+    }
+
+    fn create_type(_id: usize) -> Self {
+        unreachable!()
+    }
+
+    fn lookup_table_type(&self) -> Option<Self::TableType> {
+        None
     }
 }
 
@@ -203,8 +223,8 @@ pub(crate) struct CellColumn<F, C: CellType> {
     pub(crate) cell_type: C,
     pub(crate) cells: Vec<Cell<F>>,
     pub(crate) expr: Expression<F>,
-    pub(crate) height: usize,
-    pub(crate) index: usize,
+    pub(super) height: usize,
+    pub(super) index: usize,
 }
 
 impl<F: Field, C: CellType> PartialEq for CellColumn<F, C> {
@@ -241,51 +261,62 @@ pub struct CellManager<F, C: CellType> {
     columns: Vec<CellColumn<F, C>>,
     height: usize,
     height_limit: usize,
+    offset: usize,
 }
 
 impl<F: Field, C: CellType> CellManager<F, C> {
-    pub(crate) fn new(
-        meta: &mut ConstraintSystem<F>,
-        configs: Vec<(C, usize, u8, bool)>,
-        offset: usize,
-        max_height: usize,
-    ) -> Self {
-        let mut cm = CellManager::default();
-        cm.height_limit = max_height;
-        configs
-            .into_iter()
-            .for_each(|c| cm.add_celltype(meta, c, offset));
-        cm.height = max_height;
-        cm
+    pub(crate) fn new(max_height: usize, offset: usize) -> Self {
+        Self {
+            configs: Vec::new(),
+            columns: Vec::new(),
+            height: max_height,
+            height_limit: max_height,
+            offset,
+        }
     }
 
-    pub(crate) fn add_celltype(
+    pub(crate) fn add_columns(
         &mut self,
         meta: &mut ConstraintSystem<F>,
-        config: (C, usize, u8, bool),
-        offset: usize,
+        cb: &mut ConstraintBuilder<F, C>,
+        cell_type: C,
+        phase: u8,
+        permutable: bool,
+        num_columns: usize,
     ) {
-        if !self.get_typed_columns(config.0).is_empty() {
-            panic!("CellManager: cell type {:?} already exists", config.0);
-        }
-        let config = CellConfig::from(config);
-        for col in config.init_columns(meta).iter() {
+        for _ in 0..num_columns {
+            // Add a column of the specified type
+            let config = CellConfig::new(cell_type, phase, permutable);
+            let col = config.init_column(meta);
             let mut cells = Vec::new();
             for r in 0..self.height_limit {
                 query_expression(meta, |meta| {
-                    cells.push(Cell::new(meta, *col, offset + r));
+                    cells.push(Cell::new(meta, col, self.offset + r));
                 });
             }
+            let column_expr = cells[0].expr();
             self.columns.push(CellColumn {
-                column: *col,
+                column: col,
                 index: self.columns.len(),
                 cell_type: config.cell_type,
                 height: 0,
-                expr: cells[0].expr(),
+                expr: column_expr.expr(),
                 cells,
             });
+            self.configs.push(config);
+
+            // For cell types that are lookups, generate the lookup here
+            if let Some(table) = cell_type.lookup_table_type() {
+                cb.add_lookup(
+                    format!("{:?}", table),
+                    vec![column_expr.expr()],
+                    vec![rlc::expr(
+                        &cb.table(table),
+                        cb.lookup_challenge.clone().unwrap(),
+                    )],
+                );
+            }
         }
-        self.configs.push(config);
     }
 
     pub(crate) fn restart(&mut self) {
@@ -339,7 +370,7 @@ impl<F: Field, C: CellType> CellManager<F, C> {
     pub(crate) fn get_height(&self) -> usize {
         self.columns
             .iter()
-            .map(|column| column.cells.len())
+            .map(|column| column.height)
             .max()
             .unwrap()
     }
@@ -370,15 +401,6 @@ impl<F: Field, C: CellType> CellManager<F, C> {
             }
         }
         columns
-    }
-
-    pub(crate) fn get_config(&self, cell_type: C) -> Option<CellConfig<C>> {
-        for config in self.configs.iter() {
-            if config.cell_type == cell_type {
-                return Some(config.clone());
-            }
-        }
-        None
     }
 }
 

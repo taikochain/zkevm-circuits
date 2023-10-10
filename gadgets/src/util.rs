@@ -3,7 +3,7 @@ use eth_types::{
     evm_types::{GasCost, OpcodeId},
     Field, U256,
 };
-use halo2_proofs::plonk::Expression;
+use halo2_proofs::{plonk::Expression, circuit::Table};
 
 /// Returns the sum of the passed in cells
 pub mod sum {
