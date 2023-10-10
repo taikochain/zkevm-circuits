@@ -28,7 +28,7 @@ use halo2_proofs::plonk::Error;
 
 const BYTE_POW_BASE: u64 = 1 << 8;
 const DEFAULT_LEN: usize = 32;
-const META_HASH: usize = 0;
+const META_DATA: usize = 0;
 const PARENT_HASH: usize = 1;
 const BLOCK_HASH: usize = 2;
 const SIGNAL_ROOT: usize = 3;
@@ -146,9 +146,9 @@ impl<F: Field> Default for PublicData<F> {
 impl<F: Field> PublicData<F> {
     fn new(block: &witness::Block<F>) -> Self {
         let protocol_instance = block.protocol_instance.clone().unwrap();
-        let meta_hash = Token::FixedBytes(
+        let meta_data = Token::FixedBytes(
             protocol_instance
-                .meta_hash
+                .meta_data
                 .hash()
                 .to_word()
                 .to_be_bytes()
@@ -180,7 +180,7 @@ impl<F: Field> PublicData<F> {
         let prover = Token::Address(protocol_instance.prover);
         Self {
             evidence: Token::FixedArray(vec![
-                meta_hash,
+                meta_data,
                 parent_hash,
                 block_hash,
                 signal_root,
@@ -272,7 +272,7 @@ pub struct TaikoPiCircuitConfig<F: Field> {
     keccak_instance: Column<Instance>, // equality
     columns: Vec<CellColumn<F, PiCellType>>,
 
-    meta_hash: FieldGadget<F>,
+    meta_data: FieldGadget<F>,
     parent_hash: (Cell<F>, FieldGadget<F>, Cell<F>),
     block_hash: (Cell<F>, FieldGadget<F>, Cell<F>),
     signal_root: FieldGadget<F>,
@@ -333,7 +333,7 @@ impl<F: Field> SubCircuitConfig<F> for TaikoPiCircuitConfig<F> {
         let keccak_instance = meta.instance_column();
         meta.enable_equality(keccak_instance);
 
-        let meta_hash = FieldGadget::config(&mut cb, evidence.field_len(META_HASH));
+        let meta_data = FieldGadget::config(&mut cb, evidence.field_len(META_DATA));
         let parent_hash = (
             cb.query_one(S1),
             FieldGadget::config(&mut cb, evidence.field_len(PARENT_HASH)),
@@ -365,7 +365,7 @@ impl<F: Field> SubCircuitConfig<F> for TaikoPiCircuitConfig<F> {
                         );
                     }
                     let acc_val = [
-                        meta_hash.clone(),
+                        meta_data.clone(),
                         parent_hash.1.clone(),
                         block_hash.1.clone(),
                         signal_root.clone(),
@@ -405,7 +405,7 @@ impl<F: Field> SubCircuitConfig<F> for TaikoPiCircuitConfig<F> {
             q_enable,
             keccak_instance,
             columns,
-            meta_hash,
+            meta_data,
             parent_hash,
             block_hash,
             signal_root,
@@ -444,7 +444,7 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
 
                 let mut idx = 0;
                 [
-                    &self.meta_hash,
+                    &self.meta_data,
                     &self.parent_hash.1,
                     &self.block_hash.1,
                     &self.signal_root,
