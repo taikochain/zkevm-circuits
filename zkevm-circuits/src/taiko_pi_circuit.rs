@@ -8,7 +8,7 @@ use halo2_proofs::circuit::{AssignedCell, Layouter, SimpleFloorPlanner, Value};
 
 use gadgets::util::{Expr, Scalar};
 use halo2_proofs::plonk::{Circuit, Column, ConstraintSystem, Expression, Instance, Selector};
-use strum_macros::EnumIter;
+
 use std::{convert::TryInto, marker::PhantomData};
 
 use crate::{
@@ -97,7 +97,7 @@ enum PiCellType {
 impl CellType for PiCellType {
     type TableType = Table;
 
-    fn create_type(id: usize) -> Self {
+    fn create_type(_id: usize) -> Self {
         unreachable!()
     }
     fn lookup_table_type(&self) -> Option<Self::TableType> {
@@ -175,13 +175,8 @@ impl<F: Field> PublicData<F> {
                 .to_be_bytes()
                 .to_vec(),
         );
-        let graffiti = Token::FixedBytes(
-            protocol_instance
-                .graffiti
-                .to_word()
-                .to_be_bytes()
-                .to_vec(),
-        );
+        let graffiti =
+            Token::FixedBytes(protocol_instance.graffiti.to_word().to_be_bytes().to_vec());
         let prover = Token::Address(protocol_instance.prover);
         Self {
             evidence: Token::FixedArray(vec![
@@ -322,8 +317,9 @@ impl<F: Field> SubCircuitConfig<F> for TaikoPiCircuitConfig<F> {
     ) -> Self {
         let keccak_r = challenges.keccak_input();
         let evm_word = challenges.evm_word();
-        let mut cm = CellManager::new(15,0,);
-        let mut cb: ConstraintBuilder<F, PiCellType> = ConstraintBuilder::new(4, Some(cm.clone()), Some(evm_word.expr()));
+        let mut cm = CellManager::new(15, 0);
+        let mut cb: ConstraintBuilder<F, PiCellType> =
+            ConstraintBuilder::new(4, Some(cm.clone()), Some(evm_word.expr()));
         cb.load_table(meta, Table::Keccak, &keccak_table);
         cb.load_table(meta, Table::Bytecode, &byte_table);
         cb.load_table(meta, Table::Block, &block_table);
