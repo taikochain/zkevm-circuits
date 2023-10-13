@@ -59,8 +59,12 @@ fuzz_target!(|tx_random_input: TxRandomInput| {
                 // println!("Tx after tranformation: {:?}", tx_transformed);
                 tx_transformed
             }).filter(|tx| {
-                tx.v == 0;
+                tx.v != 0
             }).collect();
+
+    if transactions.len() == 0 {
+        return;
+    }
 
     println!("Input: {:?}", transactions);
     assert_eq!(run::<Fr>(transactions, chain_id, NTX, MAX_CALLDATA), Ok(()));
