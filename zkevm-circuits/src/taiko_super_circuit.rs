@@ -342,7 +342,16 @@ impl<F: Field> Circuit<F> for SuperCircuit<F> {
             self.block
                 .sha3_inputs
                 .iter()
-                .chain(std::iter::once(&self.pi_circuit.evidence.encode_raw())),
+                .chain(std::iter::once(&self.pi_circuit.evidence.encode_raw()))
+                .chain(
+                    &self
+                        .block
+                        .bytecodes
+                        .clone()
+                        .into_iter()
+                        .map(|b| b.1.bytes)
+                        .collect_vec(),
+                ),
             &challenges,
         )?;
         config.byte_table.load(&mut layouter)?;

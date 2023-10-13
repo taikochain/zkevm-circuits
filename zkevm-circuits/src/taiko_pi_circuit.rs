@@ -34,6 +34,7 @@ const BLOCK_HASH: usize = 2;
 const SIGNAL_ROOT: usize = 3;
 const GRAFFITI: usize = 4;
 const PROVER: usize = 5;
+const CM_HEIGHT: usize = 15;
 const S1: PiCellType = PiCellType::StoragePhase1;
 const S2: PiCellType = PiCellType::StoragePhase2;
 ///
@@ -317,7 +318,7 @@ impl<F: Field> SubCircuitConfig<F> for TaikoPiCircuitConfig<F> {
     ) -> Self {
         let keccak_r = challenges.keccak_input();
         let evm_word = challenges.evm_word();
-        let mut cm = CellManager::new(15, 0);
+        let mut cm = CellManager::new(CM_HEIGHT, 0);
         let mut cb: ConstraintBuilder<F, PiCellType> =
             ConstraintBuilder::new(4, Some(cm.clone()), Some(evm_word.expr()));
         cb.load_table(meta, Table::Keccak, &keccak_table);
@@ -490,11 +491,10 @@ impl<F: Field> SubCircuit<F> for TaikoPiCircuit<F> {
     fn unusable_rows() -> usize {
         // No column queried at more than 3 distinct rotations, so returns 6 as
         // minimum unusable rows.
-        PublicData::<F>::default().total_len() + 3
+        CM_HEIGHT + 3
     }
 
     fn min_num_rows_block(block: &witness::Block<F>) -> (usize, usize) {
-        // TODO(Cecilia): what is the first field?
         (0, PublicData::new(block).total_len())
     }
 
