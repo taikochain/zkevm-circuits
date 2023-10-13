@@ -3,36 +3,57 @@
 extern crate num_bigint;
 extern crate num_traits;
 
+use std::collections::HashSet;
 use std::panic;
+use std::sync::Arc;
+
 use libfuzzer_sys::fuzz_target;
 use rand::Rng;
+
 use bus_mapping::circuit_input_builder::CircuitsParams;
-use eth_types::Address;
-use eth_types::Bytes;
-use eth_types::H256;
-use eth_types::Word;
-use mock::MockAccount;
-use mock::MockTransaction;
 use num_traits::FromPrimitive;
 use zkevm_circuits::test_util::CircuitTestBuilder;
 
-mod lib;
 use crate::lib::AccountMember;
+use crate::lib::EVMRandomInputs;
 use crate::lib::TransactionMember;
 
+mod lib;
 
-#[derive(Clone, Debug, libfuzzer_sys::arbitrary::Arbitrary)]
-pub struct EVMRandomInput<const NACC: usize, const NTX: usize> {
-    pub accounts_random_input: [[[u8; 128]; 5]; NACC],
-    pub transactions_random_input: [[u8; 128]; NTX],
-}
+const CURRENT_NACC: usize = 2;
+const CURRENT_NTX: usize = 1;
 
-const CURRENT_NACC: usize = 200;
-const CURRENT_NTX: usize = 100;
+fuzz_target!(|evm_random_inputs: EVMRandomInputs| {
 
-fuzz_target!(|evm_random_input: EVMRandomInput<CURRENT_NACC,CURRENT_NTX>| {
+    println!("EVM Random Input: \n accounts length: {:?} \n transactions length: {:?}", evm_random_inputs.accounts_random_input.len(), evm_random_inputs.transactions_random_input.len());
+    if evm_random_inputs.accounts_random_input.len()!= CURRENT_NACC {
+        return;
+    }
+    if evm_random_inputs.transactions_random_input.len()!= CURRENT_NTX {
+        return;
+    }
 
-    eprintln!("EVM Random Input: {:?}", evm_random_input.clone());
+    let mut seen_addresses = HashSet::new();
+    let mut has_duplicates = false;
+
+    for input in &evm_random_inputs.accounts_random_input {
+        if seen_addresses.contains(&input.accounts_random_address) {
+            // Address is a duplicate
+            has_duplicates = true;
+            break;
+        } else {
+            seen_addresses.insert(input.accounts_random_address);
+        }
+    }
+
+    if has_duplicates {
+        return;
+    }
+
+    let cloned_evm_random_inputs_1 = Arc::new(evm_random_inputs.clone());
+    let cloned_evm_random_inputs_2 = Arc::clone(&cloned_evm_random_inputs_1);
+    let cloned_evm_random_inputs_3 = Arc::clone(&cloned_evm_random_inputs_1);
+    let cloned_evm_random_inputs_4 = Arc::clone(&cloned_evm_random_inputs_1);
 
     // Hook activates when a Panic has occured (invalid transactions found). Some transactions are invalid. Skipping invalid transactions is on.
     panic::set_hook(Box::new(move |info| {
@@ -40,10 +61,12 @@ fuzz_target!(|evm_random_input: EVMRandomInput<CURRENT_NACC,CURRENT_NTX>| {
         let ctx = mock::TestContext::<CURRENT_NACC, CURRENT_NTX>::new(
             None,
             |accs| {
-                AccountMember::<CURRENT_NACC>::randomize_all_accounts(accs, &evm_random_input.accounts_random_input.clone());
+                AccountMember::<CURRENT_NACC>::randomize_all_accounts(accs, cloned_evm_random_inputs_1.as_ref().clone());
             },
-            |mut txs, accs| {
-                TransactionMember::<CURRENT_NTX>::randomize_transactions_one_random_member(txs.try_into().expect("NTX mismatch"), &evm_random_input.transactions_random_input.clone(), true);
+            |txs, accs| {
+                let (transactions, accounts) =TransactionMember::<CURRENT_NTX>::randomize_transactions_vec_one_random_member_for_accounts(accs.clone().to_vec(), txs, cloned_evm_random_inputs_2.as_ref().clone(), true);
+                println!("Input txs: {:?}", transactions);
+                println!("Input accs: {:?}", accounts);
             },
             |block, _| block,
         )
@@ -62,10 +85,10 @@ fuzz_target!(|evm_random_input: EVMRandomInput<CURRENT_NACC,CURRENT_NTX>| {
     let ctx = mock::TestContext::<CURRENT_NACC, CURRENT_NTX>::new(
             None,
             |accs| {
-                AccountMember::<CURRENT_NACC>::randomize_all_accounts(accs, &evm_random_input.accounts_random_input.clone());
+                AccountMember::<CURRENT_NACC>::randomize_all_accounts(accs, cloned_evm_random_inputs_3.as_ref().clone());
             },
-            |mut txs, _| {
-                TransactionMember::<CURRENT_NTX>::randomize_transactions_one_random_member(txs.try_into().expect("NTX mismatch"), &evm_random_input.transactions_random_input.clone(), false);
+            |txs, accs| {
+                TransactionMember::<CURRENT_NTX>::randomize_transactions_vec_one_random_member_for_accounts(accs.clone().to_vec(), txs, cloned_evm_random_inputs_4.as_ref().clone(), false);
             },
             |block, _| block,
         )
