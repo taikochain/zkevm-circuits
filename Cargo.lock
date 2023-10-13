@@ -476,7 +476,7 @@ dependencies = [
  "ethers-core",
  "ethers-providers",
  "gadgets",
- "halo2_proofs 0.2.0 (git+https://github.com/taikoxyz/halo2.git?tag=v0.0.1)",
+ "halo2_proofs 0.2.0",
  "hex",
  "itertools",
  "keccak256",
@@ -1246,7 +1246,7 @@ dependencies = [
 [[package]]
 name = "ecc"
 version = "0.1.0"
-source = "git+https://github.com/privacy-scaling-explorations/halo2wrong?tag=v2023_04_20#f72db265aa3cebe297c9b9816e940d0e1d400886"
+source = "git+https://github.com/taikoxyz/halo2wrong?branch=a6-integration#1349a8706f0afcf4995ec9ccb6ad9573ddc358fc"
 dependencies = [
  "integer",
  "num-bigint",
@@ -1259,7 +1259,7 @@ dependencies = [
 [[package]]
 name = "ecdsa"
 version = "0.1.0"
-source = "git+https://github.com/privacy-scaling-explorations/halo2wrong?tag=v2023_04_20#f72db265aa3cebe297c9b9816e940d0e1d400886"
+source = "git+https://github.com/taikoxyz/halo2wrong?branch=a6-integration#1349a8706f0afcf4995ec9ccb6ad9573ddc358fc"
 dependencies = [
  "ecc",
  "num-bigint",
@@ -1451,7 +1451,7 @@ version = "0.1.0"
 dependencies = [
  "ethers-core",
  "ethers-signers",
- "halo2_proofs 0.2.0 (git+https://github.com/taikoxyz/halo2.git?tag=v0.0.1)",
+ "halo2_proofs 0.2.0",
  "hex",
  "itertools",
  "lazy_static",
@@ -2073,7 +2073,7 @@ version = "0.1.0"
 dependencies = [
  "digest 0.7.6",
  "eth-types",
- "halo2_proofs 0.2.0 (git+https://github.com/taikoxyz/halo2.git?tag=v0.0.1)",
+ "halo2_proofs 0.2.0",
  "rand",
  "rand_xorshift",
  "sha3 0.7.3",
@@ -2238,22 +2238,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "halo2_proofs"
-version = "0.2.0"
-source = "git+https://github.com/privacy-scaling-explorations/halo2?tag=v2023_04_20#be955686f86eb618f55d2320c0e042485b313d22"
-dependencies = [
- "blake2b_simd",
- "ff 0.13.0",
- "group 0.13.0",
- "halo2curves",
- "rand_chacha",
- "rand_core",
- "rayon",
- "sha3 0.9.1",
- "tracing",
-]
-
-[[package]]
 name = "halo2curves"
 version = "0.3.2"
 source = "git+https://github.com/privacy-scaling-explorations/halo2curves?tag=0.3.2#9f5c50810bbefe779ee5cf1d852b2fe85dc35d5e"
@@ -2274,9 +2258,9 @@ dependencies = [
 [[package]]
 name = "halo2wrong"
 version = "0.1.0"
-source = "git+https://github.com/privacy-scaling-explorations/halo2wrong?tag=v2023_04_20#f72db265aa3cebe297c9b9816e940d0e1d400886"
+source = "git+https://github.com/taikoxyz/halo2wrong?branch=a6-integration#1349a8706f0afcf4995ec9ccb6ad9573ddc358fc"
 dependencies = [
- "halo2_proofs 0.2.0 (git+https://github.com/privacy-scaling-explorations/halo2?tag=v2023_04_20)",
+ "halo2_proofs 0.2.0",
  "num-bigint",
  "num-integer",
  "num-traits",
@@ -2301,15 +2285,6 @@ name = "hashbrown"
 version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8a9ee70c43aaf417c914396645a0fa852624801b24ebb7ae78fe8272889ac888"
-
-[[package]]
-name = "hashbrown"
-version = "0.13.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "43a3c133739dddd0d2990f9a4bdf8eb4b21ef50e4851ca85ab661199821d510e"
-dependencies = [
- "ahash",
-]
 
 [[package]]
 name = "hashbrown"
@@ -2622,7 +2597,7 @@ dependencies = [
 [[package]]
 name = "integer"
 version = "0.1.0"
-source = "git+https://github.com/privacy-scaling-explorations/halo2wrong?tag=v2023_04_20#f72db265aa3cebe297c9b9816e940d0e1d400886"
+source = "git+https://github.com/taikoxyz/halo2wrong?branch=a6-integration#1349a8706f0afcf4995ec9ccb6ad9573ddc358fc"
 dependencies = [
  "maingate",
  "num-bigint",
@@ -2640,7 +2615,7 @@ dependencies = [
  "env_logger",
  "eth-types",
  "ethers",
- "halo2_proofs 0.2.0 (git+https://github.com/taikoxyz/halo2.git?tag=v0.0.1)",
+ "halo2_proofs 0.2.0",
  "lazy_static",
  "log",
  "mock",
@@ -2913,7 +2888,7 @@ checksum = "b5e6163cb8c49088c2c36f57875e58ccd8c87c7427f7fbd50ea6710b2f3f2e8f"
 [[package]]
 name = "maingate"
 version = "0.1.0"
-source = "git+https://github.com/privacy-scaling-explorations/halo2wrong?tag=v2023_04_20#f72db265aa3cebe297c9b9816e940d0e1d400886"
+source = "git+https://github.com/taikoxyz/halo2wrong?branch=a6-integration#1349a8706f0afcf4995ec9ccb6ad9573ddc358fc"
 dependencies = [
  "halo2wrong",
  "num-bigint",
@@ -2989,7 +2964,7 @@ dependencies = [
  "ethers-core",
  "ethers-signers",
  "external-tracer",
- "halo2_proofs 0.2.0 (git+https://github.com/taikoxyz/halo2.git?tag=v0.0.1)",
+ "halo2_proofs 0.2.0",
  "itertools",
  "lazy_static",
  "libsecp256k1",
@@ -3909,19 +3884,22 @@ dependencies = [
 
 [[package]]
 name = "revm"
-version = "2.3.1"
+version = "3.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "73d84c8f9836efb0f5f5f8de4700a953c4e1f3119e5cfcb0aad8e5be73daf991"
+checksum = "68f4ca8ae0345104523b4af1a8a7ea97cfa1865cdb7a7c25d23c1a18d9b48598"
 dependencies = [
- "arrayref",
  "auto_impl",
- "bytes",
- "hashbrown 0.13.2",
- "num_enum",
- "primitive-types",
- "revm_precompiles",
- "rlp",
- "sha3 0.10.8",
+ "revm-interpreter",
+ "revm-precompile",
+]
+
+[[package]]
+name = "revm-interpreter"
+version = "1.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f959cafdf64a7f89b014fa73dc2325001cf654b3d9400260b212d19a2ebe3da0"
+dependencies = [
+ "revm-primitives",
 ]
 
 [[package]]
@@ -3936,7 +3914,7 @@ dependencies = [
  "once_cell",
  "revm-primitives",
  "ripemd",
- "secp256k1 0.27.0",
+ "secp256k1",
  "sha2 0.10.8",
  "substrate-bn",
 ]
@@ -3957,24 +3935,6 @@ dependencies = [
  "hashbrown 0.14.1",
  "hex",
  "once_cell",
-]
-
-[[package]]
-name = "revm_precompiles"
-version = "1.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0353d456ef3e989dc9190f42c6020f09bc2025930c37895826029304413204b5"
-dependencies = [
- "bytes",
- "hashbrown 0.13.2",
- "num",
- "once_cell",
- "primitive-types",
- "ripemd",
- "secp256k1 0.24.3",
- "sha2 0.10.8",
- "sha3 0.10.8",
- "substrate-bn",
 ]
 
 [[package]]
@@ -4273,29 +4233,11 @@ dependencies = [
 
 [[package]]
 name = "secp256k1"
-version = "0.24.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6b1629c9c557ef9b293568b338dddfc8208c98a18c59d722a9d53f859d9c9b62"
-dependencies = [
- "secp256k1-sys 0.6.1",
-]
-
-[[package]]
-name = "secp256k1"
 version = "0.27.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "25996b82292a7a57ed3508f052cfff8640d38d32018784acd714758b43da9c8f"
 dependencies = [
- "secp256k1-sys 0.8.1",
-]
-
-[[package]]
-name = "secp256k1-sys"
-version = "0.6.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "83080e2c2fc1006e625be82e5d1eb6a43b7fd9578b617fcc55814daf286bba4b"
-dependencies = [
- "cc",
+ "secp256k1-sys",
 ]
 
 [[package]]
@@ -4542,12 +4484,11 @@ dependencies = [
 
 [[package]]
 name = "snark-verifier"
-version = "0.1.0"
-source = "git+https://github.com/brechtpd/snark-verifier.git?branch=feat/add-sdk#3f7e31d32058f87ae4ec45a4c42a955895eb25c6"
+version = "0.1.1"
+source = "git+https://github.com/ceciliaz030/snark-verifier.git?branch=a6-integration#69dc783b69c60b8a9394506bef6fd5e3be6a6d3e"
 dependencies = [
- "bytes",
  "ecc",
- "halo2_proofs 0.2.0 (git+https://github.com/privacy-scaling-explorations/halo2?tag=v2023_04_20)",
+ "halo2_proofs 0.2.0",
  "halo2curves",
  "hex",
  "itertools",
@@ -4556,24 +4497,22 @@ dependencies = [
  "num-integer",
  "num-traits",
  "poseidon",
- "primitive-types",
  "rand",
  "rayon",
  "revm",
- "rlp",
  "sha3 0.10.8",
 ]
 
 [[package]]
 name = "snark-verifier-sdk"
-version = "0.1.1"
-source = "git+https://github.com/brechtpd/snark-verifier.git?branch=feat/add-sdk#3f7e31d32058f87ae4ec45a4c42a955895eb25c6"
+version = "0.1.2"
+source = "git+https://github.com/ceciliaz030/snark-verifier.git?branch=a6-integration#69dc783b69c60b8a9394506bef6fd5e3be6a6d3e"
 dependencies = [
  "ark-std",
  "bincode",
  "ecc",
  "ethereum-types",
- "halo2_proofs 0.2.0 (git+https://github.com/privacy-scaling-explorations/halo2?tag=v2023_04_20)",
+ "halo2_proofs 0.2.0",
  "halo2curves",
  "hex",
  "itertools",
@@ -4832,7 +4771,7 @@ dependencies = [
  "ethers-signers",
  "external-tracer",
  "glob",
- "halo2_proofs 0.2.0 (git+https://github.com/taikoxyz/halo2.git?tag=v0.0.1)",
+ "halo2_proofs 0.2.0",
  "handlebars",
  "hex",
  "keccak256",
@@ -5609,7 +5548,7 @@ dependencies = [
  "ethers-core",
  "ethers-signers",
  "gadgets",
- "halo2_proofs 0.2.0 (git+https://github.com/taikoxyz/halo2.git?tag=v0.0.1)",
+ "halo2_proofs 0.2.0",
  "hex",
  "integer",
  "itertools",
