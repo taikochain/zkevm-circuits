@@ -19,7 +19,30 @@ use ethers_signers::{LocalWallet, Signer};
 use rand_chacha::ChaCha20Rng;
 use rand::SeedableRng;
 
-use crate::TxRandomInput;
+
+// use crate::TxRandomInput;
+// use crate::EVMRandomInput;
+
+#[derive(Clone, Debug, libfuzzer_sys::arbitrary::Arbitrary)]
+pub struct TxRandomInput {
+    pub transactions_random_input: Vec<[u8; 128]>,
+    pub transactions_random_to: [u8; 20],
+}
+
+#[derive(Clone, Debug, libfuzzer_sys::arbitrary::Arbitrary)]
+pub struct EVMRandomInput {
+    pub accounts_random_address: [u8; 20],
+    pub accounts_random_nonce: [u8; 8],
+    pub accounts_random_balance: [u8; 32],
+    // pub accounts_random_code: [u8; ],
+    // pub accounts_random_storage: [u8; ],
+}
+
+#[derive(Clone, Debug, libfuzzer_sys::arbitrary::Arbitrary)]
+pub struct EVMRandomInputs {
+    pub accounts_random_input: Vec<EVMRandomInput>,
+    pub transactions_random_input: Vec<[u8; 128]>,
+}
 
 const CURRENT_NACC: usize = 0;
 const CURRENT_NTX: usize = 0;
@@ -47,6 +70,37 @@ pub enum TransactionMember<const NTX: usize> {
 }
 
 impl<const NTX: usize> TransactionMember<NTX> {
+    pub fn randomize_transactions_vec_one_random_member_for_accounts(
+        accounts: Vec<MockAccount>,
+        mut transactions: Vec<&mut MockTransaction>,
+        evm_random_inputs: EVMRandomInputs,
+        skip_on_fail: bool,
+    ) -> (Vec<&mut MockTransaction>, Vec<MockAccount>) {
+        if transactions.len() != evm_random_inputs.transactions_random_input.len() {
+            panic!("Mismatched lengths of transactions and random input");
+        }
+
+        for (idx, (transaction, random_input)) in transactions.iter_mut().zip(&evm_random_inputs.transactions_random_input).enumerate() {
+            let empty_array: [u8; 20] = Default::default();
+            // Self::randomize_transaction_at_member(TransactionMember::From, &empty_array, *transaction);
+            let random_member = TransactionMember::random_member();
+            Self::randomize_transaction_at_member(random_member, random_input, *transaction);
+            transaction.from(accounts[idx].address);
+            transaction.to(accounts[idx+1].address);
+            transaction.enable_skipping_invalid_tx(skip_on_fail);
+        }
+
+        // for ((transaction, account), random_input) in transactions.iter_mut().zip(&accounts).zip(evm_random_inputs.transactions_random_input) {
+        //     let empty_array: [u8;20] = Default::default();
+        //     Self::randomize_transaction_at_member(TransactionMember::From, &empty_array, transaction);
+        //     let random_member = TransactionMember::random_member();
+        //     Self::randomize_transaction_at_member(random_member, &random_input, transaction);
+        //     transaction.to(account.address);
+        //     transaction.enable_skipping_invalid_tx(skip_on_fail);
+        // }
+        (transactions, accounts)
+    }
+
     pub fn randomize_transactions_vec_one_random_member(
         mut transactions: Vec<MockTransaction>,
         transactions_random_input: TxRandomInput,
@@ -59,8 +113,6 @@ impl<const NTX: usize> TransactionMember<NTX> {
             let empty_array: [u8;20] = Default::default();
             Self::randomize_transaction_at_member(TransactionMember::From, &empty_array, transaction);
             Self::randomize_transaction_at_member(TransactionMember::To, &transactions_random_input.transactions_random_to, transaction);
-            // Self::randomize_transaction_at_member(TransactionMember::Value, &transactions_random_input.transactions_value, transaction);
-            // Self::randomize_transaction_at_member(TransactionMember::GasPrice, , transaction);
             let random_member = TransactionMember::random_member();
             Self::randomize_transaction_at_member(random_member, &random_input, transaction);
         }
@@ -71,7 +123,7 @@ impl<const NTX: usize> TransactionMember<NTX> {
         mut transactions: [&mut MockTransaction; NTX],
         transactions_random_input: &[[u8; 128]; NTX],
         skip_on_fail: bool,
-    ) {
+    ){
         for (transaction, random_input) in transactions.iter_mut().zip(transactions_random_input.iter()) {
             let random_member = TransactionMember::random_member();
             transaction.enable_skipping_invalid_tx(skip_on_fail);
@@ -219,7 +271,7 @@ pub enum AccountMember<const NACC: usize> {
 }
 
 impl<const NACC: usize> AccountMember<NACC> {
-    pub fn randomize_accounts_all_members(random_input: &[[u8; 128]; 5], mock_account: &mut MockAccount) {
+    pub fn randomize_accounts_all_members(random_input: EVMRandomInput, mock_account: &mut MockAccount) {
         for function in &[
             AccountMember::Address,
             AccountMember::Nonce,
@@ -227,25 +279,22 @@ impl<const NACC: usize> AccountMember<NACC> {
             // AccountMember::Code,
             // AccountMember::Storage,
         ] {
-            Self::randomize_account_at_member(random_input, *function, mock_account);
+            Self::randomize_account_at_member(random_input.clone(), *function, mock_account);
         }
     }
 
-    pub fn randomize_account_at_member(random_input: &[[u8; 128]; 5], function: AccountMember<NACC>, mock_account: &mut MockAccount) {
+    pub fn randomize_account_at_member(random_input: EVMRandomInput, function: AccountMember<NACC>, mock_account: &mut MockAccount) {
         match function {
             AccountMember::Address => {
-                let address_bytes: [u8; 20] = random_input[0][..20].try_into().unwrap();
-                let address = Address::from(address_bytes);
+                let address = Address::from(random_input.accounts_random_address);
                 mock_account.address(address);
             }
             AccountMember::Nonce => {
-                let nonce_bytes: [u8; 8] = random_input[1][..8].try_into().unwrap();
-                let nonce = u64::from_be_bytes(nonce_bytes);
+                let nonce = u64::from_be_bytes(random_input.accounts_random_nonce);
                 mock_account.nonce(nonce);
             }
             AccountMember::Balance => {
-                let balance_bytes: [u8; 32] = random_input[2][..32].try_into().unwrap();
-                let balance = Word::from(balance_bytes);
+                let balance = Word::from(random_input.accounts_random_balance);
                 mock_account.balance(balance);
             }
             AccountMember::Code => {
@@ -262,11 +311,22 @@ impl<const NACC: usize> AccountMember<NACC> {
 
     pub fn randomize_all_accounts(
         mut accounts: [&mut MockAccount; NACC],
-        random_inputs: &[[[u8; 128]; 5]; NACC],
+        random_inputs: EVMRandomInputs,
     ) {
         for (index, account) in accounts.iter_mut().enumerate() {
-            if let Some(random_input) = random_inputs.get(index) {
-                AccountMember::<CURRENT_NACC>::randomize_accounts_all_members(random_input, account);
+            if let Some(random_input) = random_inputs.accounts_random_input.get(index) {
+                AccountMember::<CURRENT_NACC>::randomize_accounts_all_members(random_input.clone(), account);
+            }
+        }
+    }
+
+    pub fn randomize_all_accounts_vec(
+        mut accounts: Vec<&mut MockAccount>,
+        random_inputs: EVMRandomInputs,
+    ) {
+        for (index, account) in accounts.iter_mut().enumerate() {
+            if let Some(random_input) = random_inputs.accounts_random_input.get(index) {
+                AccountMember::<CURRENT_NACC>::randomize_accounts_all_members(random_input.clone(), account);
             }
         }
     }

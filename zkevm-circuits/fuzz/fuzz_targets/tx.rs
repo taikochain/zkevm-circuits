@@ -9,7 +9,7 @@ use mock::MockTransaction;
 use zkevm_circuits::tx_circuit::test::run;
 
 use crate::lib::TransactionMember;
-
+use crate::lib::TxRandomInput;
 mod lib;
 
 // use mock::AddrOrWallet;
@@ -19,25 +19,18 @@ mod lib;
 use rand_chacha::ChaCha20Rng;
 
 
-#[derive(Clone, Debug, libfuzzer_sys::arbitrary::Arbitrary)]
-pub struct TxRandomInput {
-    pub transactions_random_input: Vec<[u8; 128]>,
-    pub transactions_random_to: [u8; 20],
-    pub transactions_value: [u8; 32],
-}
+
 
 const NTX: usize = 1;
 
 fuzz_target!(|tx_random_input: TxRandomInput| {
 
     println!("tx random input count: {:?}", tx_random_input.transactions_random_input.len());
+
     if tx_random_input.transactions_random_input.len() != NTX {
         return;
     }
     if tx_random_input.transactions_random_to == [0; 20] {
-        return;
-    }
-    if tx_random_input.transactions_value == [0; 32] {
         return;
     }
 
