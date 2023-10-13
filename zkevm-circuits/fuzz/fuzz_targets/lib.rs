@@ -87,10 +87,10 @@ impl<const NTX: usize> TransactionMember<NTX> {
             TransactionMember::BlockNumber,
             TransactionMember::TransactionIdx,
             // TransactionMember::From,
-            // TransactionMember::To,
+            TransactionMember::To,
             TransactionMember::Value,
             TransactionMember::GasPrice,
-            // TransactionMember::Gas,
+            TransactionMember::Gas,
             TransactionMember::Input,
             // TransactionMember::SigData,
             TransactionMember::TransactionType,
@@ -156,9 +156,12 @@ impl<const NTX: usize> TransactionMember<NTX> {
                 mock_transaction.gas_price(gas_price);
             }
             TransactionMember::Gas => {
-                let gas_bytes: [u8; 32] = random_input[..32].try_into().unwrap();
-                let gas = Word::from(gas_bytes);
-                mock_transaction.gas(gas);
+                let gas_bytes: [u8; 16] = random_input[..16].try_into().unwrap();
+                // let gas = Word::from(gas_bytes);
+                // mock_transaction.gas(gas);
+                let gas = u128::from_le_bytes(gas_bytes); // Use u128 here
+                let gas_as_u64: u64 = gas as u64;
+                mock_transaction.gas(gas_as_u64.into());
             }
             TransactionMember::Input => {
                 let input_bytes: [u8; 32] = random_input[..32].try_into().unwrap();
