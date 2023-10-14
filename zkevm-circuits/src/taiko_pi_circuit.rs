@@ -136,9 +136,9 @@ pub struct PublicData<F> {
 impl<F: Field> Default for PublicData<F> {
     fn default() -> Self {
         // has to have at least one history hash, block number must start with at least one
-        let block = witness::Block::<F> { 
-            protocol_instance: Some(ProtocolInstance::default()), 
-            ..Default::default() 
+        let block = witness::Block::<F> {
+            protocol_instance: Some(ProtocolInstance::default()),
+            ..Default::default()
         };
         let mut ret = Self::new(&block);
         ret.block_context.history_hashes = vec![U256::default()];
@@ -637,10 +637,10 @@ mod taiko_pi_circuit_test {
     }
 
     fn mock(
-        number: Option<U256>, 
-        this_hash: Option<H256>, 
-        last_hash: Option<H256>, 
-        prover: Option<H160>
+        number: Option<U256>,
+        this_hash: Option<H256>,
+        last_hash: Option<H256>,
+        prover: Option<H160>,
     ) -> witness::Block<Fr> {
         let eth_block = eth_types::Block::<eth_types::Transaction> {
             hash: this_hash,
@@ -652,7 +652,7 @@ mod taiko_pi_circuit_test {
             history_hashes: last_hash.map_or(Vec::new(), |h| vec![h.to_word()]),
             block_hash: this_hash.unwrap_or_default().to_word(),
             ..Default::default()
-        };        
+        };
         let mut block = witness::Block::<Fr> {
             eth_block,
             context,
@@ -661,7 +661,6 @@ mod taiko_pi_circuit_test {
         block.mock_protocol_instance(prover);
         block
     }
-
 
     #[test]
     fn test_default_pi() {
@@ -674,10 +673,10 @@ mod taiko_pi_circuit_test {
     #[test]
     fn test_simple_pi() {
         let block = mock(
-            Some(300.into()), 
+            Some(300.into()),
             Some(*THIS_HASH),
             Some(*LAST_HASH),
-            Some(*PROVER_ADDR)
+            Some(*PROVER_ADDR),
         );
         let evidence = PublicData::new(&block);
 
@@ -687,12 +686,7 @@ mod taiko_pi_circuit_test {
 
     #[test]
     fn test_fail_hi_lo() {
-        let block = mock(
-            Some(300.into()), 
-            Some(*THIS_HASH),
-            Some(*LAST_HASH),
-            None
-        );
+        let block = mock(Some(300.into()), Some(*THIS_HASH), Some(*LAST_HASH), None);
         let evidence = PublicData::new(&block);
         let k = 17;
         match run::<Fr>(k, evidence, Some(vec![vec![Fr::zero(), Fr::one()]])) {
@@ -711,14 +705,9 @@ mod taiko_pi_circuit_test {
 
     #[test]
     fn test_fail_historical_hash() {
-        // ProtocolInstance has default parent hash 
+        // ProtocolInstance has default parent hash
         // but context.history_hashes is empty
-        let block = mock(
-            Some(300.into()), 
-            Some(*THIS_HASH),
-            None,
-            None
-        );
+        let block = mock(Some(300.into()), Some(*THIS_HASH), None, None);
         let evidence = PublicData::new(&block);
 
         let k = 17;
@@ -736,24 +725,18 @@ mod taiko_pi_circuit_test {
         }
     }
 
-
     #[ignore = "takes too long"]
     #[test]
     fn test_from_integration() {
-        let block = mock(
-            Some(300.into()), 
-            Some(*THIS_HASH),
-            Some(*LAST_HASH),
-            None
-        );
+        let block = mock(Some(300.into()), Some(*THIS_HASH), Some(*LAST_HASH), None);
         let evidence1 = PublicData::new(&block);
         let circuit1 = TaikoPiCircuit::new(evidence1);
 
         let block = mock(
-            Some(454.into()), 
+            Some(454.into()),
             Some(*THIS_HASH),
             Some(*LAST_HASH),
-            Some(*PROVER_ADDR)
+            Some(*PROVER_ADDR),
         );
         let evidence2 = PublicData::new(&block);
         let circuit2 = TaikoPiCircuit::new(evidence2);
