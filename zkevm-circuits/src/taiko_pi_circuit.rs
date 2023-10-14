@@ -19,7 +19,7 @@ use crate::{
         constraint_builder::{ConstraintBuilder, RLCable},
     },
     evm_circuit::{table::Table, util::rlc},
-    table::{byte_table::ByteTable, BlockContextFieldTag, BlockTable, KeccakTable, LookupTable},
+    table::{byte_table::ByteTable, BlockContextFieldTag, BlockTable, KeccakTable},
     util::{Challenges, SubCircuit, SubCircuitConfig},
     witness::{self, BlockContext},
 };
@@ -136,7 +136,10 @@ pub struct PublicData<F> {
 impl<F: Field> Default for PublicData<F> {
     fn default() -> Self {
         // has to have at least one history hash, block number must start with at least one
-        let mut block = witness::Block::default();
+        let mut block = witness::Block::<F> { 
+            protocol_instance: Some(ProtocolInstance::default()), 
+            ..Default::default() 
+        };
         block.protocol_instance = Some(ProtocolInstance::default());
         let mut ret = Self::new(&block);
         ret.block_context.history_hashes = vec![U256::default()];
@@ -438,10 +441,10 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
                 let mut region = CachedRegion::new(&mut region);
                 region.annotate_columns(&self.columns);
 
-                assign!(region, self.parent_hash.0, 0 => (evidence.block_context.number - 1).as_u64().scalar());
-                assign!(region, self.parent_hash.2, 0 => evidence.assignment_acc(PARENT_HASH, evm_word));
-                assign!(region, self.block_hash.0, 0 => (evidence.block_context.number).as_u64().scalar());
-                assign!(region, self.block_hash.2, 0 => evidence.assignment_acc(BLOCK_HASH, evm_word));
+                assign!(region, self.parent_hash.0, 0 => (evidence.block_context.number - 1).as_u64().scalar())?;
+                assign!(region, self.parent_hash.2, 0 => evidence.assignment_acc(PARENT_HASH, evm_word))?;
+                assign!(region, self.block_hash.0, 0 => (evidence.block_context.number).as_u64().scalar())?;
+                assign!(region, self.block_hash.2, 0 => evidence.assignment_acc(BLOCK_HASH, evm_word))?;
 
                 let mut idx = 0;
                 [
@@ -665,12 +668,13 @@ mod taiko_pi_circuit_test {
     #[test]
     fn test_fail_historical_hash() {
         let mut block = witness::Block::<Fr>::default();
-
         block.eth_block.parent_hash = *LAST_HASH;
         block.eth_block.hash = Some(*THIS_HASH);
-        let mut protocol_instance = ProtocolInstance::default();
-        protocol_instance.block_hash = *THIS_HASH;
-        protocol_instance.parent_hash = *LAST_HASH;
+        let protocol_instance = ProtocolInstance { 
+            block_hash: *THIS_HASH,
+            parent_hash: *LAST_HASH,
+            ..Default::default()
+        };
         block.protocol_instance = Some(protocol_instance);
 
         // parent hash doesn't exist in table!
@@ -713,9 +717,11 @@ mod taiko_pi_circuit_test {
 
         block.eth_block.parent_hash = *LAST_HASH;
         block.eth_block.hash = Some(*THIS_HASH);
-        let mut protocol_instance = ProtocolInstance::default();
-        protocol_instance.block_hash = *THIS_HASH;
-        protocol_instance.parent_hash = *LAST_HASH;
+        let protocol_instance = ProtocolInstance { 
+            prover: *PROVER_ADDR,
+            parent_hash: *LAST_HASH,
+            ..Default::default()
+        };
         block.protocol_instance = Some(protocol_instance);
         block.context.history_hashes = vec![LAST_HASH.to_word()];
         block.context.block_hash = THIS_HASH.to_word();
@@ -735,9 +741,11 @@ mod taiko_pi_circuit_test {
 
         block1.eth_block.parent_hash = *LAST_HASH;
         block1.eth_block.hash = Some(*THIS_HASH);
-        let mut protocol_instance = ProtocolInstance::default();
-        protocol_instance.block_hash = *THIS_HASH;
-        protocol_instance.parent_hash = *LAST_HASH;
+        let protocol_instance = ProtocolInstance { 
+            block_hash: *THIS_HASH,
+            parent_hash: *LAST_HASH,
+            ..Default::default()
+        };
         block1.protocol_instance = Some(protocol_instance);
         block1.context.history_hashes = vec![LAST_HASH.to_word()];
         block1.context.block_hash = THIS_HASH.to_word();
@@ -746,8 +754,11 @@ mod taiko_pi_circuit_test {
         let circuit1 = TaikoPiCircuit::new(evidence1);
 
         let mut block2 = witness::Block::<Fr>::default();
-        let mut protocol_instance = ProtocolInstance::default();
-        protocol_instance.prover = *PROVER_ADDR;
+        let protocol_instance = ProtocolInstance { 
+            prover: *PROVER_ADDR,
+            parent_hash: *LAST_HASH,
+            ..Default::default()
+        };
         block2.protocol_instance = Some(protocol_instance);
         let evidence2 = PublicData::new(&block2);
         let circuit2 = TaikoPiCircuit::new(evidence2);
