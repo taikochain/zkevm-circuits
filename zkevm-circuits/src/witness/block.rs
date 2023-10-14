@@ -12,7 +12,7 @@ use bus_mapping::{
     },
     Error,
 };
-use eth_types::{Address, Field, ToBigEndian, ToLittleEndian, ToScalar, ToWord, Word, H256};
+use eth_types::{Address, Field, ToBigEndian, ToLittleEndian, ToScalar, ToWord, Word, H256, U256, H160};
 use halo2_proofs::circuit::Value;
 
 use super::{tx::tx_convert, Bytecode, ExecStep, Rw, RwMap, Transaction};
@@ -114,6 +114,21 @@ impl<F: Field> Block<F> {
     /// Set protocol instance means in taiko context
     pub fn is_taiko(&self) -> bool {
         self.protocol_instance.is_some()
+    }
+
+    pub(crate) fn mock_protocol_instance(&mut self, prover: Option<H160>) {
+        let protocol_instance = ProtocolInstance {
+            prover: prover.unwrap_or_default(),
+            gas_used: self.eth_block.gas_used.as_u32(),
+            block_hash: H256::from(self.context.block_hash.to_be_bytes()),
+            parent_hash: H256::from(
+                self.context.history_hashes
+                    .last()
+                    .unwrap_or(&U256::default())
+                    .to_be_bytes()),
+            ..Default::default()
+        };
+        self.protocol_instance = Some(protocol_instance);
     }
 
     /// Obtains the expected Circuit degree needed in order to be able to test
