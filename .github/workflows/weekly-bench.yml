@@ -2,6 +2,10 @@ name: Weekly Circuits Benchmark
 
 on:
   workflow_dispatch:
+    inputs:
+      BRANCH_NAME:
+        description: 'BRANCH_NAME'
+        required: true
   schedule:
     - cron: "0 0 * * MON"
 
@@ -28,6 +32,7 @@ jobs:
           ./github-action-trigger.sh
         env:
           GITHUB_RUN_ID: ${{ vars.GITHUB_RUN_ID }}
+          BRANCH_NAME: ${{ inputs.BRANCH_NAME || github.event.client_payload.BRANCH_NAME }}
 
       - name: Cleanup
         run: |

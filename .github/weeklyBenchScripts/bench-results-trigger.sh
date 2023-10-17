@@ -2,6 +2,7 @@
 set -eo pipefail
 
 GITHUB_RUN_ID=$1
+BRANCH_NAME=$2
 
 ensure_git_installed() {
   if ! command -v git &>/dev/null; then
@@ -16,6 +17,7 @@ ensure_git_installed() {
 clone_zkevm-circuits() {
   git clone -q https://github.com/taikoxyz/zkevm-circuits.git
   cd zkevm-circuits || exit 1
+  git checkout "$BRANCH_NAME"
   echo "Cloned zkevm-circuits"
 }
 
@@ -27,7 +29,7 @@ clone_zkevm-circuits
 
 cd .github/weeklyBenchScripts || exit 1
 chmod u+x bench-results-local-trigger.sh
-./bench-results-local-trigger.sh "$GITHUB_RUN_ID"
+./bench-results-local-trigger.sh "$GITHUB_RUN_ID" "$BRANCH_NAME"
 RESULT=$?
 echo "Exiting bench-results-trigger with RESULT $RESULT"
 exit $RESULT

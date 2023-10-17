@@ -2,6 +2,7 @@
 set -eo pipefail
 
 GITHUB_RUN_ID=$1
+BRANCH_NAME=$2
 
 # Get the latest temp directory in the home directory
 current_dir="$HOME"/CI_Prover_Benches/"$GITHUB_RUN_ID"

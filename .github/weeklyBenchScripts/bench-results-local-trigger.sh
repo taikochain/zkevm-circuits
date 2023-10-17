@@ -4,6 +4,7 @@
 cd "$(dirname "$0")" || exit 1
 
 GITHUB_RUN_ID=$1
+BRANCH_NAME=$2
 
 PROVER_INSTANCE=$(cat "$HOME/CI_Github_Trigger/$GITHUB_RUN_ID/prover_instance")
 echo "Prover instance at trigger: $PROVER_INSTANCE"
@@ -24,7 +25,7 @@ run_single_benchmark() {
   local CIRCUIT=$2
 
   ssh -i ~/.ssh/bench.pem -o StrictHostKeyChecking=no ubuntu@"$PROVER_IP" "bash -s" -- "$GITHUB_RUN_ID" <03_prepareProver.sh
-  ssh -i ~/.ssh/bench.pem -o StrictHostKeyChecking=no ubuntu@"$PROVER_IP" "bash -s" -- "$GITHUB_RUN_ID" <04_clone.sh
+  ssh -i ~/.ssh/bench.pem -o StrictHostKeyChecking=no ubuntu@"$PROVER_IP" "bash -s" -- "$GITHUB_RUN_ID" "$BRANCH_NAME" <04_clone.sh
   ssh -i ~/.ssh/bench.pem -o StrictHostKeyChecking=no ubuntu@"$PROVER_IP" "bash -s" -- "$GITHUB_RUN_ID" <05_build.sh
   ssh -i ~/.ssh/bench.pem -o StrictHostKeyChecking=no ubuntu@"$PROVER_IP" "bash -s" -- <06_rsSysstat.sh &
   sleep 5
