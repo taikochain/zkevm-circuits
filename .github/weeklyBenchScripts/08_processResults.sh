@@ -3,6 +3,7 @@
 
 label=$1
 degree=$2
+branch_name=$3
 
 # Get the latest temp directory in the Triggerers directory
 trigger_results_dir="../../../results/$label"
@@ -46,7 +47,7 @@ scp -i ~/.ssh/bench.pem -o StrictHostKeyChecking=no ubuntu@"$PROVER_IP":"$prover
 l=$(echo "$label" | tr -d '"')
 circuit=$(echo "$l" |  awk '{print $1}')
 time=$(date +%Y-%m-%d_%H-%M-%S)
-test_id=$time-$circuit-$degree-Benchmark
+test_id="$time-$circuit-$degree-Benchmark-branch_$branch_name"
 
 cd "$trigger_results_dir"
 tar -czvf ./"$test_id".tar.gz ./*proverlog ./*.stats

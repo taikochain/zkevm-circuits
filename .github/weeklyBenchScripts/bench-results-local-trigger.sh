@@ -33,7 +33,7 @@ run_single_benchmark() {
   ssh -i ~/.ssh/bench.pem -o StrictHostKeyChecking=no ubuntu@"$PROVER_IP" "bash -s" -- "$DEGREE" "$CIRCUIT" "$GITHUB_RUN_ID" <07_execBench.sh
   declare -g RESULT=$?
   chmod u+x 08_processResults.sh
-  ./08_processResults.sh "$CIRCUIT" "$DEGREE"
+  ./08_processResults.sh "$CIRCUIT" "$DEGREE" "$BRANCH_NAME"
 }
 
 words="exp evm tx bytecode state pi copy super keccak"
