@@ -32,7 +32,7 @@ jobs:
           ./github-action-trigger.sh
         env:
           GITHUB_RUN_ID: ${{ vars.GITHUB_RUN_ID }}
-          BRANCH_NAME: ${{ inputs.BRANCH_NAME || github.event.client_payload.BRANCH_NAME }}
+          BRANCH_NAME: ${{ inputs.BRANCH_NAME || github.event.client_payload.BRANCH_NAME || main }}
 
       - name: Cleanup
         run: |
