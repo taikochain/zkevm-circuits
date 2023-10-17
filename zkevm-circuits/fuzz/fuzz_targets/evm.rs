@@ -64,9 +64,15 @@ fuzz_target!(|evm_random_inputs: EVMRandomInputs| {
                 AccountMember::<CURRENT_NACC>::randomize_all_accounts(accs, cloned_evm_random_inputs_1.as_ref().clone());
             },
             |txs, accs| {
+<<<<<<< HEAD
                 let (transactions, accounts) =TransactionMember::<CURRENT_NTX>::randomize_transactions_vec_one_random_member_for_accounts(accs.clone().to_vec(), txs, cloned_evm_random_inputs_2.as_ref().clone(), true, true);
                 println!("Skip: true; Input txs: {:?}", transactions);
                 println!("Skip: true; Input accs: {:?}", accounts);
+=======
+                let (transactions, accounts) =TransactionMember::<CURRENT_NTX>::randomize_transactions_vec_one_random_member_for_accounts(accs.clone().to_vec(), txs, cloned_evm_random_inputs_2.as_ref().clone(), true);
+                println!("Input txs: {:?}", transactions);
+                println!("Input accs: {:?}", accounts);
+>>>>>>> 2bc45d86fcb33a20f33f6f1323b44624b25ea08b
             },
             |block, _| block,
         )
@@ -88,9 +94,13 @@ fuzz_target!(|evm_random_inputs: EVMRandomInputs| {
                 AccountMember::<CURRENT_NACC>::randomize_all_accounts(accs, cloned_evm_random_inputs_3.as_ref().clone());
             },
             |txs, accs| {
+<<<<<<< HEAD
                 let (transactions, accounts) = TransactionMember::<CURRENT_NTX>::randomize_transactions_vec_one_random_member_for_accounts(accs.clone().to_vec(), txs, cloned_evm_random_inputs_4.as_ref().clone(), false, false);
                 println!("Skip: false; Input txs: {:?}", transactions);
                 println!("Skip: false; Input accs: {:?}", accounts);
+=======
+                TransactionMember::<CURRENT_NTX>::randomize_transactions_vec_one_random_member_for_accounts(accs.clone().to_vec(), txs, cloned_evm_random_inputs_4.as_ref().clone(), false);
+>>>>>>> 2bc45d86fcb33a20f33f6f1323b44624b25ea08b
             },
             |block, _| block,
         )
