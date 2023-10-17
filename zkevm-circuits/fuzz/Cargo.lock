@@ -4288,6 +4288,7 @@ dependencies = [
  "halo2_proofs 0.2.0",
  "halo2curves 0.4.0",
  "hex",
+ "lazy_static",
  "libfuzzer-sys",
  "log",
  "mock",

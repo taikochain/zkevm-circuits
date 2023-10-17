@@ -26,6 +26,7 @@ num-traits = "0.2.16"
 nonzero = "0.2.0"
 hex = "0.4.3"
 ethers-signers = "2.0.0"
+lazy_static = "1.4.0"
 [dependencies.zkevm-circuits]
 path = "../"
 
