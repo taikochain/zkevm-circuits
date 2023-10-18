@@ -1,49 +1,25 @@
 //! TaikoSuperCircuit circuit benchmarks
 
 use eth_types::{Bytes, U256};
-use halo2_proofs::poly::commitment::Params;
-use serde::{Deserialize, Serialize};
-use std::{fs, rc::Rc};
-use zkevm_circuits::{
-    root_circuit::{
-        taiko_aggregation::AccumulationSchemeType, KzgDk, KzgSvk, TaikoAggregationCircuit,
-    },
-    taiko_super_circuit::{test::block_1tx, SuperCircuit},
-};
-
-use bus_mapping::circuit_input_builder::{CircuitsParams, ProtocolInstance};
-
-use rand::SeedableRng;
-
-use ark_std::{end_timer, start_timer};
 use halo2_proofs::{
-    halo2curves::{
-        bn256::{Bn256, Fq, Fr, G1Affine},
-        ff::PrimeField,
-    },
-    plonk::{keygen_pk, keygen_vk, ProvingKey, VerifyingKey},
+    halo2curves::bn256::{Bn256, Fq, Fr, G1Affine},
+    plonk::{ProvingKey, VerifyingKey},
     poly::{
         commitment::ParamsProver,
         kzg::commitment::{KZGCommitmentScheme, ParamsKZG},
     },
 };
-use std::path::Path;
-
-use snark_verifier_sdk::{
-    evm::{gen_evm_proof_gwc, gen_evm_proof_shplonk},
-    halo2::{aggregation::AccumulationSchemeSDK, gen_snark_gwc, gen_snark_shplonk, gen_srs},
-    Snark, GWC, SHPLONK,
-};
-
+use rand::SeedableRng;
+use serde::{Deserialize, Serialize};
 use snark_verifier::{
-    loader::evm::{self, encode_calldata, Address as VerifierAddress, EvmLoader, ExecutorBuilder},
+    loader::evm::{encode_calldata, Address as VerifierAddress, EvmLoader, ExecutorBuilder},
     pcs::kzg::*,
     system::halo2::{compile, transcript::evm::EvmTranscript, Config},
     verifier::SnarkVerifier,
 };
-
-const MIN_APP_DEGREE: u32 = 21;
-const MIN_AGG_DEGREE: u32 = 26;
+use snark_verifier_sdk::{GWC, SHPLONK};
+use std::{fs, path::Path, rc::Rc};
+use zkevm_circuits::root_circuit::{taiko_aggregation::AccumulationSchemeType, KzgDk, KzgSvk};
 
 /// Number of limbs to decompose a elliptic curve base field element into.
 pub const LIMBS: usize = 4;
@@ -79,7 +55,8 @@ pub fn gen_num_instance(instance: &[Vec<Fr>]) -> Vec<usize> {
     instance.iter().map(|v| v.len()).collect()
 }
 
-fn gen_verifier(
+/// for chain to generate verifier contract
+pub fn gen_verifier(
     params: &ProverParams,
     vk: &VerifyingKey<G1Affine>,
     config: Config,
@@ -114,7 +91,8 @@ fn gen_verifier(
     yul
 }
 
-fn evm_verify(deployment_code: Vec<u8>, instances: Vec<Vec<Fr>>, proof: Vec<u8>) {
+/// for chain to verify
+pub fn evm_verify(deployment_code: Vec<u8>, instances: Vec<Vec<Fr>>, proof: Vec<u8>) {
     let calldata = encode_calldata(&instances, &proof);
     println!(
         "deploy code size: {} bytes, instances size: [{}][{}], calldata: {}",
@@ -146,219 +124,20 @@ fn evm_verify(deployment_code: Vec<u8>, instances: Vec<Vec<Fr>>, proof: Vec<u8>)
     assert!(success);
 }
 
-fn gen_application_snark(
-    params: &ParamsKZG<Bn256>,
-    aggregation_type: AccumulationSchemeType,
-) -> Snark {
-    println!("gen app snark");
-    let circuits_params = CircuitsParams {
-        max_txs: 2,
-        max_calldata: 200,
-        max_rws: 256,
-        max_copy_rows: 256,
-        max_exp_steps: 256,
-        max_bytecode: 512,
-        max_evm_rows: 0,
-        max_keccak_rows: 0,
-    };
-    let protocol_instance = ProtocolInstance::default();
-    let (_, super_circuit, _, _) =
-        SuperCircuit::<_>::build(block_1tx(), circuits_params, protocol_instance).unwrap();
-
-    // let pk = gen_pk(params, &super_circuit, Some(Path::new("./examples/app.pk")),
-    // super_circuit.params());
-    let vk = keygen_vk(params, &super_circuit).expect("keygen_vk should not fail");
-    let pk = keygen_pk(params, vk, &super_circuit).expect("keygen_pk should not fail");
-    match aggregation_type {
-        AccumulationSchemeType::GwcType => gen_snark_gwc(params, &pk, super_circuit, None::<&str>),
-        AccumulationSchemeType::ShplonkType => {
-            gen_snark_shplonk(params, &pk, super_circuit, None::<&str>)
-        }
-    }
-}
-
-fn create_root_super_circuit_prover_sdk<const T: u64, AS: AccumulationSchemeSDK>() {
-    let params_app = gen_srs(MIN_APP_DEGREE);
-    let aggregation_type = T.into();
-    let snarks = [(); 1].map(|_| gen_application_snark(&params_app, aggregation_type));
-
-    let params = gen_srs(MIN_AGG_DEGREE);
-    let mut snark_roots = Vec::new();
-    for snark in snarks {
-        let pcd_circuit = TaikoAggregationCircuit::<AS>::new(&params, [snark]).unwrap();
-
-        let start0 = start_timer!(|| "gen vk & pk");
-        // let pk = gen_pk(
-        // &params,
-        // &agg_circuit.without_witnesses(),
-        // Some(Path::new("./examples/agg.pk")),
-        // agg_circuit.params(),
-        // );
-        let vk = keygen_vk(&params, &pcd_circuit).expect("keygen_vk should not fail");
-        let pk = keygen_pk(&params, vk, &pcd_circuit).expect("keygen_pk should not fail");
-        end_timer!(start0);
-
-        let _root = match aggregation_type {
-            AccumulationSchemeType::GwcType => {
-                gen_snark_gwc(
-                    &params,
-                    &pk,
-                    pcd_circuit.clone(),
-                    // Some(Path::new("./examples/agg.snark"))
-                    None::<&str>,
-                )
-            }
-            AccumulationSchemeType::ShplonkType => {
-                gen_snark_shplonk(
-                    &params,
-                    &pk,
-                    pcd_circuit.clone(),
-                    // Some(Path::new("./examples/agg.snark"))
-                    None::<&str>,
-                )
-            }
-        };
-
-        snark_roots.push(_root);
-    }
-
-    println!("gen blocks agg snark");
-    let params = gen_srs(MIN_AGG_DEGREE);
-    let agg_circuit = TaikoAggregationCircuit::<AS>::new(&params, snark_roots).unwrap();
-    println!("new root agg circuit {}", agg_circuit);
-
-    let start0 = start_timer!(|| "gen vk & pk");
-    // let pk = gen_pk(
-    // &params,
-    // &agg_circuit.without_witnesses(),
-    // Some(Path::new("./examples/agg.pk")),
-    // agg_circuit.params(),
-    // );
-    let vk = keygen_vk(&params, &agg_circuit).expect("keygen_vk should not fail");
-    let pk = keygen_pk(&params, vk.clone(), &agg_circuit).expect("keygen_pk should not fail");
-    end_timer!(start0);
-
-    println!("gen evm snark");
-    // do one more time to verify
-    let num_instances = agg_circuit.num_instance();
-    let instances = agg_circuit.instance();
-    let accumulator_indices = Some(agg_circuit.accumulator_indices());
-    let proof_calldata = match aggregation_type {
-        AccumulationSchemeType::GwcType => {
-            gen_evm_proof_gwc(&params, &pk, agg_circuit, instances.clone())
-        }
-        AccumulationSchemeType::ShplonkType => {
-            gen_evm_proof_shplonk(&params, &pk, agg_circuit, instances.clone())
-        }
-    };
-
-    let block_proof_data = BlockProofData {
-        instances: instances
-            .iter()
-            .flatten()
-            .map(|v| U256::from_little_endian(v.to_repr().as_ref()))
-            .collect(),
-        proof: proof_calldata.clone().into(),
-    };
-
-    fs::write(
-        Path::new("./proof.json"),
-        serde_json::to_vec(&block_proof_data).unwrap(),
-    )
-    .unwrap();
-
-    let deployment_code = gen_verifier(
-        &params,
-        &vk,
-        Config::kzg()
-            .with_num_instance(num_instances.clone())
-            .with_accumulator_indices(accumulator_indices),
-        num_instances,
-        aggregation_type,
-    );
-    let evm_verifier_bytecode = evm::compile_yul(&deployment_code);
-
-    evm_verify(evm_verifier_bytecode, instances, proof_calldata);
-}
-
-// for N super circuit -> 1 root circuit integration
-fn create_1_level_root_super_circuit_prover_sdk<const T: u64, AS: AccumulationSchemeSDK>() {
-    let agg_type = T.into();
-    let mut params_app = gen_srs(MIN_AGG_DEGREE);
-    params_app.downsize(MIN_APP_DEGREE);
-    let snarks = [(); 1].map(|_| gen_application_snark(&params_app, agg_type));
-
-    println!("gen blocks agg snark");
-    let params = gen_srs(MIN_AGG_DEGREE);
-    let agg_circuit = TaikoAggregationCircuit::<AS>::new(&params, snarks).unwrap();
-    let start0 = start_timer!(|| "gen vk & pk");
-    // let pk = gen_pk(
-    // &params,
-    // &agg_circuit.without_witnesses(),
-    // Some(Path::new("./examples/agg.pk")),
-    // agg_circuit.params(),
-    // );
-    let vk = keygen_vk(&params, &agg_circuit).expect("keygen_vk should not fail");
-    let pk = keygen_pk(&params, vk.clone(), &agg_circuit).expect("keygen_pk should not fail");
-    end_timer!(start0);
-
-    println!("gen evm snark");
-    // do one more time to verify
-    let num_instances = agg_circuit.num_instance();
-    let instances = agg_circuit.instance();
-    let accumulator_indices = Some(agg_circuit.accumulator_indices());
-    let proof_calldata = match agg_type {
-        AccumulationSchemeType::GwcType => {
-            gen_evm_proof_gwc(&params, &pk, agg_circuit, instances.clone())
-        }
-        AccumulationSchemeType::ShplonkType => {
-            gen_evm_proof_shplonk(&params, &pk, agg_circuit, instances.clone())
-        }
-    };
-
-    let block_proof_data = BlockProofData {
-        instances: instances
-            .iter()
-            .flatten()
-            .map(|v| U256::from_little_endian(v.to_repr().as_ref()))
-            .collect(),
-        proof: proof_calldata.clone().into(),
-    };
-
-    fs::write(
-        Path::new("./proof.json"),
-        serde_json::to_vec(&block_proof_data).unwrap(),
-    )
-    .unwrap();
-
-    let deployment_code = gen_verifier(
-        &params,
-        &vk,
-        Config::kzg()
-            .with_num_instance(num_instances.clone())
-            .with_accumulator_indices(accumulator_indices),
-        num_instances,
-        agg_type,
-    );
-    let evm_verifier_bytecode = evm::compile_yul(&deployment_code);
-
-    evm_verify(evm_verifier_bytecode, instances, proof_calldata);
-}
-
 #[cfg(test)]
 mod tests {
-    use crate::taiko_super_circuit::{
-        create_1_level_root_super_circuit_prover_sdk, create_root_super_circuit_prover_sdk,
-    };
     use ark_std::{end_timer, start_timer};
-    use bus_mapping::circuit_input_builder::CircuitsParams;
-    use eth_types::{address, bytecode, geth_types::GethData, Word};
+    use bus_mapping::circuit_input_builder::{CircuitsParams, ProtocolInstance};
+    use eth_types::{address, bytecode, geth_types::GethData, Word, U256};
     use ethers_signers::{LocalWallet, Signer};
     use halo2_proofs::{
-        halo2curves::bn256::{Bn256, Fr, G1Affine},
+        halo2curves::{
+            bn256::{Bn256, Fr, G1Affine},
+            ff::PrimeField,
+        },
         plonk::{create_proof, keygen_pk, keygen_vk, verify_proof},
         poly::{
-            commitment::ParamsProver,
+            commitment::{Params, ParamsProver},
             kzg::{
                 commitment::{KZGCommitmentScheme, ParamsKZG, ParamsVerifierKZG},
                 multiopen::{ProverSHPLONK, VerifierSHPLONK},
@@ -369,14 +148,261 @@ mod tests {
             Blake2bRead, Blake2bWrite, Challenge255, TranscriptReadBuffer, TranscriptWriterBuffer,
         },
     };
+    use itertools::Itertools;
     use mock::{TestContext, MOCK_CHAIN_ID};
     use rand::SeedableRng;
     use rand_chacha::{ChaCha20Rng, ChaChaRng};
-    use snark_verifier_sdk::{halo2::read_or_create_srs, GWC, SHPLONK};
-    use std::{collections::HashMap, env::var};
-    use zkevm_circuits::{
-        root_circuit::taiko_aggregation::AccumulationSchemeType, super_circuit::SuperCircuit,
+    use snark_verifier::loader::evm;
+    use snark_verifier_sdk::{
+        evm::{evm_verify, gen_evm_proof_gwc, gen_evm_proof_shplonk},
+        halo2::{
+            aggregation::AccumulationSchemeSDK, gen_snark_gwc, gen_snark_shplonk, gen_srs,
+            read_or_create_srs,
+        },
+        Snark, GWC,
     };
+    use std::{collections::HashMap, env::var, fs, io::Read, path::Path};
+    use zkevm_circuits::{
+        root_circuit::{
+            taiko_aggregation::AccumulationSchemeType, Config, TaikoAggregationCircuit,
+        },
+        taiko_super_circuit::{test::block_1tx, SuperCircuit},
+    };
+
+    use crate::taiko_super_circuit::{gen_verifier, BlockProofData};
+
+    const MIN_APP_DEGREE: u32 = 21;
+    const MIN_AGG_DEGREE: u32 = 26;
+
+    fn gen_application_snark(
+        params: &ParamsKZG<Bn256>,
+        aggregation_type: AccumulationSchemeType,
+    ) -> Snark {
+        println!("gen app snark");
+        let circuits_params = CircuitsParams {
+            max_txs: 2,
+            max_calldata: 200,
+            max_rws: 256,
+            max_copy_rows: 256,
+            max_exp_steps: 256,
+            max_bytecode: 512,
+            max_evm_rows: 0,
+            max_keccak_rows: 0,
+        };
+        let protocol_instance = ProtocolInstance::default();
+        let (_, super_circuit, _, _) =
+            SuperCircuit::<_>::build(block_1tx(), circuits_params, protocol_instance).unwrap();
+
+        // let pk = gen_pk(params, &super_circuit, Some(Path::new("./examples/app.pk")),
+        // super_circuit.params());
+        let vk = keygen_vk(params, &super_circuit).expect("keygen_vk should not fail");
+        let pk = keygen_pk(params, vk, &super_circuit).expect("keygen_pk should not fail");
+        match aggregation_type {
+            AccumulationSchemeType::GwcType => {
+                gen_snark_gwc(params, &pk, super_circuit, None::<&str>)
+            }
+            AccumulationSchemeType::ShplonkType => {
+                gen_snark_shplonk(params, &pk, super_circuit, None::<&str>)
+            }
+        }
+    }
+
+    fn create_root_super_circuit_prover_sdk<const T: u64, AS: AccumulationSchemeSDK>() {
+        let params_app = gen_srs(MIN_APP_DEGREE);
+        let aggregation_type = T.into();
+        let snarks = [(); 1].map(|_| gen_application_snark(&params_app, aggregation_type));
+
+        let params = gen_srs(MIN_AGG_DEGREE);
+        let mut snark_roots = Vec::new();
+        for snark in snarks {
+            let pcd_circuit = TaikoAggregationCircuit::<AS>::new(&params, [snark]).unwrap();
+
+            let start0 = start_timer!(|| "gen vk & pk");
+            // let pk = gen_pk(
+            // &params,
+            // &agg_circuit.without_witnesses(),
+            // Some(Path::new("./examples/agg.pk")),
+            // agg_circuit.params(),
+            // );
+            let vk = keygen_vk(&params, &pcd_circuit).expect("keygen_vk should not fail");
+            let pk = keygen_pk(&params, vk, &pcd_circuit).expect("keygen_pk should not fail");
+            end_timer!(start0);
+
+            let _root = match aggregation_type {
+                AccumulationSchemeType::GwcType => {
+                    gen_snark_gwc(
+                        &params,
+                        &pk,
+                        pcd_circuit.clone(),
+                        // Some(Path::new("./examples/agg.snark"))
+                        None::<&str>,
+                    )
+                }
+                AccumulationSchemeType::ShplonkType => {
+                    gen_snark_shplonk(
+                        &params,
+                        &pk,
+                        pcd_circuit.clone(),
+                        // Some(Path::new("./examples/agg.snark"))
+                        None::<&str>,
+                    )
+                }
+            };
+
+            snark_roots.push(_root);
+        }
+
+        println!("gen blocks agg snark");
+        let params = gen_srs(MIN_AGG_DEGREE);
+        let agg_circuit = TaikoAggregationCircuit::<AS>::new(&params, snark_roots).unwrap();
+        println!("new root agg circuit {}", agg_circuit);
+
+        let start0 = start_timer!(|| "gen vk & pk");
+        // let pk = gen_pk(
+        // &params,
+        // &agg_circuit.without_witnesses(),
+        // Some(Path::new("./examples/agg.pk")),
+        // agg_circuit.params(),
+        // );
+        let vk = keygen_vk(&params, &agg_circuit).expect("keygen_vk should not fail");
+        let pk = keygen_pk(&params, vk.clone(), &agg_circuit).expect("keygen_pk should not fail");
+        end_timer!(start0);
+
+        println!("gen evm snark");
+        // do one more time to verify
+        let num_instances = agg_circuit.num_instance();
+        let instances = agg_circuit.instance();
+        let accumulator_indices = Some(agg_circuit.accumulator_indices());
+        let proof_calldata = match aggregation_type {
+            AccumulationSchemeType::GwcType => {
+                gen_evm_proof_gwc(&params, &pk, agg_circuit, instances.clone())
+            }
+            AccumulationSchemeType::ShplonkType => {
+                gen_evm_proof_shplonk(&params, &pk, agg_circuit, instances.clone())
+            }
+        };
+
+        let block_proof_data = BlockProofData {
+            instances: instances
+                .iter()
+                .flatten()
+                .map(|v| U256::from_little_endian(v.to_repr().as_ref()))
+                .collect(),
+            proof: proof_calldata.clone().into(),
+        };
+
+        fs::write(
+            Path::new("./proof.json"),
+            serde_json::to_vec(&block_proof_data).unwrap(),
+        )
+        .unwrap();
+
+        let deployment_code = gen_verifier(
+            &params,
+            &vk,
+            Config::kzg()
+                .with_num_instance(num_instances.clone())
+                .with_accumulator_indices(accumulator_indices),
+            num_instances,
+            aggregation_type,
+        );
+        let evm_verifier_bytecode = evm::compile_yul(&deployment_code);
+
+        evm_verify(evm_verifier_bytecode, instances, proof_calldata);
+    }
+
+    // for N super circuit -> 1 root circuit integration
+    fn create_1_level_root_super_circuit_prover_sdk<const T: u64, AS: AccumulationSchemeSDK>() {
+        let agg_type = T.into();
+        let mut params_app = gen_srs(MIN_AGG_DEGREE);
+        params_app.downsize(MIN_APP_DEGREE);
+        let snarks = [(); 1].map(|_| gen_application_snark(&params_app, agg_type));
+
+        println!("gen blocks agg snark");
+        let params = gen_srs(MIN_AGG_DEGREE);
+        let agg_circuit = TaikoAggregationCircuit::<AS>::new(&params, snarks).unwrap();
+        let start0 = start_timer!(|| "gen vk & pk");
+        // let pk = gen_pk(
+        // &params,
+        // &agg_circuit.without_witnesses(),
+        // Some(Path::new("./examples/agg.pk")),
+        // agg_circuit.params(),
+        // );
+        let vk = keygen_vk(&params, &agg_circuit).expect("keygen_vk should not fail");
+        let pk = keygen_pk(&params, vk.clone(), &agg_circuit).expect("keygen_pk should not fail");
+        end_timer!(start0);
+
+        println!("gen evm snark");
+        // do one more time to verify
+        let num_instances = agg_circuit.num_instance();
+        let instances = agg_circuit.instance();
+        let accumulator_indices = Some(agg_circuit.accumulator_indices());
+        let proof_calldata = match agg_type {
+            AccumulationSchemeType::GwcType => {
+                gen_evm_proof_gwc(&params, &pk, agg_circuit, instances.clone())
+            }
+            AccumulationSchemeType::ShplonkType => {
+                gen_evm_proof_shplonk(&params, &pk, agg_circuit, instances.clone())
+            }
+        };
+
+        let block_proof_data = BlockProofData {
+            instances: instances
+                .iter()
+                .flatten()
+                .map(|v| U256::from_little_endian(v.to_repr().as_ref()))
+                .collect(),
+            proof: proof_calldata.clone().into(),
+        };
+
+        fs::write(
+            Path::new("./proof.json"),
+            serde_json::to_vec(&block_proof_data).unwrap(),
+        )
+        .unwrap();
+
+        let deployment_code = gen_verifier(
+            &params,
+            &vk,
+            Config::kzg()
+                .with_num_instance(num_instances.clone())
+                .with_accumulator_indices(accumulator_indices),
+            num_instances,
+            agg_type,
+        );
+        let evm_verifier_bytecode = evm::compile_yul(&deployment_code);
+
+        evm_verify(evm_verifier_bytecode, instances, proof_calldata);
+    }
+
+    #[test]
+    fn test_local_verify() {
+        let file_path = "./aggregation_plonk.yul";
+        let mut file = fs::File::open(file_path).expect("yul file open ok");
+        let mut deployment_code = String::new();
+        file.read_to_string(&mut deployment_code)
+            .expect("yul file read ok");
+        let evm_verifier_bytecode = evm::compile_yul(&deployment_code);
+
+        let proof_path = "./proof.json";
+        let proof_file = fs::File::open(proof_path).expect("proof file open ok");
+        let block_proof_data: BlockProofData =
+            serde_json::from_reader(proof_file).expect("read proof json ok");
+
+        let instances = block_proof_data
+            .instances
+            .iter()
+            .map(|v| Fr::from_u128(v.as_u128()))
+            .collect_vec();
+        println!("instances = {:?}", instances);
+        println!("proof = {:?}", block_proof_data.proof);
+
+        evm_verify(
+            evm_verifier_bytecode,
+            vec![instances],
+            block_proof_data.proof.to_vec(),
+        );
+    }
 
     #[cfg_attr(not(feature = "benches"), ignore)]
     #[test]
@@ -399,8 +425,8 @@ mod tests {
     #[test]
     fn bench_taiko_super_circuit_n_to_1_root_prover() {
         // for N->1 aggregation using new sdk
-        const AGG_TYPE: u64 = AccumulationSchemeType::ShplonkType as u64;
-        create_1_level_root_super_circuit_prover_sdk::<AGG_TYPE, SHPLONK>();
+        const AGG_TYPE: u64 = AccumulationSchemeType::GwcType as u64;
+        create_1_level_root_super_circuit_prover_sdk::<AGG_TYPE, GWC>();
     }
 
     #[cfg_attr(not(feature = "benches"), ignore)]
@@ -466,7 +492,7 @@ mod tests {
             max_keccak_rows: 0,
         };
         let (_, circuit, instance, _) =
-            SuperCircuit::build(block, circuits_params, Fr::from(0x100)).unwrap();
+            SuperCircuit::build(block, circuits_params, ProtocolInstance::default()).unwrap();
         let instance_refs: Vec<&[Fr]> = instance.iter().map(|v| &v[..]).collect();
 
         // Bench setup generation
