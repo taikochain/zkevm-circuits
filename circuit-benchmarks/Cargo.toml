@@ -28,5 +28,5 @@ serde_json = "*"
 hex = "0.4.3"
 
 [features]
-default = []
+default = ["benches"]
 benches = []

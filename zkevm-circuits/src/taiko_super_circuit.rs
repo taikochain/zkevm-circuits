@@ -14,7 +14,6 @@ use crate::{
     exp_circuit::{ExpCircuit, ExpCircuitConfig},
     keccak_circuit::{KeccakCircuit, KeccakCircuitConfig, KeccakCircuitConfigArgs},
     state_circuit::{StateCircuit, StateCircuitConfig, StateCircuitConfigArgs},
-    // state_circuit::{StateCircuit, StateCircuitConfig, StateCircuitConfigArgs},
     table::{
         BlockTable, ByteTable, BytecodeTable, CopyTable, ExpTable, KeccakTable, MptTable, PiTable,
         RwTable, TxTable,
@@ -30,7 +29,7 @@ use bus_mapping::{
 use eth_types::{geth_types::GethData, Field};
 use halo2_proofs::{
     circuit::{Layouter, SimpleFloorPlanner, Value},
-    plonk::{Circuit, ConstraintSystem, Error, Expression},
+    plonk::{Circuit, ConstraintSystem, Error, Expression}, dev::CircuitCost, halo2curves::bn256::{G1Affine, G1},
 };
 
 use itertools::Itertools;
@@ -49,14 +48,14 @@ pub struct SuperCircuitConfig<F: Field> {
     byte_table: ByteTable,
     copy_table: CopyTable,
     exp_table: ExpTable,
-    pi_circuit: TaikoPiCircuitConfig<F>,
-    anchor_tx_circuit: AnchorTxCircuitConfig<F>,
+    // pi_circuit: TaikoPiCircuitConfig<F>,
+    // anchor_tx_circuit: AnchorTxCircuitConfig<F>,
     evm_circuit: EvmCircuitConfig<F>,
-    keccak_circuit: KeccakCircuitConfig<F>,
-    bytecode_circuit: BytecodeCircuitConfig<F>,
-    state_circuit: StateCircuitConfig<F>,
-    exp_circuit: ExpCircuitConfig<F>,
-    copy_circuit: CopyCircuitConfig<F>,
+    // keccak_circuit: KeccakCircuitConfig<F>,
+    // bytecode_circuit: BytecodeCircuitConfig<F>,
+    // state_circuit: StateCircuitConfig<F>,
+    // exp_circuit: ExpCircuitConfig<F>,
+    // copy_circuit: CopyCircuitConfig<F>,
 }
 
 /// Circuit configuration arguments
@@ -85,15 +84,15 @@ impl<F: Field> SubCircuitConfig<F> for SuperCircuitConfig<F> {
         let copy_table = CopyTable::construct(meta, q_copy_table);
         let exp_table = ExpTable::construct(meta);
 
-        let pi_circuit = TaikoPiCircuitConfig::new(
-            meta,
-            TaikoPiCircuitConfigArgs {
-                block_table: block_table.clone(),
-                keccak_table: keccak_table.clone(),
-                byte_table: byte_table.clone(),
-                challenges: challenges.clone(),
-            },
-        );
+        // let pi_circuit = TaikoPiCircuitConfig::new(
+        //     meta,
+        //     TaikoPiCircuitConfigArgs {
+        //         block_table: block_table.clone(),
+        //         keccak_table: keccak_table.clone(),
+        //         byte_table: byte_table.clone(),
+        //         challenges: challenges.clone(),
+        //     },
+        // );
 
         let anchor_tx_circuit = AnchorTxCircuitConfig::new(
             meta,
@@ -120,45 +119,45 @@ impl<F: Field> SubCircuitConfig<F> for SuperCircuitConfig<F> {
             },
         );
 
-        let keccak_circuit = KeccakCircuitConfig::new(
-            meta,
-            KeccakCircuitConfigArgs {
-                keccak_table: keccak_table.clone(),
-                challenges: challenges.clone(),
-            },
-        );
+        // let keccak_circuit = KeccakCircuitConfig::new(
+        //     meta,
+        //     KeccakCircuitConfigArgs {
+        //         keccak_table: keccak_table.clone(),
+        //         challenges: challenges.clone(),
+        //     },
+        // );
 
-        let bytecode_circuit = BytecodeCircuitConfig::new(
-            meta,
-            BytecodeCircuitConfigArgs {
-                bytecode_table: bytecode_table.clone(),
-                challenges: challenges.clone(),
-                keccak_table: keccak_table.clone(),
-            },
-        );
+        // let bytecode_circuit = BytecodeCircuitConfig::new(
+        //     meta,
+        //     BytecodeCircuitConfigArgs {
+        //         bytecode_table: bytecode_table.clone(),
+        //         challenges: challenges.clone(),
+        //         keccak_table: keccak_table.clone(),
+        //     },
+        // );
 
-        let state_circuit = StateCircuitConfig::new(
-            meta,
-            StateCircuitConfigArgs {
-                rw_table,
-                mpt_table,
-                challenges: challenges.clone(),
-            },
-        );
+        // let state_circuit = StateCircuitConfig::new(
+        //     meta,
+        //     StateCircuitConfigArgs {
+        //         rw_table,
+        //         mpt_table,
+        //         challenges: challenges.clone(),
+        //     },
+        // );
 
-        let exp_circuit = ExpCircuitConfig::new(meta, exp_table);
+        // let exp_circuit = ExpCircuitConfig::new(meta, exp_table);
 
-        let copy_circuit = CopyCircuitConfig::new(
-            meta,
-            CopyCircuitConfigArgs {
-                tx_table: tx_table.clone(),
-                rw_table,
-                bytecode_table: bytecode_table.clone(),
-                copy_table,
-                challenges,
-                q_enable: q_copy_table,
-            },
-        );
+        // let copy_circuit = CopyCircuitConfig::new(
+        //     meta,
+        //     CopyCircuitConfigArgs {
+        //         tx_table: tx_table.clone(),
+        //         rw_table,
+        //         bytecode_table: bytecode_table.clone(),
+        //         copy_table,
+        //         challenges,
+        //         q_enable: q_copy_table,
+        //     },
+        // );
 
         Self {
             tx_table,
@@ -168,17 +167,17 @@ impl<F: Field> SubCircuitConfig<F> for SuperCircuitConfig<F> {
             copy_table,
             exp_table,
             pi_table,
-            pi_circuit,
+            // pi_circuit,
             block_table,
             keccak_table,
             byte_table,
-            anchor_tx_circuit,
+            // anchor_tx_circuit,
             evm_circuit,
-            keccak_circuit,
-            bytecode_circuit,
-            state_circuit,
-            exp_circuit,
-            copy_circuit,
+            // keccak_circuit,
+            // bytecode_circuit,
+            // state_circuit,
+            // exp_circuit,
+            // copy_circuit,
         }
     }
 }
@@ -187,18 +186,18 @@ impl<F: Field> SubCircuitConfig<F> for SuperCircuitConfig<F> {
 #[derive(Clone, Default, Debug)]
 pub struct SuperCircuit<F: Field> {
     /// Public Input Circuit
-    pub pi_circuit: TaikoPiCircuit<F>,
-    /// Anchor Transaction Circuit
-    pub anchor_tx_circuit: AnchorTxCircuit<F>,
+    // pub pi_circuit: TaikoPiCircuit<F>,
+    // /// Anchor Transaction Circuit
+    // pub anchor_tx_circuit: AnchorTxCircuit<F>,
     /// EVM Circuit
     pub evm_circuit: EvmCircuit<F>,
 
     // planed circuits for a6
-    pub(crate) keccak_circuit: KeccakCircuit<F>,
-    pub(crate) bytecode_circuit: BytecodeCircuit<F>,
-    pub(crate) state_circuit: StateCircuit<F>,
-    pub(crate) copy_circuit: CopyCircuit<F>,
-    pub(crate) exp_circuit: ExpCircuit<F>,
+    // pub(crate) keccak_circuit: KeccakCircuit<F>,
+    // pub(crate) bytecode_circuit: BytecodeCircuit<F>,
+    // pub(crate) state_circuit: StateCircuit<F>,
+    // pub(crate) copy_circuit: CopyCircuit<F>,
+    // pub(crate) exp_circuit: ExpCircuit<F>,
 
     /// Block witness
     pub block: Block<F>,
@@ -225,24 +224,27 @@ impl<F: Field> SubCircuit<F> for SuperCircuit<F> {
     }
 
     fn new_from_block(block: &Block<F>) -> Self {
-        let pi_circuit = TaikoPiCircuit::new_from_block(block);
-        let anchor_tx_circuit = AnchorTxCircuit::new_from_block(block);
+        // let pi_circuit = TaikoPiCircuit::new_from_block(block);
+        // let anchor_tx_circuit = AnchorTxCircuit::new_from_block(block);
         let evm_circuit = EvmCircuit::new_from_block(block);
-        let keccak_circuit = KeccakCircuit::new_from_block(block);
-        let bytecode_circuit = BytecodeCircuit::new_from_block(block);
-        let state_circuit = StateCircuit::new_from_block(block);
-        let copy_circuit = CopyCircuit::new_from_block(block);
-        let exp_circuit = ExpCircuit::new_from_block(block);
+        // let keccak_circuit = KeccakCircuit::new_from_block(block);
+        // let bytecode_circuit = BytecodeCircuit::new_from_block(block);
+        // let state_circuit = StateCircuit::new_from_block(block);
+        // let copy_circuit = CopyCircuit::new_from_block(block);
+        // let exp_circuit = ExpCircuit::new_from_block(block);
+
+
+        
 
         SuperCircuit::<_> {
-            pi_circuit,
-            anchor_tx_circuit,
+            // pi_circuit,
+            // anchor_tx_circuit,
             evm_circuit,
-            keccak_circuit,
-            bytecode_circuit,
-            state_circuit,
-            copy_circuit,
-            exp_circuit,
+            // keccak_circuit,
+            // bytecode_circuit,
+            // state_circuit,
+            // copy_circuit,
+            // exp_circuit,
             block: block.clone(),
         }
     }
@@ -250,7 +252,7 @@ impl<F: Field> SubCircuit<F> for SuperCircuit<F> {
     /// Returns suitable inputs for the SuperCircuit.
     fn instance(&self) -> Vec<Vec<F>> {
         let mut instance = Vec::new();
-        instance.extend_from_slice(&self.pi_circuit.instance());
+        // instance.extend_from_slice(&self.pi_circuit.instance());
         instance
     }
 
@@ -273,22 +275,22 @@ impl<F: Field> SubCircuit<F> for SuperCircuit<F> {
         challenges: &Challenges<Value<F>>,
         layouter: &mut impl Layouter<F>,
     ) -> Result<(), Error> {
-        self.pi_circuit
-            .synthesize_sub(&config.pi_circuit, challenges, layouter)?;
-        self.anchor_tx_circuit
-            .synthesize_sub(&config.anchor_tx_circuit, challenges, layouter)?;
+        // self.pi_circuit
+        //     .synthesize_sub(&config.pi_circuit, challenges, layouter)?;
+        // self.anchor_tx_circuit
+        //     .synthesize_sub(&config.anchor_tx_circuit, challenges, layouter)?;
         self.evm_circuit
             .synthesize_sub(&config.evm_circuit, challenges, layouter)?;
-        self.keccak_circuit
-            .synthesize_sub(&config.keccak_circuit, challenges, layouter)?;
-        self.bytecode_circuit
-            .synthesize_sub(&config.bytecode_circuit, challenges, layouter)?;
-        self.state_circuit
-            .synthesize_sub(&config.state_circuit, challenges, layouter)?;
-        self.copy_circuit
-            .synthesize_sub(&config.copy_circuit, challenges, layouter)?;
-        self.exp_circuit
-            .synthesize_sub(&config.exp_circuit, challenges, layouter)?;
+        // self.keccak_circuit
+        //     .synthesize_sub(&config.keccak_circuit, challenges, layouter)?;
+        // self.bytecode_circuit
+        //     .synthesize_sub(&config.bytecode_circuit, challenges, layouter)?;
+        // self.state_circuit
+        //     .synthesize_sub(&config.state_circuit, challenges, layouter)?;
+        // self.copy_circuit
+        //     .synthesize_sub(&config.copy_circuit, challenges, layouter)?;
+        // self.exp_circuit
+        //     .synthesize_sub(&config.exp_circuit, challenges, layouter)?;
 
         Ok(())
     }
@@ -339,7 +341,7 @@ impl<F: Field> Circuit<F> for SuperCircuit<F> {
             self.block
                 .sha3_inputs
                 .iter()
-                .chain(std::iter::once(&self.pi_circuit.public_data.rpi_bytes()))
+                // .chain(std::iter::once(&self.pi_circuit.public_data.rpi_bytes()))
                 .chain(
                     &self
                         .block
@@ -358,10 +360,11 @@ impl<F: Field> Circuit<F> for SuperCircuit<F> {
             &challenges,
         )?;
 
-        let rws = &self.state_circuit.rows;
+        // let rws = &self.state_circuit.rows;
+        let rws = self.block.rws.table_assignments();
         config
             .mpt_table
-            .load(&mut layouter, &MptUpdates::mock_from(rws), randomness)?;
+            .load(&mut layouter, &MptUpdates::mock_from(&rws), randomness)?;
 
         config.tx_table.load(
             &mut layouter,
@@ -389,6 +392,11 @@ impl<F: Field> Circuit<F> for SuperCircuit<F> {
 }
 
 impl<F: Field> SuperCircuit<F> {
+
+    // fn cost(&self) {
+    //     CircuitCost::<G1, _>::measure(100, self);
+    // }
+
     /// From the witness data, generate a SuperCircuit instance with all of the
     /// sub-circuits filled with their corresponding witnesses.
     ///
