@@ -103,14 +103,7 @@ impl<const NTX: usize> TransactionMember<NTX> {
 
         for (idx, (transaction, random_input)) in transactions.iter_mut().zip(&evm_random_inputs.transactions_random_input).enumerate() {
 
-            // if idx == 0 {
-            //     let to = MOCK_ACCOUNTS[0];
-            //     let from = MOCK_ACCOUNTS[1];
-            //     transaction.to(to).from(from).nonce(1);
-            //
-            // }
             let empty_array: [u8; 20] = Default::default();
-            // Self::randomize_transaction_at_member(TransactionMember::From, &empty_array, *transaction);
             if !repeat_last {
                 let mut random_member = RANDOM_MEMBER.lock().unwrap();
                 *random_member =Some(TransactionMember::random_member());
@@ -118,17 +111,10 @@ impl<const NTX: usize> TransactionMember<NTX> {
             TransactionMember::<CURRENT_NTX>::randomize_transaction_at_member(*RANDOM_MEMBER.lock().unwrap().as_ref().unwrap(), random_input, *transaction);
             transaction.from(accounts[idx].address);
             transaction.to(accounts[idx+1].address);
+            transaction.nonce(accounts[idx].nonce );
             transaction.enable_skipping_invalid_tx(skip_on_fail);
         }
 
-        // for ((transaction, account), random_input) in transactions.iter_mut().zip(&accounts).zip(evm_random_inputs.transactions_random_input) {
-        //     let empty_array: [u8;20] = Default::default();
-        //     Self::randomize_transaction_at_member(TransactionMember::From, &empty_array, transaction);
-        //     let random_member = TransactionMember::random_member();
-        //     Self::randomize_transaction_at_member(random_member, &random_input, transaction);
-        //     transaction.to(account.address);
-        //     transaction.enable_skipping_invalid_tx(skip_on_fail);
-        // }
         (transactions, accounts)
     }
 
@@ -172,7 +158,7 @@ impl<const NTX: usize> TransactionMember<NTX> {
             TransactionMember::Nonce,
             TransactionMember::BlockHash,
             TransactionMember::BlockNumber,
-            TransactionMember::TransactionIdx,
+            // TransactionMember::TransactionIdx,
             // TransactionMember::From,
             TransactionMember::To,
             TransactionMember::Value,
@@ -205,7 +191,8 @@ impl<const NTX: usize> TransactionMember<NTX> {
             }
             TransactionMember::Nonce => {
                 let nonce_bytes: [u8; 8] = random_input[..8].try_into().unwrap();
-                let nonce = u64::from_be_bytes(nonce_bytes);
+                let mut nonce = u64::from_be_bytes(nonce_bytes);
+                nonce = nonce.min(u64::MAX / 2);
                 mock_transaction.nonce(nonce);
             }
             TransactionMember::BlockHash => {
@@ -215,12 +202,14 @@ impl<const NTX: usize> TransactionMember<NTX> {
             }
             TransactionMember::BlockNumber => {
                 let block_number_bytes: [u8; 8] = random_input[..8].try_into().unwrap();
-                let block_number = u64::from_be_bytes(block_number_bytes);
+                let mut block_number = u64::from_be_bytes(block_number_bytes);
+                                block_number = block_number.min(u64::MAX / 2);
                 mock_transaction.block_number(block_number);
             }
             TransactionMember::TransactionIdx => {
                 let transaction_idx_bytes: [u8; 8] = random_input[..8].try_into().unwrap();
-                let transaction_idx = u64::from_be_bytes(transaction_idx_bytes);
+                let mut transaction_idx = u64::from_be_bytes(transaction_idx_bytes);
+                                transaction_idx = transaction_idx.min(u64::MAX / 2);
                 mock_transaction.transaction_idx(transaction_idx);
             }
             TransactionMember::From => {
@@ -234,12 +223,14 @@ impl<const NTX: usize> TransactionMember<NTX> {
             }
             TransactionMember::Value => {
                 let value_bytes: [u8; 32] = random_input[..32].try_into().unwrap();
-                let value = Word::from(value_bytes);
+                let mut value = Word::from(value_bytes);
+                value = value.min((Word::MAX  / (2*(CURRENT_NTX + 1))).try_into().unwrap());
                 mock_transaction.value(value);
             }
             TransactionMember::GasPrice => {
                 let gas_price_bytes: [u8; 32] = random_input[..32].try_into().unwrap();
-                let gas_price = Word::from(gas_price_bytes);
+                let mut gas_price = Word::from(gas_price_bytes);
+                                gas_price = gas_price.min((10000000000000000 / (2*(CURRENT_NTX + 1))).try_into().unwrap());
                 mock_transaction.gas_price(gas_price);
             }
             TransactionMember::Gas => {
@@ -248,7 +239,7 @@ impl<const NTX: usize> TransactionMember<NTX> {
                 // mock_transaction.gas(gas);
                 let gas = u128::from_le_bytes(gas_bytes); // Use u128 here
                 let mut gas_as_u64: u64 = gas as u64;
-                gas_as_u64 = gas_as_u64 / 1000000;
+                gas_as_u64 = gas_as_u64.min((10000000000000000 / (2*(CURRENT_NTX + 1))).try_into().unwrap());
                 mock_transaction.gas(gas_as_u64.into());
             }
             TransactionMember::Input => {
@@ -326,11 +317,13 @@ impl<const NACC: usize> AccountMember<NACC> {
                 mock_account.address(address);
             }
             AccountMember::Nonce => {
-                let nonce = u64::from_be_bytes(random_input.accounts_random_nonce);
+                let mut nonce = u64::from_be_bytes(random_input.accounts_random_nonce);
+                nonce = nonce.min(u64::MAX / 2);
                 mock_account.nonce(nonce);
             }
             AccountMember::Balance => {
-                let balance = Word::from(random_input.accounts_random_balance);
+                let mut balance = Word::from(random_input.accounts_random_balance);
+                                                balance = balance.min((Word::MAX/ (CURRENT_NTX + 1)).try_into().unwrap());
                 mock_account.balance(balance);
             }
             AccountMember::Code => {
@@ -361,12 +354,6 @@ impl<const NACC: usize> AccountMember<NACC> {
         random_inputs: EVMRandomInputs,
     ) {
         for (index, account) in accounts.iter_mut().enumerate() {
-            if index == 0 {
-                // let to = MOCK_ACCOUNTS[0];
-                // let from = MOCK_ACCOUNTS[1];
-                // account.address(from).balance(eth(1)).nonce(1);
-
-            }
             if let Some(random_input) = random_inputs.accounts_random_input.get(index) {
                 AccountMember::<CURRENT_NACC>::randomize_accounts_all_members(random_input.clone(), account);
             }
