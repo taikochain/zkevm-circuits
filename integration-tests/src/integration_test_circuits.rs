@@ -1,4 +1,4 @@
-use crate::{get_client, GenDataOutput};
+use crate::{get_client, GenDataOutput, GETH_L2_URL};
 use bus_mapping::{
     circuit_input_builder::{BuilderClient, CircuitInputBuilder, CircuitsParams},
     mock::BlockData,
@@ -60,7 +60,7 @@ const MAX_EXP_STEPS: usize = 1000;
 
 const MAX_KECCAK_ROWS: usize = 15000;
 
-const CIRCUITS_PARAMS: CircuitsParams = CircuitsParams {
+pub(crate) const CIRCUITS_PARAMS: CircuitsParams = CircuitsParams {
     max_rws: MAX_RWS,
     max_txs: MAX_TXS,
     max_calldata: MAX_CALLDATA,
@@ -129,15 +129,15 @@ lazy_static! {
 
 /// Generic implementation for integration tests
 pub struct IntegrationTest<C: SubCircuit<Fr> + Circuit<Fr>> {
-    name: &'static str,
-    degree: u32,
-    key: Option<ProvingKey<G1Affine>>,
-    fixed: Option<Vec<Vec<CellValue<Fr>>>>,
+    pub(crate) name: &'static str,
+    pub(crate) degree: u32,
+    pub(crate) key: Option<ProvingKey<G1Affine>>,
+    pub(crate) fixed: Option<Vec<Vec<CellValue<Fr>>>>,
     _marker: PhantomData<C>,
 }
 
 impl<C: SubCircuit<Fr> + Circuit<Fr>> IntegrationTest<C> {
-    fn new(name: &'static str, degree: u32) -> Self {
+    pub(crate) fn new(name: &'static str, degree: u32) -> Self {
         Self {
             name,
             degree,
@@ -147,7 +147,7 @@ impl<C: SubCircuit<Fr> + Circuit<Fr>> IntegrationTest<C> {
         }
     }
 
-    fn get_key(&mut self) -> ProvingKey<G1Affine> {
+    pub(crate) fn get_key(&mut self) -> ProvingKey<G1Affine> {
         match self.key.clone() {
             Some(key) => key,
             None => {
@@ -165,7 +165,7 @@ impl<C: SubCircuit<Fr> + Circuit<Fr>> IntegrationTest<C> {
         }
     }
 
-    fn test_actual(&self, circuit: C, instance: Vec<Vec<Fr>>, proving_key: ProvingKey<G1Affine>) {
+    pub(crate) fn test_actual(&self, circuit: C, instance: Vec<Vec<Fr>>, proving_key: ProvingKey<G1Affine>) {
         fn test_gen_proof<C: Circuit<Fr>, R: RngCore>(
             rng: R,
             circuit: C,
@@ -247,7 +247,7 @@ impl<C: SubCircuit<Fr> + Circuit<Fr>> IntegrationTest<C> {
         );
     }
 
-    fn test_mock(&mut self, circuit: &C, instance: Vec<Vec<Fr>>) {
+    pub(crate) fn test_mock(&mut self, circuit: &C, instance: Vec<Vec<Fr>>) {
         let mock_prover = MockProver::<Fr>::run(self.degree, circuit, instance).unwrap();
 
         self.test_variadic(&mock_prover);
@@ -257,7 +257,7 @@ impl<C: SubCircuit<Fr> + Circuit<Fr>> IntegrationTest<C> {
             .expect("mock prover verification failed");
     }
 
-    fn test_variadic(&mut self, mock_prover: &MockProver<Fr>) {
+    pub(crate) fn test_variadic(&mut self, mock_prover: &MockProver<Fr>) {
         let fixed = mock_prover.fixed();
 
         match self.fixed.clone() {
@@ -302,7 +302,7 @@ impl<C: SubCircuit<Fr> + Circuit<Fr>> IntegrationTest<C> {
     }
 }
 
-fn new_empty_block() -> Block<Fr> {
+pub(crate) fn new_empty_block() -> Block<Fr> {
     let block: GethData = TestContext::<0, 0>::new(None, |_| {}, |_, _| {}, |b, _| b)
         .unwrap()
         .into();
@@ -314,7 +314,7 @@ fn new_empty_block() -> Block<Fr> {
     block_convert(&builder.block, &builder.code_db).unwrap()
 }
 
-fn get_general_params(degree: u32) -> ParamsKZG<Bn256> {
+pub(crate) fn get_general_params(degree: u32) -> ParamsKZG<Bn256> {
     let mut map = GEN_PARAMS.lock().unwrap();
     match map.get(&degree) {
         Some(params) => params.clone(),
@@ -327,13 +327,13 @@ fn get_general_params(degree: u32) -> ParamsKZG<Bn256> {
 }
 
 /// returns gen_inputs for a block number
-async fn gen_inputs(
+pub(crate) async fn gen_inputs(
     block_num: u64,
 ) -> (
     CircuitInputBuilder,
     eth_types::Block<eth_types::Transaction>,
 ) {
-    let cli = get_client();
+    let cli = get_client(&GETH_L2_URL);
     let cli = BuilderClient::new(cli, CIRCUITS_PARAMS, Default::default())
         .await
         .unwrap();

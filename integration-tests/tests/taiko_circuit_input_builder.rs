@@ -1,7 +1,7 @@
 #![cfg(feature = "circuit_input_builder")]
 
 use integration_tests::{
-    build_circuit_input_builder_block, log_init, TAIKO_BLOCK_ANCHOR_ONLY,
+    integration_test_circuits::gen_inputs, log_init, TAIKO_BLOCK_ANCHOR_ONLY,
     TAIKO_BLOCK_TRANSFER_SUCCEED,
 };
 
