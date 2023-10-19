@@ -155,56 +155,56 @@ pub struct CompiledContract {
     pub bin_runtime: Bytes,
 }
 
-// /// Build circuit input builder for a block
-// pub async fn build_circuit_input_builder_block(block_num: u64) {
-//     let cli = get_client(&GETH_L2_URL);
-//     let cli = BuilderClient::new(
-//         cli,
-//         CircuitsParams {
-//             max_rws: 800000,
-//             max_txs: 10,
-//             max_calldata: 4000,
-//             max_bytecode: 4000,
-//             max_copy_rows: 800000,
-//             max_evm_rows: 0,
-//             max_exp_steps: 1000,
-//             max_keccak_rows: 0,
-//         },
-//         Default::default(),
-//     )
-//     .await
-//     .unwrap();
+/// Build circuit input builder for a block
+pub async fn build_circuit_input_builder_block(block_num: u64) {
+    let cli = get_client(&GETH_L2_URL);
+    let cli = BuilderClient::new(
+        cli,
+        CircuitsParams {
+            max_rws: 800000,
+            max_txs: 10,
+            max_calldata: 4000,
+            max_bytecode: 4000,
+            max_copy_rows: 800000,
+            max_evm_rows: 0,
+            max_exp_steps: 1000,
+            max_keccak_rows: 0,
+        },
+        Default::default(),
+    )
+    .await
+    .unwrap();
 
-//     // 1. Query geth for Block, Txs and TxExecTraces
-//     let (eth_block, geth_trace, history_hashes, prev_state_root) =
-//         cli.get_block(block_num).await.unwrap();
+    // 1. Query geth for Block, Txs and TxExecTraces
+    let (eth_block, geth_trace, history_hashes, prev_state_root) =
+        cli.get_block(block_num).await.unwrap();
 
-//     // 2. Get State Accesses from TxExecTraces
-//     let access_set = get_state_accesses(&eth_block, &geth_trace, &None).unwrap();
-//     trace!("AccessSet: {:#?}", access_set);
+    // 2. Get State Accesses from TxExecTraces
+    let access_set = get_state_accesses(&eth_block, &geth_trace, &None).unwrap();
+    trace!("AccessSet: {:#?}", access_set);
 
-//     // 3. Query geth for all accounts, storage keys, and codes from Accesses
-//     let (proofs, codes) = cli.get_state(block_num, access_set).await.unwrap();
+    // 3. Query geth for all accounts, storage keys, and codes from Accesses
+    let (proofs, codes) = cli.get_state(block_num, access_set).await.unwrap();
 
-//     // 4. Build a partial StateDB from step 3
-//     let (state_db, code_db) = build_state_code_db(proofs, codes);
-//     trace!("StateDB: {:#?}", state_db);
+    // 4. Build a partial StateDB from step 3
+    let (state_db, code_db) = build_state_code_db(proofs, codes);
+    trace!("StateDB: {:#?}", state_db);
 
-//     // 5. For each step in TxExecTraces, gen the associated ops and state
-//     // circuit inputs
-//     let builder = cli
-//         .gen_inputs_from_state(
-//             state_db,
-//             code_db,
-//             &eth_block,
-//             &geth_trace,
-//             history_hashes,
-//             prev_state_root,
-//         )
-//         .unwrap();
+    // 5. For each step in TxExecTraces, gen the associated ops and state
+    // circuit inputs
+    let builder = cli
+        .gen_inputs_from_state(
+            state_db,
+            code_db,
+            &eth_block,
+            &geth_trace,
+            history_hashes,
+            prev_state_root,
+        )
+        .unwrap();
 
-//     trace!("CircuitInputBuilder: {:#?}", builder);
-// }
+    trace!("CircuitInputBuilder: {:#?}", builder);
+}
 
 /// Block explorer URL is https://explorer.internal.taiko.xyz
 /// The block that has only one anchor
