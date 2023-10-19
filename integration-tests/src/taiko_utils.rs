@@ -5,13 +5,13 @@
 use std::str::FromStr;
 
 use bus_mapping::circuit_input_builder::{BuilderClient, MetaData, ProtocolInstance};
-use eth_types::{Address, Block as EthBlock, Field, Hash, Transaction, U64};
+use eth_types::{Address, Block as EthBlock, Hash, Transaction};
 use ethers::{
     abi::{Function, Param, ParamType, StateMutability},
     utils::hex,
 };
 use halo2_proofs::{
-    halo2curves::bn256::{Bn256, Fr, G1Affine},
+    halo2curves::bn256::{Fr, G1Affine},
     plonk::{keygen_pk, keygen_vk, Circuit, ProvingKey},
 };
 

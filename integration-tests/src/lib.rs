@@ -5,9 +5,6 @@
 #![feature(async_fn_in_trait)]
 
 use bus_mapping::{
-    circuit_input_builder::{
-        build_state_code_db, get_state_accesses, BuilderClient, CircuitsParams,
-    },
     rpc::GethClient,
 };
 use env_logger::Env;
@@ -19,7 +16,7 @@ use ethers::{
     signers::{coins_bip39::English, MnemonicBuilder, Signer, Wallet},
 };
 use lazy_static::lazy_static;
-use log::trace;
+
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
@@ -80,13 +77,13 @@ pub fn log_init() {
 
 /// Get the integration test [`GethClient`]
 pub fn get_client(url: &'static str) -> GethClient<Http> {
-    let transport = Http::new(Url::parse(&url).expect("invalid url"));
+    let transport = Http::new(Url::parse(url).expect("invalid url"));
     GethClient::new(transport)
 }
 
 /// Get the integration test [`Provider`]
 pub fn get_provider(url: &'static str) -> Provider<Http> {
-    let transport = Http::new(Url::parse(&url).expect("invalid url"));
+    let transport = Http::new(Url::parse(url).expect("invalid url"));
     Provider::new(transport).interval(Duration::from_millis(100))
 }
 

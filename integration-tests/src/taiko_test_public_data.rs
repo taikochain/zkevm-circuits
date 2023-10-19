@@ -2,27 +2,17 @@
 // public data itself. for examplp: rlp decoding, we need to parse fn calldata from every
 // proposalBlock call and give txlist bytes to the circuit.
 
-use super::{log_init, taiko_utils::*};
-use crate::{get_client, GETH_L1_URL, GETH_L2_URL, integration_test_circuits::IntegrationTest};
-use bus_mapping::{
-    circuit_input_builder::{BuilderClient, CircuitsParams, MetaData, ProtocolInstance},
-    rpc::BlockNumber,
-};
-use eth_types::{Address, Block as EthBlock, Hash, Transaction, H256};
-use ethers::{
-    abi::{Function, Param, ParamType, StateMutability},
-    utils::hex,
-};
-use halo2_proofs::{arithmetic::Field, dev::MockProver, halo2curves::bn256::Fr};
-use log::error;
-use serde::de;
-use std::str::FromStr;
-use testool::{parse_address, parse_hash};
-use zkevm_circuits::{
-    taiko_super_circuit::SuperCircuit,
-    util::SubCircuit,
-    witness::{block_convert, Block},
-};
+
+
+
+
+
+
+
+
+
+
+
 
 const TAIKO_CIRCUIT_DEGREE: u32 = 20;
 
