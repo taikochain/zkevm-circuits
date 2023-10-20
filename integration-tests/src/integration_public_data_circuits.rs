@@ -4,7 +4,6 @@
 
 #[cfg(test)]
 mod public_data_test {
-
     use crate::get_client;
     use bus_mapping::{
         circuit_input_builder::{BuilderClient, CircuitsParams, MetaData, ProtocolInstance},
@@ -529,7 +528,8 @@ mod public_data_test {
         };
 
         let requests = gen_requests();
-        let protocol_instances: std::iter::Take<std::slice::Iter<'_, ProtocolInstance>> = requests.iter().take(2);
+        let protocol_instances: std::iter::Take<std::slice::Iter<'_, ProtocolInstance>> =
+            requests.iter().take(2);
         assert!(protocol_instances.len() == 2);
         let mut fixed_wits = vec![];
         for protocol_instance in protocol_instances {

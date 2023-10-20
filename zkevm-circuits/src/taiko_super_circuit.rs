@@ -15,9 +15,9 @@ use crate::exp_circuit::{ExpCircuit, ExpCircuitConfig};
 #[cfg(feature = "for-a7")]
 use crate::keccak_circuit::{KeccakCircuit, KeccakCircuitConfig, KeccakCircuitConfigArgs};
 #[cfg(feature = "for-a7")]
-use state_circuit::{StateCircuit, StateCircuitConfig, StateCircuitConfigArgs};
+use crate::state_circuit::{StateCircuit, StateCircuitConfig, StateCircuitConfigArgs};
 #[cfg(feature = "for-a7")]
-use crate::{table::MptTable, witness::MptUpdate};
+use crate::{table::MptTable, witness::MptUpdates};
 
 use crate::{
     anchor_tx_circuit::{AnchorTxCircuit, AnchorTxCircuitConfig, AnchorTxCircuitConfigArgs},
