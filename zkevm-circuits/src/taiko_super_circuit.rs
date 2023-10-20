@@ -23,8 +23,8 @@ use crate::{
     anchor_tx_circuit::{AnchorTxCircuit, AnchorTxCircuitConfig, AnchorTxCircuitConfigArgs},
     evm_circuit::{EvmCircuit, EvmCircuitConfig, EvmCircuitConfigArgs},
     table::{
-        BlockTable, ByteTable, BytecodeTable, CopyTable, ExpTable, KeccakTable, PiTable,
-        RwTable, TxTable,
+        BlockTable, ByteTable, BytecodeTable, CopyTable, ExpTable, KeccakTable, PiTable, RwTable,
+        TxTable,
     },
     taiko_pi_circuit::{TaikoPiCircuit, TaikoPiCircuitConfig, TaikoPiCircuitConfigArgs},
     util::{log2_ceil, Challenges, SubCircuit, SubCircuitConfig},
