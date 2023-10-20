@@ -1,4 +1,4 @@
-use integration_tests::{TAIKO_BLOCK_ANCHOR_ONLY, TAIKO_BLOCK_TRANSFER_SUCCEED};
+use integration_tests::taiko_utils::{TAIKO_BLOCK_ANCHOR_ONLY, TAIKO_BLOCK_TRANSFER_SUCCEED};
 
 macro_rules! run_test {
     ($test_instance:expr, $block_num:expr, $real_prover:expr) => {

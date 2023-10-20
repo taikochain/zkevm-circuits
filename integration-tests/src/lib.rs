@@ -30,7 +30,9 @@ use std::{
     time::Duration,
 };
 use url::Url;
-mod taiko_utils;
+
+/// Utils for taiko tests
+pub mod taiko_utils;
 
 /// Geth dev chain ID
 pub const CHAIN_ID: u64 = 1337;
@@ -210,14 +212,5 @@ pub async fn build_circuit_input_builder_block(block_num: u64) {
     trace!("CircuitInputBuilder: {:#?}", builder);
 }
 
-/// Block explorer URL is https://explorer.internal.taiko.xyz
-/// The block that has only one anchor
-pub const TAIKO_BLOCK_ANCHOR_ONLY: u64 = 5368;
-/// The block that has ERC20 transfer
-pub const TAIKO_BLOCK_TRANSFER_SUCCEED: u64 = 1270;
-
 /// Common code for integration tests of circuits.
 pub mod integration_test_circuits;
-
-/// Common code for integration public data tests of circuits.
-pub mod taiko_test_public_data;

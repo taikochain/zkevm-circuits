@@ -1,4 +1,4 @@
-// Public data circuits verifies the things related to public data, such as rlp decoding txlist and
+/// Public data circuits verifies the things related to public data, s///uch as rlp decoding txlist and
 // public data itself. for examplp: rlp decoding, we need to parse pub fn calldata from every
 // proposalBlock call and give txlist bytes to the circuit.
 
@@ -25,6 +25,13 @@ use zkevm_circuits::{
     util::SubCircuit,
     witness::{block_convert, Block},
 };
+
+
+/// Block explorer URL is https://explorer.internal.taiko.xyz
+/// The block that has only one anchor
+pub const TAIKO_BLOCK_ANCHOR_ONLY: u64 = 5368;
+/// The block that has ERC20 transfer
+pub const TAIKO_BLOCK_TRANSFER_SUCCEED: u64 = 1270;
 
 /// sepolia protocal address
 const ID: u64 = 10;
@@ -57,8 +64,8 @@ const L1_SIGNAL_SERVICE: &str = "1000777700000000000000000000000000000001";
 const L2_SIGNAL_SERVICE: &str = "1000777700000000000000000000000000000001";
 const L2_CONTRACT: &str = "1000777700000000000000000000000000000001";
 const ANCHOR_GAS_LIMIT: u64 = 180000;
-
-pub trait ProtocolInstanceTest {
+///
+trait ProtocolInstanceTest {
     type ProtocolInstance;
     async fn block_with_instance(&self, block_num: u64) -> Block<Fr>;
     fn get_key_from_block(&mut self, block: Block<Fr>) -> ProvingKey<G1Affine>;
@@ -118,7 +125,7 @@ impl<C: SubCircuit<Fr> + Circuit<Fr>> ProtocolInstanceTest for IntegrationTest<C
         key
     }
 }
-
+///
 pub fn filter_proposal_txs(block: &EthBlock<Transaction>) -> Vec<Transaction> {
     let protocol_address = Address::from_str(PROTOCOL_ADDRESS).unwrap();
     block
@@ -136,7 +143,7 @@ pub fn filter_proposal_txs(block: &EthBlock<Transaction>) -> Vec<Transaction> {
         .cloned()
         .collect::<Vec<_>>()
 }
-
+///
 pub fn filter_anchor_tx(block: &EthBlock<Transaction>) -> Transaction {
     let protocol_address = Address::from_str(GOLDEN_TOUCH_ADDRESS).unwrap();
     assert!(!block.transactions.is_empty());
@@ -144,7 +151,7 @@ pub fn filter_anchor_tx(block: &EthBlock<Transaction>) -> Transaction {
     block.transactions[0].clone()
 }
 
-// abi: anchor(bytes32 l1Hash, bytes32 l1SignalRoot, uint64 l1Height, uint32 parentGasUsed)
+///abi: anchor(bytes32 l1Hash, bytes32 l1SignalRoot, uint64 l1Height, uint32 parentGasUsed)
 pub fn get_anchor_tx_info(tx: &Transaction) -> (Hash, Hash, u64, u32) {
     #[allow(deprecated)]
     let function = Function {
@@ -199,7 +206,7 @@ pub fn get_anchor_tx_info(tx: &Transaction) -> (Hash, Hash, u64, u32) {
         decoded_calldata[3].clone().into_uint().unwrap().as_u32(),
     )
 }
-
+///
 pub fn get_txlist_bytes(tx: &Transaction) -> Vec<u8> {
     #[allow(deprecated)]
     let function = Function {

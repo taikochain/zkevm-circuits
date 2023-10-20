@@ -60,7 +60,8 @@ const MAX_EXP_STEPS: usize = 1000;
 
 const MAX_KECCAK_ROWS: usize = 15000;
 
-pub(crate) const CIRCUITS_PARAMS: CircuitsParams = CircuitsParams {
+///
+pub const CIRCUITS_PARAMS: CircuitsParams = CircuitsParams {
     max_rws: MAX_RWS,
     max_txs: MAX_TXS,
     max_calldata: MAX_CALLDATA,
@@ -129,15 +130,20 @@ lazy_static! {
 
 /// Generic implementation for integration tests
 pub struct IntegrationTest<C: SubCircuit<Fr> + Circuit<Fr>> {
-    pub(crate) name: &'static str,
-    pub(crate) degree: u32,
-    pub(crate) key: Option<ProvingKey<G1Affine>>,
-    pub(crate) fixed: Option<Vec<Vec<CellValue<Fr>>>>,
+    ///
+    pub name: &'static str,
+    ///
+    pub degree: u32,
+    ///
+    pub key: Option<ProvingKey<G1Affine>>,
+    ///
+    pub fixed: Option<Vec<Vec<CellValue<Fr>>>>,
     _marker: PhantomData<C>,
 }
 
 impl<C: SubCircuit<Fr> + Circuit<Fr>> IntegrationTest<C> {
-    pub(crate) fn new(name: &'static str, degree: u32) -> Self {
+    ///
+    pub fn new(name: &'static str, degree: u32) -> Self {
         Self {
             name,
             degree,
@@ -146,8 +152,8 @@ impl<C: SubCircuit<Fr> + Circuit<Fr>> IntegrationTest<C> {
             _marker: PhantomData,
         }
     }
-
-    pub(crate) fn get_key(&mut self) -> ProvingKey<G1Affine> {
+    ///
+    pub fn get_key(&mut self) -> ProvingKey<G1Affine> {
         match self.key.clone() {
             Some(key) => key,
             None => {
@@ -164,8 +170,8 @@ impl<C: SubCircuit<Fr> + Circuit<Fr>> IntegrationTest<C> {
             }
         }
     }
-
-    pub(crate) fn test_actual(
+    ///
+    pub fn test_actual(
         &self,
         circuit: C,
         instance: Vec<Vec<Fr>>,
@@ -251,8 +257,8 @@ impl<C: SubCircuit<Fr> + Circuit<Fr>> IntegrationTest<C> {
             &instance,
         );
     }
-
-    pub(crate) fn test_mock(&mut self, circuit: &C, instance: Vec<Vec<Fr>>) {
+    ///
+    pub fn test_mock(&mut self, circuit: &C, instance: Vec<Vec<Fr>>) {
         let mock_prover = MockProver::<Fr>::run(self.degree, circuit, instance).unwrap();
 
         self.test_variadic(&mock_prover);
@@ -261,8 +267,8 @@ impl<C: SubCircuit<Fr> + Circuit<Fr>> IntegrationTest<C> {
             .verify_par()
             .expect("mock prover verification failed");
     }
-
-    pub(crate) fn test_variadic(&mut self, mock_prover: &MockProver<Fr>) {
+    ///
+    pub fn test_variadic(&mut self, mock_prover: &MockProver<Fr>) {
         let fixed = mock_prover.fixed();
 
         match self.fixed.clone() {
@@ -307,7 +313,8 @@ impl<C: SubCircuit<Fr> + Circuit<Fr>> IntegrationTest<C> {
     }
 }
 
-pub(crate) fn new_empty_block() -> Block<Fr> {
+///
+pub fn new_empty_block() -> Block<Fr> {
     let block: GethData = TestContext::<0, 0>::new(None, |_| {}, |_, _| {}, |b, _| b)
         .unwrap()
         .into();
@@ -319,7 +326,8 @@ pub(crate) fn new_empty_block() -> Block<Fr> {
     block_convert(&builder.block, &builder.code_db).unwrap()
 }
 
-pub(crate) fn get_general_params(degree: u32) -> ParamsKZG<Bn256> {
+///
+pub fn get_general_params(degree: u32) -> ParamsKZG<Bn256> {
     let mut map = GEN_PARAMS.lock().unwrap();
     match map.get(&degree) {
         Some(params) => params.clone(),
@@ -332,7 +340,7 @@ pub(crate) fn get_general_params(degree: u32) -> ParamsKZG<Bn256> {
 }
 
 /// returns gen_inputs for a block number
-pub(crate) async fn gen_inputs(
+pub async fn gen_inputs(
     block_num: u64,
 ) -> (
     CircuitInputBuilder,
