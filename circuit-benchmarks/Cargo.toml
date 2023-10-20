@@ -9,7 +9,7 @@ license = "MIT OR Apache-2.0"
 [dependencies]
 halo2_proofs = { git = "https://github.com/taikoxyz/halo2.git", tag = "v0.0.1" }
 snark-verifier = { git = "https://github.com/taikoxyz/snark-verifier.git", branch = "a6-integration", default-features = false, features = ["loader_halo2", "system_halo2", "loader_evm", "parallel"] }
-snark-verifier-sdk = { git = "https://github.com/ceciliaz030/snark-verifier.git", branch = "a6-integration", default-features = false, features = ["loader_halo2", "loader_evm", "parallel", "display", "halo2_circuit_params"] }
+snark-verifier-sdk = { git = "https://github.com/taikoxyz/snark-verifier.git", branch = "a6-integration", default-features = false, features = ["loader_halo2", "loader_evm", "parallel", "display", "halo2_circuit_params"] }
 
 ark-std = { version = "0.3", features = ["print-trace"] }
 zkevm-circuits = { path = "../zkevm-circuits", features = ["test"] }
