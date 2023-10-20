@@ -26,7 +26,6 @@ use zkevm_circuits::{
     witness::{block_convert, Block},
 };
 
-
 /// sepolia protocal address
 const ID: u64 = 10;
 const TIMESTAMP: u64 = 1694510352;
@@ -58,7 +57,6 @@ const L1_SIGNAL_SERVICE: &str = "1000777700000000000000000000000000000001";
 const L2_SIGNAL_SERVICE: &str = "1000777700000000000000000000000000000001";
 const L2_CONTRACT: &str = "1000777700000000000000000000000000000001";
 const ANCHOR_GAS_LIMIT: u64 = 180000;
-
 
 pub trait ProtocolInstanceTest {
     type ProtocolInstance;
@@ -120,7 +118,6 @@ impl<C: SubCircuit<Fr> + Circuit<Fr>> ProtocolInstanceTest for IntegrationTest<C
         key
     }
 }
-
 
 pub fn filter_proposal_txs(block: &EthBlock<Transaction>) -> Vec<Transaction> {
     let protocol_address = Address::from_str(PROTOCOL_ADDRESS).unwrap();
@@ -230,4 +227,3 @@ pub fn get_txlist_bytes(tx: &Transaction) -> Vec<u8> {
     let txlist: Vec<u8> = decoded_calldata[1].clone().into_bytes().unwrap();
     txlist
 }
-

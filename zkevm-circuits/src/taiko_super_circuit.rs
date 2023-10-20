@@ -6,19 +6,12 @@ pub mod test;
 
 use crate::{
     anchor_tx_circuit::{AnchorTxCircuit, AnchorTxCircuitConfig, AnchorTxCircuitConfigArgs},
-    bytecode_circuit::circuit::{
-        BytecodeCircuit, BytecodeCircuitConfig, BytecodeCircuitConfigArgs,
-    },
-    copy_circuit::{CopyCircuit, CopyCircuitConfig, CopyCircuitConfigArgs},
     evm_circuit::{EvmCircuit, EvmCircuitConfig, EvmCircuitConfigArgs},
-    exp_circuit::{ExpCircuit, ExpCircuitConfig},
-    keccak_circuit::{KeccakCircuit, KeccakCircuitConfig, KeccakCircuitConfigArgs},
-    state_circuit::{StateCircuit, StateCircuitConfig, StateCircuitConfigArgs},
     table::{
         BlockTable, ByteTable, BytecodeTable, CopyTable, ExpTable, KeccakTable, MptTable, PiTable,
         RwTable, TxTable,
     },
-    taiko_pi_circuit::{TaikoPiCircuit, TaikoPiCircuitConfig, TaikoPiCircuitConfigArgs},
+    taiko_pi_circuit::TaikoPiCircuit,
     util::{log2_ceil, Challenges, SubCircuit, SubCircuitConfig},
     witness::{block_convert, Block, MptUpdates},
 };
@@ -29,7 +22,7 @@ use bus_mapping::{
 use eth_types::{geth_types::GethData, Field};
 use halo2_proofs::{
     circuit::{Layouter, SimpleFloorPlanner, Value},
-    plonk::{Circuit, ConstraintSystem, Error, Expression}, dev::CircuitCost, halo2curves::bn256::{G1Affine, G1},
+    plonk::{Circuit, ConstraintSystem, Error, Expression},
 };
 
 use itertools::Itertools;
@@ -94,7 +87,7 @@ impl<F: Field> SubCircuitConfig<F> for SuperCircuitConfig<F> {
         //     },
         // );
 
-        let anchor_tx_circuit = AnchorTxCircuitConfig::new(
+        let _anchor_tx_circuit = AnchorTxCircuitConfig::new(
             meta,
             AnchorTxCircuitConfigArgs {
                 tx_table: tx_table.clone(),
@@ -107,7 +100,7 @@ impl<F: Field> SubCircuitConfig<F> for SuperCircuitConfig<F> {
         let evm_circuit = EvmCircuitConfig::new(
             meta,
             EvmCircuitConfigArgs {
-                challenges: challenges.clone(),
+                challenges,
                 tx_table: tx_table.clone(),
                 rw_table,
                 bytecode_table: bytecode_table.clone(),
@@ -198,7 +191,6 @@ pub struct SuperCircuit<F: Field> {
     // pub(crate) state_circuit: StateCircuit<F>,
     // pub(crate) copy_circuit: CopyCircuit<F>,
     // pub(crate) exp_circuit: ExpCircuit<F>,
-
     /// Block witness
     pub block: Block<F>,
 }
@@ -233,9 +225,6 @@ impl<F: Field> SubCircuit<F> for SuperCircuit<F> {
         // let copy_circuit = CopyCircuit::new_from_block(block);
         // let exp_circuit = ExpCircuit::new_from_block(block);
 
-
-        
-
         SuperCircuit::<_> {
             // pi_circuit,
             // anchor_tx_circuit,
@@ -251,9 +240,8 @@ impl<F: Field> SubCircuit<F> for SuperCircuit<F> {
 
     /// Returns suitable inputs for the SuperCircuit.
     fn instance(&self) -> Vec<Vec<F>> {
-        let mut instance = Vec::new();
         // instance.extend_from_slice(&self.pi_circuit.instance());
-        instance
+        Vec::new()
     }
 
     /// Return the minimum number of rows required to prove the block
@@ -392,7 +380,6 @@ impl<F: Field> Circuit<F> for SuperCircuit<F> {
 }
 
 impl<F: Field> SuperCircuit<F> {
-
     // fn cost(&self) {
     //     CircuitCost::<G1, _>::measure(100, self);
     // }

@@ -5,6 +5,9 @@
 #![feature(async_fn_in_trait)]
 
 use bus_mapping::{
+    circuit_input_builder::{
+        build_state_code_db, get_state_accesses, BuilderClient, CircuitsParams,
+    },
     rpc::GethClient,
 };
 use env_logger::Env;
@@ -17,6 +20,7 @@ use ethers::{
 };
 use lazy_static::lazy_static;
 
+use log::trace;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,

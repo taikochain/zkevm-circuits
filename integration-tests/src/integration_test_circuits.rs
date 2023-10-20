@@ -165,7 +165,12 @@ impl<C: SubCircuit<Fr> + Circuit<Fr>> IntegrationTest<C> {
         }
     }
 
-    pub(crate) fn test_actual(&self, circuit: C, instance: Vec<Vec<Fr>>, proving_key: ProvingKey<G1Affine>) {
+    pub(crate) fn test_actual(
+        &self,
+        circuit: C,
+        instance: Vec<Vec<Fr>>,
+        proving_key: ProvingKey<G1Affine>,
+    ) {
         fn test_gen_proof<C: Circuit<Fr>, R: RngCore>(
             rng: R,
             circuit: C,
