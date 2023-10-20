@@ -15,7 +15,11 @@ mod public_data_test {
         abi::{Function, Param, ParamType, StateMutability},
         utils::hex,
     };
-    use halo2_proofs::{arithmetic::Field, dev::MockProver, halo2curves::bn256::Fr};
+    use halo2_proofs::{
+        arithmetic::Field,
+        dev::{CellValue, MockProver},
+        halo2curves::bn256::Fr,
+    };
     use log::error;
     use std::str::FromStr;
     use testool::{parse_address, parse_hash};
@@ -294,17 +298,26 @@ mod public_data_test {
         assert_eq!(txlist_bytes, expected_txlist_bytes);
     }
 
-    fn test_super_circuit(block: &Block<Fr>) {
+    fn run_super_circuit_mock_prover(block: &Block<Fr>) {
         let circuit = SuperCircuit::new_from_block(block);
         let instance = circuit.instance();
         // TODO: fix k from build
-        let k = 23;
+        let k = 20;
         let prover = MockProver::run(k, &circuit, instance).unwrap();
         let res = prover.verify_par();
         if let Err(err) = res {
             error!("Verification failures: {:#?}", err);
             panic!("Failed verification");
         }
+    }
+
+    fn get_fixed_columns(block: &Block<Fr>) -> Vec<Vec<CellValue<Fr>>> {
+        let circuit = SuperCircuit::new_from_block(block);
+        let instance = circuit.instance();
+        // TODO: fix k from build
+        let k = 20;
+        let prover = MockProver::run(k, &circuit, instance).unwrap();
+        prover.fixed().clone()
     }
 
     #[tokio::test]
@@ -321,76 +334,129 @@ mod public_data_test {
         println!("anchor_info: {:?}", anchor_info);
     }
 
-    #[tokio::test]
-    async fn test_pure_anchor_block() {
-        let block_num = 10;
-        let cli = get_client();
-
-        let circuits_params = CircuitsParams {
-            max_txs: 80,
-            max_calldata: 69750,
-            max_bytecode: 139500,
-            max_rws: 524288,
-            max_copy_rows: 524288,
-            max_exp_steps: 27900,
-            max_evm_rows: 0,
-            max_keccak_rows: 0,
-        };
-
-        let protocol_instance = ProtocolInstance {
-            meta_data: MetaData {
-                id: 10,
-                timestamp: 1694510352,
-                l1_height: 4272887,
-                l1_hash: parse_hash(
-                    "6e3b781b2d9a04e21ecba49e67dc3fb0a8242408cc07fa6fed5d8bd0eca2c985",
+    fn gen_requests() -> Vec<ProtocolInstance> {
+        vec![
+            ProtocolInstance {
+                meta_data: MetaData {
+                    id: 10,
+                    timestamp: 1694510352,
+                    l1_height: 4272887,
+                    l1_hash: parse_hash(
+                        "6e3b781b2d9a04e21ecba49e67dc3fb0a8242408cc07fa6fed5d8bd0eca2c985",
+                    )
+                    .unwrap(),
+                    l1_mix_hash: parse_hash(
+                        "0000000000000000000000000000000000000000000000000000000000000000",
+                    )
+                    .unwrap(),
+                    deposits_processed: parse_hash(
+                        "56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+                    )
+                    .unwrap(),
+                    tx_list_hash: parse_hash(
+                        "569e75fc77c1a856f6daaf9e69d8a9566ca34aa47f9133711ce065a571af0cfd",
+                    )
+                    .unwrap(),
+                    tx_list_byte_start: 0,
+                    tx_list_byte_end: 0,
+                    gas_limit: 820000000,
+                    beneficiary: parse_address("0000777700000000000000000000000000000001").unwrap(),
+                    treasury: parse_address("df09A0afD09a63fb04ab3573922437e1e637dE8b").unwrap(),
+                },
+                block_hash: parse_hash(
+                    "c32ce5789b5ae9b2a3921e43fb16c429abcb520acf5e27dc717a9caf46c4319f",
                 )
                 .unwrap(),
-                l1_mix_hash: parse_hash(
-                    "0000000000000000000000000000000000000000000000000000000000000000",
+                parent_hash: parse_hash(
+                    "a534f7f74d155fa0575ccfd9dbb2a7c4f89baa0fb48c3a312f0d97e3fbff7c47",
                 )
                 .unwrap(),
-                deposits_processed: parse_hash(
-                    "56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+                signal_root: parse_hash(
+                    "95a87577b110954a0daf867bd574aa726ec9a061b4bf0903d5adef23872f7f1b",
                 )
                 .unwrap(),
-                tx_list_hash: parse_hash(
-                    "569e75fc77c1a856f6daaf9e69d8a9566ca34aa47f9133711ce065a571af0cfd",
+                graffiti: parse_hash(
+                    "6162630000000000000000000000000000000000000000000000000000000000",
                 )
                 .unwrap(),
-                tx_list_byte_start: 0,
-                tx_list_byte_end: 0,
-                gas_limit: 820000000,
-                beneficiary: parse_address("0000777700000000000000000000000000000001").unwrap(),
-                treasury: parse_address("df09A0afD09a63fb04ab3573922437e1e637dE8b").unwrap(),
+                prover: parse_address("70997970C51812dc3A010C7d01b50e0d17dc79C8").unwrap(),
+                gas_used: 141003,
+                parent_gas_used: 123960,
+                block_max_gas_limit: 6000000,
+                max_transactions_per_block: 79,
+                max_bytes_per_tx_list: 120000,
+                l1_signal_service: parse_address("1000777700000000000000000000000000000001")
+                    .unwrap(),
+                l2_signal_service: parse_address("1000777700000000000000000000000000000001")
+                    .unwrap(),
+                l2_contract: parse_address("1000777700000000000000000000000000000001").unwrap(),
+                anchor_gas_limit: 180000,
             },
-            block_hash: parse_hash(
-                "c32ce5789b5ae9b2a3921e43fb16c429abcb520acf5e27dc717a9caf46c4319f",
-            )
-            .unwrap(),
-            parent_hash: parse_hash(
-                "a534f7f74d155fa0575ccfd9dbb2a7c4f89baa0fb48c3a312f0d97e3fbff7c47",
-            )
-            .unwrap(),
-            signal_root: parse_hash(
-                "95a87577b110954a0daf867bd574aa726ec9a061b4bf0903d5adef23872f7f1b",
-            )
-            .unwrap(),
-            graffiti: parse_hash(
-                "6162630000000000000000000000000000000000000000000000000000000000",
-            )
-            .unwrap(),
-            prover: parse_address("70997970C51812dc3A010C7d01b50e0d17dc79C8").unwrap(),
-            gas_used: 141003,
-            parent_gas_used: 123960,
-            block_max_gas_limit: 6000000,
-            max_transactions_per_block: 79,
-            max_bytes_per_tx_list: 120000,
-            l1_signal_service: parse_address("1000777700000000000000000000000000000001").unwrap(),
-            l2_signal_service: parse_address("1000777700000000000000000000000000000001").unwrap(),
-            l2_contract: parse_address("1000777700000000000000000000000000000001").unwrap(),
-            anchor_gas_limit: 180000,
-        };
+            ProtocolInstance {
+                l1_signal_service: parse_address("1000777700000000000000000000000000000001")
+                    .unwrap(),
+                l2_signal_service: parse_address("1000777700000000000000000000000000000001")
+                    .unwrap(),
+                l2_contract: parse_address("1000777700000000000000000000000000000001").unwrap(),
+                meta_data: MetaData {
+                    id: 1045,
+                    timestamp: 1694590452,
+                    l1_height: 4278960,
+                    l1_hash: parse_hash(
+                        "7240c017af19dd18eb328bad5865bfd812e9c14053c354ecaae64ab8896f6e2a",
+                    )
+                    .unwrap(),
+                    l1_mix_hash: parse_hash(
+                        "0000000000000000000000000000000000000000000000000000000000000000",
+                    )
+                    .unwrap(),
+                    deposits_processed: parse_hash(
+                        "56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+                    )
+                    .unwrap(),
+                    tx_list_hash: parse_hash(
+                        "569e75fc77c1a856f6daaf9e69d8a9566ca34aa47f9133711ce065a571af0cfd",
+                    )
+                    .unwrap(),
+                    tx_list_byte_start: 0,
+                    tx_list_byte_end: 0,
+                    gas_limit: 820000000,
+                    beneficiary: parse_address("0000777700000000000000000000000000000001").unwrap(),
+                    treasury: parse_address("df09A0afD09a63fb04ab3573922437e1e637dE8b").unwrap(),
+                },
+                block_hash: parse_hash(
+                    "19101b2b2c7fc6308f1b17657efb1adfa94aa2c6c64ab4d9e9d18675bd3e57c3",
+                )
+                .unwrap(),
+                parent_hash: parse_hash(
+                    "ccac2185fbfb904b6551b4fdedd240b5fc02e8f5508c05e58a2dc7d8f4ca9f0c",
+                )
+                .unwrap(),
+                signal_root: parse_hash(
+                    "55d8315a59fd224b008c28023824f40072e06e7ad7b25781ec7fd71ea4f8cad5",
+                )
+                .unwrap(),
+                graffiti: parse_hash(
+                    "6162630000000000000000000000000000000000000000000000000000000000",
+                )
+                .unwrap(),
+                prover: parse_address("70997970C51812dc3A010C7d01b50e0d17dc79C8").unwrap(),
+                gas_used: 814499,
+                parent_gas_used: 217799,
+                block_max_gas_limit: 6000000,
+                max_transactions_per_block: 79,
+                max_bytes_per_tx_list: 120000,
+                anchor_gas_limit: 180000,
+            },
+        ]
+    }
+
+    async fn gen_block(
+        circuits_params: CircuitsParams,
+        protocol_instance: ProtocolInstance,
+    ) -> Block<Fr> {
+        let block_num = protocol_instance.meta_data.id;
+        let cli = get_client();
 
         let cli = BuilderClient::new(cli, circuits_params, Some(protocol_instance.clone()))
             .await
@@ -403,70 +469,73 @@ mod public_data_test {
         block.randomness = Fr::ONE;
         block.protocol_instance = Some(protocol_instance);
 
-        test_super_circuit(&block);
+        block
     }
 
-    // #[tokio::test]
-    // async fn test_single_sepolia_txlist_call() {
-    //     let block_num = 3974689;
-    //     let cli = get_client();
-    //     let block = cli
-    //         .get_block_by_number(BlockNumber::from(block_num))
-    //         .await
-    //         .unwrap();
-    //     let proposal_txs = filter_proposal_txs(&block);
+    #[tokio::test]
+    async fn test_pure_anchor_block() {
+        let circuits_params = CircuitsParams {
+            max_txs: 80,
+            max_calldata: 69750,
+            max_bytecode: 139500,
+            max_rws: 524288,
+            max_copy_rows: 524288,
+            max_exp_steps: 27900,
+            max_evm_rows: 80000,
+            max_keccak_rows: 0,
+        };
+        let protocol_instance = gen_requests()[0].clone();
+        let block = gen_block(circuits_params, protocol_instance).await;
+        run_super_circuit_mock_prover(&block);
+    }
 
-    //     for tx in proposal_txs {
-    //         let txlist_bytes = get_txlist_bytes(&tx);
-    //         assert_eq!(run_rlp_circuit_for_valid_bytes(&txlist_bytes), Ok(()));
-    //     }
-    // }
+    #[tokio::test]
+    async fn test_block_statistics() {
+        let block_num = 526831;
+        let circuits_params = CircuitsParams {
+            max_txs: 80,
+            max_calldata: 69750,
+            max_bytecode: 139500,
+            max_rws: 1524288,
+            max_copy_rows: 524288,
+            max_exp_steps: 27900,
+            max_evm_rows: 80000,
+            max_keccak_rows: 0,
+        };
 
-    // #[tokio::test]
-    // #[tokio::test]
-    // async fn test_single_sepolia_txlist_call() {
-    //     let block_num = 3974689;
-    //     let cli = get_client();
-    //     let block = cli
-    //         .get_block_by_number(BlockNumber::from(block_num))
-    //         .await
-    //         .unwrap();
-    //     let proposal_txs = filter_proposal_txs(&block);
+        let protocol_instance: ProtocolInstance = ProtocolInstance::default();
+        for i in block_num..block_num + 1000 {
+            let w3_client = get_client();
+            let cli =
+                BuilderClient::new(w3_client, circuits_params, Some(protocol_instance.clone()))
+                    .await
+                    .unwrap();
 
-    //     for tx in proposal_txs {
-    //         let txlist_bytes = get_txlist_bytes(&tx);
-    //         assert_eq!(run_rlp_circuit_for_valid_bytes(&txlist_bytes), Ok(()));
-    //     }
-    // }
+            cli.gen_inputs(i).await.unwrap();
+        }
+    }
 
-    // #[tokio::test]
-    // async fn test_all_sepolia_txlist_calls() {
-    //     let begin_block_num: u64 = match env::var("SEPOLIA_BLOCK_NUM") {
-    //         Ok(val) => {
-    //             println!("Begins with {:?}", val);
-    //             val.parse().unwrap()
-    //         }
-    //         _ => 3980000u64,
-    //     };
+    #[tokio::test]
+    async fn test_fixed_stablity() {
+        let circuits_params = CircuitsParams {
+            max_txs: 80,
+            max_calldata: 69750,
+            max_bytecode: 139500,
+            max_rws: 72428,
+            max_copy_rows: 72428,
+            max_exp_steps: 27900,
+            max_evm_rows: 80000,
+            max_keccak_rows: 20000,
+        };
 
-    //     let cli = get_client();
-    //     for block_num in begin_block_num..begin_block_num * 2 {
-    //         print!("running block {} ", block_num);
-    //         io::stdout().flush().unwrap();
-    //         let block = cli
-    //             .get_block_by_number(BlockNumber::from(block_num))
-    //             .await
-    //             .unwrap();
-    //         let proposal_txs = filter_proposal_txs(&block);
-
-    //         println!("which has {} proposal txlists...", proposal_txs.len());
-    //         for (i, tx) in proposal_txs.iter().enumerate() {
-    //             let txlist_bytes = get_txlist_bytes(&tx);
-    //             print!("  running {} tx {:?} ... ", i, tx.hash);
-    //             io::stdout().flush().unwrap();
-    //             assert_eq!(run_rlp_circuit_for_valid_bytes(&txlist_bytes), Ok(()));
-    //             println!("succed!");
-    //         }
-    //     }
-    // }
+        let requests = gen_requests();
+        let protocol_instances: std::iter::Take<std::slice::Iter<'_, ProtocolInstance>> = requests.iter().take(2);
+        assert!(protocol_instances.len() == 2);
+        let mut fixed_wits = vec![];
+        for protocol_instance in protocol_instances {
+            let block = gen_block(circuits_params, protocol_instance.clone()).await;
+            fixed_wits.push(get_fixed_columns(&block));
+        }
+        assert!(fixed_wits[0] == fixed_wits[1])
+    }
 }
