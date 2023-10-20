@@ -23,7 +23,7 @@ macro_rules! declare_tests {
 macro_rules! unroll_tests {
     ($($arg:tt),*) => {
         use paste::paste;
-        use integration_tests::integration_test_circuits::{
+        use integration_tests::circuits_utils::{
             EVM_CIRCUIT_TEST,
         };
         use integration_tests::log_init;

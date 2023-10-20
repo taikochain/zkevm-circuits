@@ -17,7 +17,7 @@ use halo2_proofs::{
 
 use crate::{
     get_client,
-    integration_test_circuits::{get_general_params, IntegrationTest, CIRCUITS_PARAMS},
+    circuits_utils::{get_general_params, IntegrationTest, CIRCUITS_PARAMS},
     GETH_L2_URL,
 };
 use testool::{parse_address, parse_hash};

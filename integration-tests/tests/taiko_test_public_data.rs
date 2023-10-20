@@ -43,6 +43,7 @@ macro_rules! declare_l1_tests {
             let proposal_txs = filter_proposal_txs(&block);
             for tx in proposal_txs {
                 let _txlist_bytes = get_txlist_bytes(&tx);
+                // TODO(Cecilia): wait for Yue's rlp
                 // assert_eq!(run_rlp_circuit_for_valid_bytes(&txlist_bytes), Ok(()));
             }
         }
@@ -85,7 +86,7 @@ macro_rules! declare_l2_tests {
         async fn $test_name() {
             use integration_tests::{
                 integration_tests::get_client,
-                integration_test_circuits::IntegrationTest,
+                circuits_utils::IntegrationTest,
                 taiko_utils::{filter_anchor_tx, get_anchor_tx_info, ProtocolInstanceTest},
             };
             use halo2_proofs::{arithmetic::Field, halo2curves::bn256::Fr};

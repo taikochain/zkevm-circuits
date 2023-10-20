@@ -213,4 +213,4 @@ pub async fn build_circuit_input_builder_block(block_num: u64) {
 }
 
 /// Common code for integration tests of circuits.
-pub mod integration_test_circuits;
+pub mod circuits_utils;
