@@ -34,7 +34,7 @@ integer =   { git = "https://github.com/taikoxyz/halo2wrong", branch = "a6-integ
 libsecp256k1 = "0.7"
 num-bigint = { version = "0.4" }
 rand_chacha = "0.3"
-snark-verifier = { git = "https://github.com/ceciliaz030/snark-verifier.git", branch = "a6-integration", default-features = false, features = ["loader_halo2", "system_halo2", "loader_evm", "parallel"] }
+snark-verifier = { git = "https://github.com/taikoxyz/snark-verifier.git", branch = "a6-integration", default-features = false, features = ["loader_halo2", "system_halo2", "loader_evm", "parallel"] }
 snark-verifier-sdk = { git = "https://github.com/ceciliaz030/snark-verifier.git", branch = "a6-integration", default-features = false, features = ["loader_halo2", "loader_evm", "parallel", "display", "halo2_circuit_params"] }
 cli-table = { version = "0.4", optional = true }
 once_cell = "1.17.1"
