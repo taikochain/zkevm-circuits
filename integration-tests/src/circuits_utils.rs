@@ -54,7 +54,7 @@ const MAX_BYTECODE: usize = 5000;
 /// MAX_COPY_ROWS
 const MAX_COPY_ROWS: usize = 5888;
 /// MAX_EVM_ROWS
-const MAX_EVM_ROWS: usize = 10000;
+const MAX_EVM_ROWS: usize = 100000;
 /// MAX_EXP_STEPS
 const MAX_EXP_STEPS: usize = 1000;
 
@@ -231,6 +231,7 @@ impl<C: SubCircuit<Fr> + Circuit<Fr>> IntegrationTest<C> {
             .expect("failed to verify circuit");
         }
 
+        log::info!("get param with degree #{}", self.degree);
         let general_params = get_general_params(self.degree);
         let verifier_params: ParamsVerifierKZG<Bn256> = general_params.verifier_params().clone();
 
@@ -239,6 +240,7 @@ impl<C: SubCircuit<Fr> + Circuit<Fr>> IntegrationTest<C> {
         // change instace to slice
         let instance: Vec<&[Fr]> = instance.iter().map(|v| v.as_slice()).collect();
 
+        log::info!("create proof");
         let proof = test_gen_proof(
             RNG.clone(),
             circuit,
@@ -248,6 +250,7 @@ impl<C: SubCircuit<Fr> + Circuit<Fr>> IntegrationTest<C> {
             &instance,
         );
 
+        log::info!("verify proof with vk");
         let verifying_key = proving_key.get_vk();
         test_verify(
             &general_params,
@@ -273,12 +276,14 @@ impl<C: SubCircuit<Fr> + Circuit<Fr>> IntegrationTest<C> {
 
         match self.fixed.clone() {
             Some(prev_fixed) => {
+                log::debug!("compare fixed columns");
                 assert!(
                     fixed.eq(&prev_fixed),
                     "circuit fixed columns are not constant for different witnesses"
                 );
             }
             None => {
+                log::debug!("setting fixed columns");
                 self.fixed = Some(fixed.clone());
             }
         };
@@ -311,6 +316,19 @@ impl<C: SubCircuit<Fr> + Circuit<Fr>> IntegrationTest<C> {
             self.test_mock(&circuit, instance);
         }
     }
+
+    /// returns gen_inputs for a block number
+pub async fn gen_block(
+    block_num: u64,
+) -> Block<Fr> {
+    let cli = get_client(&GETH_L2_URL);
+    let cli = BuilderClient::new(cli, CIRCUITS_PARAMS, Default::default())
+        .await
+        .unwrap();
+
+    let (builder, _) = cli.gen_inputs(block_num).await.unwrap();
+    block_convert(&builder.block, &builder.code_db).unwrap()
+}
 }
 
 ///
