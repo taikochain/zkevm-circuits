@@ -7,9 +7,9 @@ license = "MIT OR Apache-2.0"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-halo2_proofs = { git = "https://github.com/privacy-scaling-explorations/halo2.git", tag = "v2023_04_20" }
-snark-verifier = { git = "https://github.com/brechtpd/snark-verifier.git", branch = "feat/add-sdk", default-features = false, features = ["loader_halo2", "system_halo2", "loader_evm", "parallel"] }
-snark-verifier-sdk = { git = "https://github.com/brechtpd/snark-verifier.git", branch = "feat/add-sdk", default-features = false, features = ["loader_halo2", "loader_evm", "parallel", "display", "halo2_circuit_params"] }
+halo2_proofs = { git = "https://github.com/taikoxyz/halo2.git", branch = "integration-dependency" }
+snark-verifier = { git = "https://github.com/taikoxyz/snark-verifier.git", branch = "integration-dependency", default-features = false, features = ["loader_halo2", "system_halo2", "loader_evm", "parallel"] }
+snark-verifier-sdk = { git = "https://github.com/taikoxyz/snark-verifier.git", branch = "integration-dependency", default-features = false, features = ["loader_halo2", "loader_evm", "parallel", "display", "halo2_circuit_params"] }
 
 ark-std = { version = "0.3", features = ["print-trace"] }
 zkevm-circuits = { path = "../zkevm-circuits", features = ["test"] }
