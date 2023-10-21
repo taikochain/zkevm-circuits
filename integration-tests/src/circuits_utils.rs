@@ -25,7 +25,7 @@ use mock::TestContext;
 use rand_chacha::rand_core::SeedableRng;
 use rand_core::RngCore;
 use rand_xorshift::XorShiftRng;
-use std::{collections::HashMap, marker::PhantomData, sync::Mutex};
+use std::{collections::HashMap, marker::PhantomData, sync::Mutex, fmt::Debug};
 use tokio::sync::Mutex as TokioMutex;
 use zkevm_circuits::{
     bytecode_circuit::TestBytecodeCircuit,
@@ -141,7 +141,7 @@ pub struct IntegrationTest<C: SubCircuit<Fr> + Circuit<Fr>> {
     _marker: PhantomData<C>,
 }
 
-impl<C: SubCircuit<Fr> + Circuit<Fr>> IntegrationTest<C> {
+impl<C: SubCircuit<Fr> + Circuit<Fr> + Debug> IntegrationTest<C> {
     ///
     pub fn new(name: &'static str, degree: u32) -> Self {
         Self {
@@ -152,11 +152,14 @@ impl<C: SubCircuit<Fr> + Circuit<Fr>> IntegrationTest<C> {
             _marker: PhantomData,
         }
     }
-    fn cost(&self, block: Block<Fr>, k: usize) {
+
+    ///
+    pub fn print_cost(&self, circuit: &C, k: u32) {
         let mut cs = ConstraintSystem::<Fr>::default();
-        let circuit = C::new_from_block(&block);
         C::configure_with_params(&mut cs, circuit.params());
-        let cost = CircuitCost::<G1, C>::measure(k, &circuit);
+        let cost = CircuitCost::<G1, C>::measure(k as usize, circuit);
+        let proof_size = cost.proof_size(1);
+        println!("cost: {:?}\n proof_size {:?}", cost, proof_size);
     }
 
     ///
@@ -308,14 +311,14 @@ impl<C: SubCircuit<Fr> + Circuit<Fr>> IntegrationTest<C> {
 
     /// Run integration test for a block number
     pub async fn test_block_by_number(&mut self, block_num: u64, actual: bool) {
-        let (builder, _) = gen_inputs(block_num).await;
+        let mut block = gen_block(block_num).await;
 
         log::info!("test {} circuit, block: #{}", self.name, block_num);
-        let mut block = block_convert(&builder.block, &builder.code_db).unwrap();
         block.randomness = Fr::from(TEST_MOCK_RANDOMNESS);
         let circuit = C::new_from_block(&block);
         let instance = circuit.instance();
-
+        self.print_cost(&circuit, EVM_CIRCUIT_DEGREE);
+        
         if actual {
             let key = self.get_key();
             self.test_actual(circuit, instance, key);
@@ -324,18 +327,6 @@ impl<C: SubCircuit<Fr> + Circuit<Fr>> IntegrationTest<C> {
         }
     }
 
-    /// returns gen_inputs for a block number
-pub async fn gen_block(
-    block_num: u64,
-) -> Block<Fr> {
-    let cli = get_client(&GETH_L2_URL);
-    let cli = BuilderClient::new(cli, CIRCUITS_PARAMS, Default::default())
-        .await
-        .unwrap();
-
-    let (builder, _) = cli.gen_inputs(block_num).await.unwrap();
-    block_convert(&builder.block, &builder.code_db).unwrap()
-}
 }
 
 ///
@@ -364,8 +355,8 @@ pub fn get_general_params(degree: u32) -> ParamsKZG<Bn256> {
     }
 }
 
-/// returns gen_inputs for a block number
-pub async fn gen_inputs(
+// returns gen_inputs for a block number
+/* pub async fn gen_inputs(
     block_num: u64,
 ) -> (
     CircuitInputBuilder,
@@ -377,4 +368,17 @@ pub async fn gen_inputs(
         .unwrap();
 
     cli.gen_inputs(block_num).await.unwrap()
+} */
+
+/// returns gen_inputs for a block number
+pub async fn gen_block(
+    block_num: u64,
+) -> Block<Fr> {
+    let cli = get_client(&GETH_L2_URL);
+    let cli = BuilderClient::new(cli, CIRCUITS_PARAMS, Default::default())
+        .await
+        .unwrap();
+
+    let (builder, _) = cli.gen_inputs(block_num).await.unwrap();
+    block_convert(&builder.block, &builder.code_db).unwrap()
 }

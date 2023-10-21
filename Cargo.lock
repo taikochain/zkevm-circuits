@@ -2160,11 +2160,7 @@ dependencies = [
 [[package]]
 name = "halo2_proofs"
 version = "0.2.0"
-<<<<<<< HEAD
-source = "git+https://github.com/taikoxyz/halo2.git?branch=integration-dependency#2e5de895e699526c3bb7fa23aeb4b44eebf12c0c"
-=======
 source = "git+https://github.com/privacy-scaling-explorations/halo2.git?tag=v2023_04_20#be955686f86eb618f55d2320c0e042485b313d22"
->>>>>>> parent of bea7d898 (dependency)
 dependencies = [
  "blake2b_simd",
  "ff 0.13.0",
