@@ -8,7 +8,7 @@ license = "MIT OR Apache-2.0"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-halo2_proofs = { git = "https://github.com/taikoxyz/halo2.git", branch = "integration-dependency", features = ["circuit-params"]}
+halo2_proofs = { git = "https://github.com/privacy-scaling-explorations/halo2.git", features = ["circuit-params"], tag = "v2023_04_20" }
 num = "0.4"
 sha3 = "0.10"
 array-init = "2.0.0"
@@ -27,15 +27,15 @@ lazy_static = "1.4"
 keccak256 = { path = "../keccak256"}
 log = "0.4"
 env_logger = "0.9"
-ecdsa = { git = "https://github.com/taikoxyz/halo2wrong", branch = "integration-dependency" }
-ecc =       { git = "https://github.com/taikoxyz/halo2wrong", branch = "integration-dependency" }
-maingate =  { git = "https://github.com/taikoxyz/halo2wrong", branch = "integration-dependency" }
-integer =   { git = "https://github.com/taikoxyz/halo2wrong", branch = "integration-dependency" }
+ecdsa = { git = "https://github.com/privacy-scaling-explorations/halo2wrong", tag = "v2023_04_20" }
+ecc =       { git = "https://github.com/privacy-scaling-explorations/halo2wrong", tag = "v2023_04_20" }
+maingate =  { git = "https://github.com/privacy-scaling-explorations/halo2wrong", tag = "v2023_04_20" }
+integer =   { git = "https://github.com/privacy-scaling-explorations/halo2wrong", tag = "v2023_04_20" }
 libsecp256k1 = "0.7"
 num-bigint = { version = "0.4" }
 rand_chacha = "0.3"
-snark-verifier = { git = "https://github.com/taikoxyz/snark-verifier.git", branch = "integration-dependency", default-features = false, features = ["loader_halo2", "system_halo2", "loader_evm", "parallel"] }
-snark-verifier-sdk = { git = "https://github.com/taikoxyz/snark-verifier.git", branch = "integration-dependency", default-features = false, features = ["loader_halo2", "loader_evm", "parallel", "display", "halo2_circuit_params"] }
+snark-verifier = { git = "https://github.com/brechtpd/snark-verifier.git", branch = "feat/add-sdk", default-features = false, features = ["loader_halo2", "system_halo2", "loader_evm", "parallel"] }
+snark-verifier-sdk = { git = "https://github.com/brechtpd/snark-verifier.git", branch = "feat/add-sdk", default-features = false, features = ["loader_halo2", "loader_evm", "parallel", "display", "halo2_circuit_params"] }
 cli-table = { version = "0.4", optional = true }
 once_cell = "1.17.1"
 
