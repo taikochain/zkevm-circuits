@@ -6,7 +6,7 @@ use bus_mapping::{
 use eth_types::geth_types::GethData;
 use halo2_proofs::{
     dev::{CellValue, MockProver, CircuitCost},
-    halo2curves::bn256::{Bn256, Fr, G1Affine},
+    halo2curves::{bn256::{Bn256, Fr, G1Affine, G1}},
     plonk::{create_proof, keygen_pk, keygen_vk, verify_proof, Circuit, ProvingKey, VerifyingKey, ConstraintSystem},
     poly::{
         commitment::ParamsProver,
@@ -156,18 +156,7 @@ impl<C: SubCircuit<Fr> + Circuit<Fr>> IntegrationTest<C> {
         let mut cs = ConstraintSystem::<Fr>::default();
         let circuit = C::new_from_block(&block);
         C::configure_with_params(&mut cs, circuit.params());
-        // let cost = CircuitCost {
-        //     k,
-        //     max_deg: cs.degree(),
-        //     advice_columns: cs.num_advice_columns(),
-        //     instance_queries: cs.instance_queries.len(),
-        //     advice_queries: cs.advice_queries.len(),
-        //     fixed_queries: cs.fixed_queries.len(),
-        //     lookups: cs.lookups.len(),
-        //     permutation_cols,
-        //     point_sets: point_sets.len(),
-        //     _marker: PhantomData::default(),
-        // }
+        let cost = CircuitCost::<G1, C>::measure(k, &circuit);
     }
 
     ///
