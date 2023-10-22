@@ -6,7 +6,7 @@ use bus_mapping::{
 use eth_types::geth_types::GethData;
 use halo2_proofs::{
     dev::{CellValue, MockProver, CircuitCost},
-    halo2curves::{bn256::{Bn256, Fr, G1Affine, G1}},
+    halo2curves::{bn256::{Bn256, Fr, G1Affine, G1}, pasta::EqAffine},
     plonk::{create_proof, keygen_pk, keygen_vk, verify_proof, Circuit, ProvingKey, VerifyingKey, ConstraintSystem},
     poly::{
         commitment::ParamsProver,
@@ -135,7 +135,7 @@ pub struct IntegrationTest<C: SubCircuit<Fr> + Circuit<Fr>> {
     ///
     pub degree: u32,
     ///
-    pub circuit: Option<C>,
+    pub block: HashMap<u64, Block<Fr>>,
     ///
     pub key: HashMap<u64, ProvingKey<G1Affine>>,
     ///
@@ -150,36 +150,33 @@ impl<C: SubCircuit<Fr> + Circuit<Fr> + Debug> IntegrationTest<C> {
         Self {
             name,
             degree,
-            circuit: None,
+            block:HashMap::new(),
             key: HashMap::new(),
             fixed: HashMap::new(),
             _marker: PhantomData,
         }
     }
 
-    ///
-    pub fn print_cost(&self) {
-        if let Some(circuit) = self.circuit.as_ref() {
-            let mut cs = ConstraintSystem::<Fr>::default();
-            C::configure_with_params(&mut cs, circuit.params());
-            let cost = CircuitCost::<G1, C>::measure(self.degree as usize, &circuit);
-            let proof_size = cost.proof_size(1);
-            println!("cost: {:?}\n proof_size {:?}", cost, proof_size);
+
+    async fn get_block(&mut self, block_num: u64) -> Block<Fr> {
+        match self.block.get(&block_num) {
+            Some(block) => block.clone(),
+            None => {
+                let mut block = gen_block(block_num).await;
+                block.randomness = Fr::from(TEST_MOCK_RANDOMNESS);
+                self.block.insert(block_num, block.clone());
+                block
+            }
         }
     }
 
     ///
-    pub async fn get_key(&mut self, block_num: u64) -> ProvingKey<G1Affine> {
+    pub async fn get_key(&mut self, block_num: u64, circuit: &C) -> ProvingKey<G1Affine> {
         match self.key.get(&block_num) {
             Some(key) => key.clone(),
             None => {
-                let block = gen_block(block_num).await;
-                let circuit = C::new_from_block(&block);
-                let general_params = get_general_params(self.degree);
-                let verifying_key =
-                    keygen_vk(&general_params, &circuit).expect("keygen_vk should not fail");
-                let key = keygen_pk(&general_params, verifying_key, &circuit)
-                    .expect("keygen_pk should not fail");
+                let key = gen_key(circuit, self.degree);
+                self.key_veriadic(&key.get_vk());
                 self.key.insert(block_num, key.clone());
                 key
             }
@@ -246,7 +243,6 @@ impl<C: SubCircuit<Fr> + Circuit<Fr> + Debug> IntegrationTest<C> {
             .expect("failed to verify circuit");
         }
 
-        log::info!("get param with degree #{}", self.degree);
         let general_params = get_general_params(self.degree);
         let verifier_params: ParamsVerifierKZG<Bn256> = general_params.verifier_params().clone();
 
@@ -275,36 +271,45 @@ impl<C: SubCircuit<Fr> + Circuit<Fr> + Debug> IntegrationTest<C> {
             &instance,
         );
     }
+    
     ///
-    pub fn test_mock(&mut self, circuit: &C, block_num: u64,instance: Vec<Vec<Fr>>) {
+    pub fn test_mock(&mut self, circuit: &C, instance: Vec<Vec<Fr>>) {
         let mock_prover = MockProver::<Fr>::run(self.degree, circuit, instance).unwrap();
-
-        self.test_variadic(block_num, &mock_prover);
-
+        self.fixed_variadic(&mock_prover);
         mock_prover
             .verify_par()
             .expect("mock prover verification failed");
     }
+
     ///
-    pub fn test_variadic(&mut self, block_num: u64, mock_prover: &MockProver<Fr>) {
+    pub fn fixed_variadic(&mut self, mock_prover: &MockProver<Fr>) {
         let fixed = mock_prover.fixed();
-
-        match self.fixed.get(&block_num) {
-            Some(prev_fixed) => {
-                log::debug!("compare fixed columns");
-                assert!(
-                    fixed.eq(prev_fixed),
-                    "circuit fixed columns are not constant for different witnesses"
-                );
-            }
-            None => {
-                log::debug!("setting fixed columns");
-                self.fixed.insert(block_num, fixed.clone());
-            }
-        };
-
+        log::debug!("compare fixed columns");
+        self.fixed.values().for_each(|prev_fixed| {
+            assert!(
+                fixed.eq(prev_fixed),
+                "circuit fixed columns are not constant for different witnesses"
+            );
+        });
         // TODO: check mock_prover.permutation(), currently the returning type
         // is private so cannot store.
+    }
+
+    ///
+    pub fn key_veriadic(&self, cur: &VerifyingKey<G1Affine>) {
+        log::debug!("compare verfiying key");
+        self.key.values().for_each(|key| {
+            let prev = key.get_vk();
+            assert_eq!(prev.get_domain().extended_k(), cur.get_domain().extended_k());
+            assert_eq!(prev.fixed_commitments(), cur.fixed_commitments());
+            assert_eq!(prev.permutation().commitments(), cur.permutation().commitments());
+
+            let mut transcript = Blake2bWrite::<_, G1Affine, Challenge255<_>>::init(vec![]);
+            assert_eq!(
+                prev.hash_into(&mut transcript.clone()).unwrap(),
+                cur.hash_into(&mut transcript).unwrap()
+            );
+        });
     }
 
     /// Run integration test at a block identified by a tag.
@@ -316,23 +321,24 @@ impl<C: SubCircuit<Fr> + Circuit<Fr> + Debug> IntegrationTest<C> {
 
     /// Run integration test for a block number
     pub async fn test_block_by_number(&mut self, block_num: u64, actual: bool) {
-        let mut block = gen_block(block_num).await;
-
         log::info!("test {} circuit, block: #{}", self.name, block_num);
-        block.randomness = Fr::from(TEST_MOCK_RANDOMNESS);
+        let block = self.get_block(block_num).await;
         let circuit = C::new_from_block(&block);
         let instance = circuit.instance();
-        self.print_cost();
+        circuit_cost(&circuit, self.degree);
 
         if actual {
-            let key = self.get_key(block_num).await;
+            log::info!("generate (pk, vk)");
+            let key = self.get_key(block_num, &circuit).await;
             self.test_actual(circuit, instance, key);
         } else {
-            self.test_mock(&circuit, block_num, instance);
+            log::info!("init mock prover");
+            self.test_mock(&circuit, instance);
         }
     }
 
 }
+
 
 ///
 pub fn new_empty_block() -> Block<Fr> {
@@ -353,27 +359,13 @@ pub fn get_general_params(degree: u32) -> ParamsKZG<Bn256> {
     match map.get(&degree) {
         Some(params) => params.clone(),
         None => {
+            log::info!("initialize degree #{} params", degree);
             let params = ParamsKZG::<Bn256>::setup(degree, RNG.clone());
             map.insert(degree, params.clone());
             params
         }
     }
 }
-
-// returns gen_inputs for a block number
-/* pub async fn gen_inputs(
-    block_num: u64,
-) -> (
-    CircuitInputBuilder,
-    eth_types::Block<eth_types::Transaction>,
-) {
-    let cli = get_client(&GETH_L2_URL);
-    let cli = BuilderClient::new(cli, CIRCUITS_PARAMS, Default::default())
-        .await
-        .unwrap();
-
-    cli.gen_inputs(block_num).await.unwrap()
-} */
 
 /// returns gen_inputs for a block number
 pub async fn gen_block(
@@ -386,4 +378,22 @@ pub async fn gen_block(
 
     let (builder, _) = cli.gen_inputs(block_num).await.unwrap();
     block_convert(&builder.block, &builder.code_db).unwrap()
+}
+
+/// 
+pub fn gen_key<C: SubCircuit<Fr> + Circuit<Fr>>(circuit: &C, degree: u32) ->  ProvingKey<G1Affine> {
+    let general_params = get_general_params(degree);
+    let verifying_key =
+        keygen_vk(&general_params, circuit).expect("keygen_vk should not fail");
+    let key = keygen_pk(&general_params, verifying_key, circuit)
+        .expect("keygen_pk should not fail");
+    key
+}
+
+///
+pub fn circuit_cost<C: SubCircuit<Fr> + Circuit<Fr> + Debug>(circuit: &C, degree: u32) {
+    let cost = CircuitCost::<G1, C>::measure(degree as usize, &circuit);
+    let proof_size = cost.proof_size(1);
+    println!("cost: {:?}\n proof_size {:?}", cost, proof_size);
+    println!("cost: {:?}", cost);
 }
