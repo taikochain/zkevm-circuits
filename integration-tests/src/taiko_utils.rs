@@ -64,67 +64,49 @@ const L1_SIGNAL_SERVICE: &str = "1000777700000000000000000000000000000001";
 const L2_SIGNAL_SERVICE: &str = "1000777700000000000000000000000000000001";
 const L2_CONTRACT: &str = "1000777700000000000000000000000000000001";
 const ANCHOR_GAS_LIMIT: u64 = 180000;
-///
-trait ProtocolInstanceTest {
-    type ProtocolInstance;
-    async fn block_with_instance(&self, block_num: u64) -> Block<Fr>;
-    fn get_key_from_block(&mut self, block: Block<Fr>) -> ProvingKey<G1Affine>;
+
+
+async fn gen_block_with_instance(block_num: u64) -> Block<Fr> {
+    let instance = ProtocolInstance {
+        meta_data: MetaData {
+            id: ID,
+            timestamp: TIMESTAMP,
+            l1_height: L1_HEIGHT,
+            l1_hash: parse_hash(L1_HASH).unwrap(),
+            l1_mix_hash: parse_hash(L1_MIX_HASH).unwrap(),
+            deposits_processed: parse_hash(DEPOSITS_PROCESSED).unwrap(),
+            tx_list_hash: parse_hash(TX_LIST_HASH).unwrap(),
+            tx_list_byte_start: TX_LIST_BYTE_START,
+            tx_list_byte_end: TX_LIST_BYTE_END,
+            gas_limit: GAS_LIMIT,
+            beneficiary: parse_address(BENEFICIARY).unwrap(),
+            treasury: parse_address(TREASURY).unwrap(),
+        },
+        block_hash: parse_hash(BLOCK_HASH).unwrap(),
+        parent_hash: parse_hash(PARENT_HASH).unwrap(),
+        signal_root: parse_hash(SIGNAL_ROOT).unwrap(),
+        graffiti: parse_hash(GRAFFITI).unwrap(),
+        prover: parse_address(PROVER).unwrap(),
+        gas_used: GAS_USED,
+        parent_gas_used: PARENT_GAS_USED,
+        block_max_gas_limit: BLOCK_MAX_GAS_LIMIT,
+        max_transactions_per_block: MAX_TRANSACTIONS_PER_BLOCK,
+        max_bytes_per_tx_list: MAX_BYTES_PER_TX_LIST,
+        l1_signal_service: parse_address(L1_SIGNAL_SERVICE).unwrap(),
+        l2_signal_service: parse_address(L2_SIGNAL_SERVICE).unwrap(),
+        l2_contract: parse_address(L2_CONTRACT).unwrap(),
+        anchor_gas_limit: ANCHOR_GAS_LIMIT,
+    };
+    let cli = get_client(&GETH_L2_URL);
+    let cli = BuilderClient::new(cli, CIRCUITS_PARAMS, Some(instance.clone()))
+        .await
+        .unwrap();
+
+    let (builder, _) = cli.gen_inputs(block_num).await.unwrap();
+    block_convert(&builder.block, &builder.code_db).expect("block convert failed")
 }
 
-impl<C: SubCircuit<Fr> + Circuit<Fr>> ProtocolInstanceTest for IntegrationTest<C> {
-    type ProtocolInstance = ProtocolInstance;
 
-    async fn block_with_instance(&self, block_num: u64) -> Block<Fr> {
-        let instance = ProtocolInstance {
-            meta_data: MetaData {
-                id: ID,
-                timestamp: TIMESTAMP,
-                l1_height: L1_HEIGHT,
-                l1_hash: parse_hash(L1_HASH).unwrap(),
-                l1_mix_hash: parse_hash(L1_MIX_HASH).unwrap(),
-                deposits_processed: parse_hash(DEPOSITS_PROCESSED).unwrap(),
-                tx_list_hash: parse_hash(TX_LIST_HASH).unwrap(),
-                tx_list_byte_start: TX_LIST_BYTE_START,
-                tx_list_byte_end: TX_LIST_BYTE_END,
-                gas_limit: GAS_LIMIT,
-                beneficiary: parse_address(BENEFICIARY).unwrap(),
-                treasury: parse_address(TREASURY).unwrap(),
-            },
-            block_hash: parse_hash(BLOCK_HASH).unwrap(),
-            parent_hash: parse_hash(PARENT_HASH).unwrap(),
-            signal_root: parse_hash(SIGNAL_ROOT).unwrap(),
-            graffiti: parse_hash(GRAFFITI).unwrap(),
-            prover: parse_address(PROVER).unwrap(),
-            gas_used: GAS_USED,
-            parent_gas_used: PARENT_GAS_USED,
-            block_max_gas_limit: BLOCK_MAX_GAS_LIMIT,
-            max_transactions_per_block: MAX_TRANSACTIONS_PER_BLOCK,
-            max_bytes_per_tx_list: MAX_BYTES_PER_TX_LIST,
-            l1_signal_service: parse_address(L1_SIGNAL_SERVICE).unwrap(),
-            l2_signal_service: parse_address(L2_SIGNAL_SERVICE).unwrap(),
-            l2_contract: parse_address(L2_CONTRACT).unwrap(),
-            anchor_gas_limit: ANCHOR_GAS_LIMIT,
-        };
-        let cli = get_client(&GETH_L2_URL);
-        let cli = BuilderClient::new(cli, CIRCUITS_PARAMS, Some(instance.clone()))
-            .await
-            .unwrap();
-
-        let (builder, _) = cli.gen_inputs(block_num).await.unwrap();
-        block_convert(&builder.block, &builder.code_db).expect("block convert failed")
-    }
-
-    fn get_key_from_block(&mut self, block: Block<Fr>) -> ProvingKey<G1Affine> {
-        let circuit = C::new_from_block(&block);
-        let general_params = get_general_params(self.degree);
-        let verifying_key =
-            keygen_vk(&general_params, &circuit).expect("keygen_vk should not fail");
-        let key =
-            keygen_pk(&general_params, verifying_key, &circuit).expect("keygen_pk should not fail");
-        self.key = Some(key.clone());
-        key
-    }
-}
 ///
 pub fn filter_proposal_txs(block: &EthBlock<Transaction>) -> Vec<Transaction> {
     let protocol_address = Address::from_str(PROTOCOL_ADDRESS).unwrap();

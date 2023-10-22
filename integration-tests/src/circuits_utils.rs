@@ -135,9 +135,12 @@ pub struct IntegrationTest<C: SubCircuit<Fr> + Circuit<Fr>> {
     ///
     pub degree: u32,
     ///
-    pub key: Option<ProvingKey<G1Affine>>,
+    pub circuit: Option<C>,
     ///
-    pub fixed: Option<Vec<Vec<CellValue<Fr>>>>,
+    pub key: HashMap<u64, ProvingKey<G1Affine>>,
+    ///
+    pub fixed: HashMap<u64, Vec<Vec<CellValue<Fr>>>>,
+
     _marker: PhantomData<C>,
 }
 
@@ -147,35 +150,37 @@ impl<C: SubCircuit<Fr> + Circuit<Fr> + Debug> IntegrationTest<C> {
         Self {
             name,
             degree,
-            key: None,
-            fixed: None,
+            circuit: None,
+            key: HashMap::new(),
+            fixed: HashMap::new(),
             _marker: PhantomData,
         }
     }
 
     ///
-    pub fn print_cost(&self, circuit: &C, k: u32) {
-        let mut cs = ConstraintSystem::<Fr>::default();
-        C::configure_with_params(&mut cs, circuit.params());
-        let cost = CircuitCost::<G1, C>::measure(k as usize, circuit);
-        let proof_size = cost.proof_size(1);
-        println!("cost: {:?}\n proof_size {:?}", cost, proof_size);
+    pub fn print_cost(&self) {
+        if let Some(circuit) = self.circuit.as_ref() {
+            let mut cs = ConstraintSystem::<Fr>::default();
+            C::configure_with_params(&mut cs, circuit.params());
+            let cost = CircuitCost::<G1, C>::measure(self.degree as usize, &circuit);
+            let proof_size = cost.proof_size(1);
+            println!("cost: {:?}\n proof_size {:?}", cost, proof_size);
+        }
     }
 
     ///
-    pub fn get_key(&mut self) -> ProvingKey<G1Affine> {
-        match self.key.clone() {
-            Some(key) => key,
+    pub async fn get_key(&mut self, block_num: u64) -> ProvingKey<G1Affine> {
+        match self.key.get(&block_num) {
+            Some(key) => key.clone(),
             None => {
-                let block = new_empty_block();
+                let block = gen_block(block_num).await;
                 let circuit = C::new_from_block(&block);
                 let general_params = get_general_params(self.degree);
-
                 let verifying_key =
                     keygen_vk(&general_params, &circuit).expect("keygen_vk should not fail");
                 let key = keygen_pk(&general_params, verifying_key, &circuit)
                     .expect("keygen_pk should not fail");
-                self.key = Some(key.clone());
+                self.key.insert(block_num, key.clone());
                 key
             }
         }
@@ -271,30 +276,30 @@ impl<C: SubCircuit<Fr> + Circuit<Fr> + Debug> IntegrationTest<C> {
         );
     }
     ///
-    pub fn test_mock(&mut self, circuit: &C, instance: Vec<Vec<Fr>>) {
+    pub fn test_mock(&mut self, circuit: &C, block_num: u64,instance: Vec<Vec<Fr>>) {
         let mock_prover = MockProver::<Fr>::run(self.degree, circuit, instance).unwrap();
 
-        self.test_variadic(&mock_prover);
+        self.test_variadic(block_num, &mock_prover);
 
         mock_prover
             .verify_par()
             .expect("mock prover verification failed");
     }
     ///
-    pub fn test_variadic(&mut self, mock_prover: &MockProver<Fr>) {
+    pub fn test_variadic(&mut self, block_num: u64, mock_prover: &MockProver<Fr>) {
         let fixed = mock_prover.fixed();
 
-        match self.fixed.clone() {
+        match self.fixed.get(&block_num) {
             Some(prev_fixed) => {
                 log::debug!("compare fixed columns");
                 assert!(
-                    fixed.eq(&prev_fixed),
+                    fixed.eq(prev_fixed),
                     "circuit fixed columns are not constant for different witnesses"
                 );
             }
             None => {
                 log::debug!("setting fixed columns");
-                self.fixed = Some(fixed.clone());
+                self.fixed.insert(block_num, fixed.clone());
             }
         };
 
@@ -317,13 +322,13 @@ impl<C: SubCircuit<Fr> + Circuit<Fr> + Debug> IntegrationTest<C> {
         block.randomness = Fr::from(TEST_MOCK_RANDOMNESS);
         let circuit = C::new_from_block(&block);
         let instance = circuit.instance();
-        self.print_cost(&circuit, EVM_CIRCUIT_DEGREE);
-        
+        self.print_cost();
+
         if actual {
-            let key = self.get_key();
+            let key = self.get_key(block_num).await;
             self.test_actual(circuit, instance, key);
         } else {
-            self.test_mock(&circuit, instance);
+            self.test_mock(&circuit, block_num, instance);
         }
     }
 
