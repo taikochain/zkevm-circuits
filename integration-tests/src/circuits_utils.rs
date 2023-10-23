@@ -5,7 +5,7 @@ use bus_mapping::{
 };
 use eth_types::geth_types::GethData;
 use halo2_proofs::{
-    dev::{CellValue, MockProver, CircuitCost},
+    dev::{CellValue, MockProver, CircuitCost, cost::{ProofSize, ProofContribution}},
     halo2curves::{bn256::{Bn256, Fr, G1Affine, G1}, pasta::EqAffine},
     plonk::{create_proof, keygen_pk, keygen_vk, verify_proof, Circuit, ProvingKey, VerifyingKey, ConstraintSystem},
     poly::{
@@ -37,9 +37,12 @@ use zkevm_circuits::{
     super_circuit::SuperCircuit,
     tx_circuit::TestTxCircuit,
     util::SubCircuit,
-    witness::{block_convert, Block},
+    witness::{block_convert, Block}, table,
 };
-
+use cli_table::{
+    format::{Justify, Separator},
+    print_stdout, Table, WithTitle,
+};
 /// TEST_MOCK_RANDOMNESS
 const TEST_MOCK_RANDOMNESS: u64 = 0x100;
 
@@ -390,10 +393,68 @@ pub fn gen_key<C: SubCircuit<Fr> + Circuit<Fr>>(circuit: &C, degree: u32) ->  Pr
     key
 }
 
+
+#[derive(Table)]
+struct Row {
+    #[table(title = "")]
+    name: &'static str,
+    #[table(title = "commitments")]
+    commitments: usize,
+    #[table(title = "evaluations")]
+    evaluations: usize,
+}
+
+impl Row {
+    fn set_name(&mut self, name: &'static str) {
+        self.name = name;
+    }
+}
+
+impl From<ProofContribution> for Row {
+    fn from(contribution: ProofContribution) -> Self {
+        Self {
+            name: "",
+            commitments: contribution.commitments,
+            evaluations: contribution.evaluations,
+        }
+    }
+}
+
 ///
 pub fn circuit_cost<C: SubCircuit<Fr> + Circuit<Fr> + Debug>(circuit: &C, degree: u32) {
     let cost = CircuitCost::<G1, C>::measure(degree as usize, &circuit);
-    let proof_size = cost.proof_size(1);
-    println!("cost: {:?}\n proof_size {:?}", cost, proof_size);
-    println!("cost: {:?}", cost);
+    let ProofSize {
+        instance,
+        advice,
+        fixed,
+        lookups,
+        equality,
+        vanishing,
+        multiopen,
+        polycomm,
+        ..
+    } = cost.proof_size(1);
+    let mut rows: Vec<Row> = vec![
+        instance.into(),
+        advice.into(),
+        fixed.into(),
+        lookups.into(),
+        equality.into(),
+        vanishing.into(),
+        multiopen.into(),
+        polycomm.into(),
+    ];
+    rows[0].set_name("instance");
+    rows[1].set_name("advice");
+    rows[2].set_name("fixed");
+    rows[3].set_name("lookups");
+    rows[4].set_name("equality");
+    rows[5].set_name("vanishing");
+    rows[6].set_name("multiopen");
+    rows[7].set_name("polycomm");
+    
+    print_stdout(rows.with_title().separator(Separator::builder().build()))
+        .expect("the table renders");
+
+    println!("{:?}", cost);
 }

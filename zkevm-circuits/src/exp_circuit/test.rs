@@ -146,7 +146,7 @@ fn variadic_size_check() {
         block.circuits_params.max_exp_steps,
     );
     let cost = CircuitCost::measure(20, &circuit);
-    let proof_size: halo2_proofs::dev::cost::ProofSize<G1> = cost.proof_size(2);
+    let proof_size: halo2_proofs::dev::cost::ProofSize<G1> = cost.proof_size(1);
     println!("cost: {:?}\n proof_size {:?}", cost, proof_size);
     let prover2 = MockProver::<Fr>::run(k, &circuit, vec![]).unwrap();
 
