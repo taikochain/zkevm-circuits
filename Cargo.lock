@@ -2246,7 +2246,7 @@ dependencies = [
 [[package]]
 name = "halo2_proofs"
 version = "0.2.0"
-source = "git+https://github.com/taikoxyz/halo2.git?branch=integration-dependency#7eeb28815294eb7f38560bbd94a2318393f633a4"
+source = "git+https://github.com/taikoxyz/halo2.git?branch=integration-dependency#7233fbe453ab4fc2b50630d2fcdb6894ef6db0fb"
 dependencies = [
  "ark-std",
  "blake2b_simd",

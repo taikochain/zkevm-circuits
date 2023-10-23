@@ -3,7 +3,7 @@ use bus_mapping::{
     circuit_input_builder::{BuilderClient, CircuitInputBuilder, CircuitsParams},
     mock::BlockData,
 };
-use eth_types::geth_types::GethData;
+use eth_types::{geth_types::GethData, Field};
 use halo2_proofs::{
     dev::{CellValue, MockProver, CircuitCost, cost::{ProofSize, ProofContribution}},
     halo2curves::{bn256::{Bn256, Fr, G1Affine, G1}, pasta::EqAffine},
@@ -192,6 +192,7 @@ impl<C: SubCircuit<Fr> + Circuit<Fr> + Debug> IntegrationTest<C> {
         instance: Vec<Vec<Fr>>,
         proving_key: ProvingKey<G1Affine>,
     ) {
+        print_cs_info(proving_key.get_vk().cs());
         fn test_gen_proof<C: Circuit<Fr>, R: RngCore>(
             rng: R,
             circuit: C,
@@ -278,6 +279,7 @@ impl<C: SubCircuit<Fr> + Circuit<Fr> + Debug> IntegrationTest<C> {
     ///
     pub fn test_mock(&mut self, circuit: &C, instance: Vec<Vec<Fr>>) {
         let mock_prover = MockProver::<Fr>::run(self.degree, circuit, instance).unwrap();
+        print_cs_info(mock_prover.cs());
         self.fixed_variadic(&mock_prover);
         mock_prover
             .verify_par()
@@ -287,7 +289,7 @@ impl<C: SubCircuit<Fr> + Circuit<Fr> + Debug> IntegrationTest<C> {
     ///
     pub fn fixed_variadic(&mut self, mock_prover: &MockProver<Fr>) {
         let fixed = mock_prover.fixed();
-        log::debug!("compare fixed columns");
+        log::info!("compare fixed columns with recorded vals from prev blocks");
         self.fixed.values().for_each(|prev_fixed| {
             assert!(
                 fixed.eq(prev_fixed),
@@ -300,7 +302,7 @@ impl<C: SubCircuit<Fr> + Circuit<Fr> + Debug> IntegrationTest<C> {
 
     ///
     pub fn key_veriadic(&self, cur: &VerifyingKey<G1Affine>) {
-        log::debug!("compare verfiying key");
+        log::info!("compare verfiying key with recorded vals from prev blocks");
         self.key.values().for_each(|key| {
             let prev = key.get_vk();
             assert_eq!(prev.get_domain().extended_k(), cur.get_domain().extended_k());
@@ -326,9 +328,10 @@ impl<C: SubCircuit<Fr> + Circuit<Fr> + Debug> IntegrationTest<C> {
     pub async fn test_block_by_number(&mut self, block_num: u64, actual: bool) {
         log::info!("test {} circuit, block: #{}", self.name, block_num);
         let block = self.get_block(block_num).await;
+        let min_rows = C::min_num_rows_block(&block);
         let circuit = C::new_from_block(&block);
         let instance = circuit.instance();
-        circuit_cost(&circuit, self.degree);
+        print_circuit_cost(&circuit, self.degree, min_rows);
 
         if actual {
             log::info!("generate (pk, vk)");
@@ -393,6 +396,15 @@ pub fn gen_key<C: SubCircuit<Fr> + Circuit<Fr>>(circuit: &C, degree: u32) ->  Pr
     key
 }
 
+///
+pub fn print_cs_info<Fr: Field>(cs: &ConstraintSystem<Fr>) {
+    println!(
+        "Constraint System\nminimum_rows: {}\nblinding_factors: {}\ngates count: {}", 
+        cs.minimum_rows(),
+        cs.blinding_factors(),
+        cs.gates().len()
+    );
+}
 
 #[derive(Table)]
 struct Row {
@@ -421,7 +433,11 @@ impl From<ProofContribution> for Row {
 }
 
 ///
-pub fn circuit_cost<C: SubCircuit<Fr> + Circuit<Fr> + Debug>(circuit: &C, degree: u32) {
+pub fn print_circuit_cost<C: SubCircuit<Fr> + Circuit<Fr> + Debug>(
+    circuit: &C, 
+    degree: u32,
+    min_rows: (usize, usize),
+) {
     let cost = CircuitCost::<G1, C>::measure(degree as usize, &circuit);
     let ProofSize {
         instance,
@@ -456,5 +472,5 @@ pub fn circuit_cost<C: SubCircuit<Fr> + Circuit<Fr> + Debug>(circuit: &C, degree
     print_stdout(rows.with_title().separator(Separator::builder().build()))
         .expect("the table renders");
 
-    println!("{:?}", cost);
+    println!("min_rows of block: {:?} min_rows with padding: {:?}\n{:?}", min_rows.0, min_rows.1, cost);
 }
