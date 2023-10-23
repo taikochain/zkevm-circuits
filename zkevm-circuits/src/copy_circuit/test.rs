@@ -11,8 +11,8 @@ use bus_mapping::{
 };
 use eth_types::{bytecode, geth_types::GethData, ToWord, Word};
 use halo2_proofs::{
-    dev::{MockProver, VerifyFailure, CircuitCost},
-    halo2curves::bn256::{Fr, G1},
+    dev::{MockProver, VerifyFailure},
+    halo2curves::bn256::Fr,
 };
 use mock::{test_ctx::helpers::account_0_code_account_1_no_code, TestContext, MOCK_ACCOUNTS};
 
@@ -31,14 +31,10 @@ pub fn test_copy_circuit<F: Field>(
     max_copy_rows: usize,
     external_data: ExternalData,
 ) -> Result<(), Vec<VerifyFailure>> {
-    let circuit: CopyCircuit<Fr> =
-        CopyCircuit::<Fr>::new_with_external_data(copy_events, max_copy_rows, external_data);
+    let circuit =
+        CopyCircuit::<F>::new_with_external_data(copy_events, max_copy_rows, external_data);
 
-    let cost = CircuitCost::measure(20, &circuit);
-    let proof_size: halo2_proofs::dev::cost::ProofSize<G1> = cost.proof_size(2);
-    println!("cost: {:?}\n proof_size {:?}", cost, proof_size);
-
-    let prover = MockProver::<Fr>::run(k, &circuit, vec![]).unwrap();
+    let prover = MockProver::<F>::run(k, &circuit, vec![]).unwrap();
     prover.verify_par()
 }
 

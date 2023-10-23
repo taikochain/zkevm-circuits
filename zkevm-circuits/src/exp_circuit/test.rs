@@ -11,7 +11,7 @@ use bus_mapping::{
 };
 use eth_types::{bytecode, geth_types::GethData, Bytecode, Field, Word};
 use halo2_proofs::{
-    circuit::SimpleFloorPlanner, dev::{MockProver, CircuitCost}, halo2curves::bn256::{Fr, G1}, plonk::Circuit,
+    circuit::SimpleFloorPlanner, dev::MockProver, halo2curves::bn256::Fr, plonk::Circuit,
 };
 use mock::TestContext;
 
@@ -145,9 +145,6 @@ fn variadic_size_check() {
         block.exp_events.clone(),
         block.circuits_params.max_exp_steps,
     );
-    let cost = CircuitCost::measure(20, &circuit);
-    let proof_size: halo2_proofs::dev::cost::ProofSize<G1> = cost.proof_size(1);
-    println!("cost: {:?}\n proof_size {:?}", cost, proof_size);
     let prover2 = MockProver::<Fr>::run(k, &circuit, vec![]).unwrap();
 
     assert_eq!(prover1.fixed(), prover2.fixed());

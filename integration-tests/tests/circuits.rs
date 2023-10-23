@@ -10,40 +10,40 @@ macro_rules! run_test {
 macro_rules! declare_tests {
     (($name:ident, $block_tag:expr),$real_prover:expr) => {
         paste! {
-            // #[tokio::test]
-            // async fn [<serial_test_evm_ $name>]() {
-            //     run_test! (EVM_CIRCUIT_TEST, $block_tag, $real_prover);
-            // }
+            #[tokio::test]
+            async fn [<serial_test_evm_ $name>]() {
+                run_test! (EVM_CIRCUIT_TEST, $block_tag, $real_prover);
+            }
 
-            // #[tokio::test]
-            // async fn [<serial_test_state_ $name>]() {
-            //     run_test! (STATE_CIRCUIT_TEST, $block_tag, $real_prover);
-            // }
+            #[tokio::test]
+            async fn [<serial_test_state_ $name>]() {
+                run_test! (STATE_CIRCUIT_TEST, $block_tag, $real_prover);
+            }
 
-            // #[tokio::test]
-            // async fn [<serial_test_tx_ $name>]() {
-            //     run_test! (TX_CIRCUIT_TEST, $block_tag, $real_prover);
-            // }
+            #[tokio::test]
+            async fn [<serial_test_tx_ $name>]() {
+                run_test! (TX_CIRCUIT_TEST, $block_tag, $real_prover);
+            }
 
-            // #[tokio::test]
-            // async fn [<serial_test_bytecode_ $name>]() {
-            //     run_test! (BYTECODE_CIRCUIT_TEST, $block_tag, $real_prover);
-            // }
+            #[tokio::test]
+            async fn [<serial_test_bytecode_ $name>]() {
+                run_test! (BYTECODE_CIRCUIT_TEST, $block_tag, $real_prover);
+            }
 
-            // #[tokio::test]
-            // async fn [<serial_test_copy_ $name>]() {
-            //     run_test! (COPY_CIRCUIT_TEST, $block_tag, $real_prover);
-            // }
+            #[tokio::test]
+            async fn [<serial_test_copy_ $name>]() {
+                run_test! (COPY_CIRCUIT_TEST, $block_tag, $real_prover);
+            }
 
-            // #[tokio::test]
-            // async fn [<serial_test_keccak_ $name>]() {
-            //     run_test! (KECCAK_CIRCUIT_TEST, $block_tag, $real_prover);
-            // }
+            #[tokio::test]
+            async fn [<serial_test_keccak_ $name>]() {
+                run_test! (KECCAK_CIRCUIT_TEST, $block_tag, $real_prover);
+            }
 
-            // #[tokio::test]
-            // async fn [<serial_test_super_ $name>]() {
-            //     run_test! (SUPER_CIRCUIT_TEST, $block_tag, $real_prover);
-            // }
+            #[tokio::test]
+            async fn [<serial_test_super_ $name>]() {
+                run_test! (SUPER_CIRCUIT_TEST, $block_tag, $real_prover);
+            }
 
             #[tokio::test]
             async fn [<serial_test_exp_ $name>]() {
