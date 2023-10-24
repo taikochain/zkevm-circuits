@@ -477,7 +477,7 @@ dependencies = [
  "ethers-core",
  "ethers-providers",
  "gadgets",
- "halo2_proofs 0.2.0 (git+https://github.com/taikoxyz/halo2.git?branch=taiko/unstable)",
+ "halo2_proofs 0.2.0",
  "hex",
  "itertools",
  "keccak256",
@@ -1452,7 +1452,7 @@ version = "0.1.0"
 dependencies = [
  "ethers-core",
  "ethers-signers",
- "halo2_proofs 0.2.0 (git+https://github.com/taikoxyz/halo2.git?branch=taiko/unstable)",
+ "halo2_proofs 0.2.0",
  "hex",
  "itertools",
  "lazy_static",
@@ -2074,7 +2074,7 @@ version = "0.1.0"
 dependencies = [
  "digest 0.7.6",
  "eth-types",
- "halo2_proofs 0.2.0 (git+https://github.com/taikoxyz/halo2.git?branch=taiko/unstable)",
+ "halo2_proofs 0.2.0",
  "rand",
  "rand_xorshift",
  "sha3 0.7.3",
@@ -2223,24 +2223,6 @@ dependencies = [
 [[package]]
 name = "halo2_proofs"
 version = "0.2.0"
-source = "git+https://github.com/taikoxyz/halo2.git?tag=v0.0.1#9eaccbb8578f3c1741d4961eef7405a4e80a9dfe"
-dependencies = [
- "ark-std",
- "blake2b_simd",
- "ff 0.13.0",
- "group 0.13.0",
- "halo2curves",
- "itertools",
- "rand_chacha",
- "rand_core",
- "rayon",
- "sha3 0.9.1",
- "tracing",
-]
-
-[[package]]
-name = "halo2_proofs"
-version = "0.2.0"
 source = "git+https://github.com/taikoxyz/halo2.git?branch=taiko/unstable#fb69aa2d6c1bc4afaab360adaca40aee69a76ac8"
 dependencies = [
  "ark-std",
@@ -2279,7 +2261,7 @@ name = "halo2wrong"
 version = "0.1.0"
 source = "git+https://github.com/taikoxyz/halo2wrong?branch=a6-integration#07afd1119dd34693a0ad7af0e74b5b2b66d3196f"
 dependencies = [
- "halo2_proofs 0.2.0 (git+https://github.com/taikoxyz/halo2.git?branch=taiko/unstable)",
+ "halo2_proofs 0.2.0",
  "num-bigint",
  "num-integer",
  "num-traits",
@@ -2634,7 +2616,7 @@ dependencies = [
  "env_logger",
  "eth-types",
  "ethers",
- "halo2_proofs 0.2.0 (git+https://github.com/taikoxyz/halo2.git?branch=taiko/unstable)",
+ "halo2_proofs 0.2.0",
  "lazy_static",
  "log",
  "mock",
@@ -2983,7 +2965,7 @@ dependencies = [
  "ethers-core",
  "ethers-signers",
  "external-tracer",
- "halo2_proofs 0.2.0 (git+https://github.com/taikoxyz/halo2.git?branch=taiko/unstable)",
+ "halo2_proofs 0.2.0",
  "itertools",
  "lazy_static",
  "libsecp256k1",
@@ -4516,7 +4498,7 @@ version = "0.1.1"
 source = "git+https://github.com/taikoxyz/snark-verifier.git?branch=a6-integration#612f4950197af29883b6e67f9099117318579f99"
 dependencies = [
  "ecc",
- "halo2_proofs 0.2.0 (git+https://github.com/taikoxyz/halo2.git?branch=taiko/unstable)",
+ "halo2_proofs 0.2.0",
  "halo2curves",
  "hex",
  "itertools",
@@ -4540,7 +4522,7 @@ dependencies = [
  "bincode",
  "ecc",
  "ethereum-types",
- "halo2_proofs 0.2.0 (git+https://github.com/taikoxyz/halo2.git?branch=taiko/unstable)",
+ "halo2_proofs 0.2.0",
  "halo2curves",
  "hex",
  "itertools",
@@ -4799,7 +4781,7 @@ dependencies = [
  "ethers-signers",
  "external-tracer",
  "glob",
- "halo2_proofs 0.2.0 (git+https://github.com/taikoxyz/halo2.git?branch=taiko/unstable)",
+ "halo2_proofs 0.2.0",
  "handlebars",
  "hex",
  "keccak256",
@@ -5595,7 +5577,7 @@ dependencies = [
  "ethers-core",
  "ethers-signers",
  "gadgets",
- "halo2_proofs 0.2.0 (git+https://github.com/taikoxyz/halo2.git?tag=v0.0.1)",
+ "halo2_proofs 0.2.0",
  "hex",
  "integer",
  "itertools",
