@@ -13,7 +13,7 @@ members = [
 ]
 
 [patch.crates-io]
-halo2_proofs = { git = "https://github.com/taikoxyz/halo2.git", tag = "v0.0.1"}
+halo2_proofs = { git = "https://github.com/taikoxyz/halo2.git", branch = "taiko/unstable"}
 
 # Definition of benchmarks profile to use.
 [profile.bench]
