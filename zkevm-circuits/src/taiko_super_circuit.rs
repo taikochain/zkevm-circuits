@@ -19,7 +19,7 @@ use crate::{
         BlockTable, ByteTable, BytecodeTable, CopyTable, ExpTable, KeccakTable, MptTable, PiTable,
         RwTable, TxTable,
     },
-    taiko_pi_circuit::{
+    taiko_pi_circuit_::{
         PublicData, TaikoPiCircuit, TaikoPiCircuitConfig, TaikoPiCircuitConfigArgs,
     },
     util::{log2_ceil, Challenges, SubCircuit, SubCircuitConfig},
