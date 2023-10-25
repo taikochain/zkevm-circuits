@@ -1,4 +1,4 @@
-name: Tencent Run
+name: Integration Benchmark
 
 on:
   workflow_dispatch:
