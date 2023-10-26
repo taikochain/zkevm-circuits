@@ -224,10 +224,7 @@ impl<F: Field> AnchorTxCircuitConfig<F> {
         // Gas, GasPrice, CallerAddress, CalleeAddress, IsCreate, Value, CallDataLength,
         let mut offset = 0;
         for (tag, value) in [
-            (
-                TxFieldTag::Gas,
-                Value::known(F::from(ANCHOR_GAS_LIMIT)),
-            ),
+            (TxFieldTag::Gas, Value::known(F::from(ANCHOR_GAS_LIMIT))),
             (
                 TxFieldTag::GasPrice,
                 Value::known(F::from(ANCHOR_GAS_PRICE)),
@@ -246,11 +243,7 @@ impl<F: Field> AnchorTxCircuitConfig<F> {
             ),
             (
                 TxFieldTag::CalleeAddress,
-                Value::known(
-                    L2_CONTRACT
-                        .to_scalar()
-                        .expect("anchor_tx.to too big"),
-                ),
+                Value::known(L2_CONTRACT.to_scalar().expect("anchor_tx.to too big")),
             ),
             (
                 TxFieldTag::IsCreate,

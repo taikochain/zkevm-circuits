@@ -1,8 +1,6 @@
 use super::TxExecSteps;
 use crate::{
-    circuit_input_builder::{
-        CircuitInputStateRef, ExecState, ExecStep, protocol_instance
-    },
+    circuit_input_builder::{protocol_instance, CircuitInputStateRef, ExecState, ExecStep},
     operation::{AccountField, AccountOp, CallContextField, TxReceiptField, TxRefundOp, RW},
     state_db::CodeDB,
     Error,

@@ -435,7 +435,7 @@ pub fn get_state_accesses(
         let tx_access_trace = gen_state_access_trace(eth_block, tx, geth_trace)?;
         block_access_trace.extend(tx_access_trace);
     }
-    if let Some(pi) = protocol_instance {
+    if let Some(_pi) = protocol_instance {
         block_access_trace.push(Access::new(
             None,
             RW::WRITE,

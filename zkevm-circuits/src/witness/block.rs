@@ -8,7 +8,8 @@ use crate::{
 };
 use bus_mapping::{
     circuit_input_builder::{
-        self, CircuitsParams, CopyEvent, ExpEvent, ProtocolInstance, ANCHOR_METHOD_SIGNATURE, protocol_instance,
+        self, protocol_instance, CircuitsParams, CopyEvent, ExpEvent, ProtocolInstance,
+        ANCHOR_METHOD_SIGNATURE,
     },
     Error,
 };

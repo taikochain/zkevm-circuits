@@ -1,14 +1,13 @@
 #![allow(missing_docs)]
 
-use eth_types::{Bytes, H160};
-use sha3::{Digest, Keccak256};
 use alloy_dyn_abi::DynSolValue;
 use alloy_primitives::{B256, U160, U256};
 use alloy_sol_types::{sol, SolValue};
+use eth_types::{Address, Bytes};
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
+use sha3::{Digest, Keccak256};
 use std::{iter, str::FromStr};
-use eth_types::Address;
 
 ///
 pub static L1_SIGNAL_SERVICE: Lazy<Address> = Lazy::new(|| {
@@ -156,8 +155,8 @@ impl BlockEvidence {
         match evidence_type {
             EvidenceType::Sgx { prover, new_pubkey } => {
                 abi_encode_tuple.extend(vec![
-                    Address(prover.to_fixed_bytes().into()), 
-                    Address(new_pubkey.to_fixed_bytes().into())
+                    Address(prover.to_fixed_bytes().into()),
+                    Address(new_pubkey.to_fixed_bytes().into()),
                 ]);
             }
             EvidenceType::PseZk { prover } => {
@@ -171,11 +170,9 @@ impl BlockEvidence {
     pub fn hash(&self, evidence_type: EvidenceType) -> B256 {
         keccak(self.abi_encode(evidence_type)).into()
     }
-
 }
 
 pub type ProtocolInstance = BlockEvidence;
-
 
 pub const ANCHOR_METHOD_SIGNATURE: u32 = 0xda69d3db;
 

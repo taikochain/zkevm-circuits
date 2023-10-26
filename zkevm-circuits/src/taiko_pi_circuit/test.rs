@@ -2,7 +2,9 @@
 use super::{dev::*, param::*, *};
 use std::vec;
 
+use alloy_primitives::FixedBytes;
 use bus_mapping::circuit_input_builder::protocol_instance;
+use core::result::Result;
 use eth_types::H256;
 use halo2_proofs::{
     dev::{MockProver, VerifyFailure},
@@ -11,17 +13,13 @@ use halo2_proofs::{
 };
 use lazy_static::lazy_static;
 use snark_verifier_sdk::halo2::gen_srs;
-use core::result::Result;
-use alloy_primitives::FixedBytes;
 
 lazy_static! {
     static ref LAST_HASH: H256 = H256::from_slice(
-        &hex::decode("1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347")
-            .unwrap(),
+        &hex::decode("1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347").unwrap(),
     );
     static ref THIS_HASH: H256 = H256::from_slice(
-        &hex::decode("1dcc4de8dec751111b85b567b6cc12fea12451b9480000000a142fd40d493111")
-            .unwrap(),
+        &hex::decode("1dcc4de8dec751111b85b567b6cc12fea12451b9480000000a142fd40d493111").unwrap(),
     );
     static ref PROVER_ADDR: H160 =
         H160::from_slice(&hex::decode("8626f6940E2eb28930eFb4CeF49B2d1F2C9C1199").unwrap(),);
@@ -101,11 +99,7 @@ fn test_default_pi() {
 
 #[test]
 fn test_simple_pi() {
-    let block = mock(
-        Some(300.into()),
-        Some(*THIS_HASH),
-        Some(*LAST_HASH),
-    );
+    let block = mock(Some(300.into()), Some(*THIS_HASH), Some(*LAST_HASH));
     let evidence = PublicData::new(&block, Some(*PROVER_ADDR));
 
     let k = 17;
@@ -160,11 +154,7 @@ fn test_from_integration() {
     let evidence1 = PublicData::new(&block, None);
     let circuit1 = TaikoPiCircuit::new(evidence1);
 
-    let block = mock(
-        Some(454.into()),
-        Some(*THIS_HASH),
-        Some(*LAST_HASH),
-    );
+    let block = mock(Some(454.into()), Some(*THIS_HASH), Some(*LAST_HASH));
     let evidence2 = PublicData::new(&block, Some(*PROVER_ADDR));
     let circuit2 = TaikoPiCircuit::new(evidence2);
 

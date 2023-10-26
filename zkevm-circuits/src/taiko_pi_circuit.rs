@@ -1,15 +1,15 @@
 //! TaikoPiCircuit
-mod param;
 #[cfg(any(feature = "test", test, feature = "test-circuits"))]
 mod dev;
+mod param;
 #[cfg(any(test))]
 mod test;
-use bus_mapping::circuit_input_builder::{ProtocolInstance, protocol_instance::EvidenceType};
-use param::*;
+use bus_mapping::circuit_input_builder::{protocol_instance::EvidenceType, ProtocolInstance};
 use dev::*;
+use param::*;
 
 // use bus_mapping::circuit_input_builder::ProtocolInstance;
-use eth_types::{Field, ToBigEndian, ToWord, H160, U256, Address};
+use eth_types::{Address, Field, ToBigEndian, ToWord, H160, U256};
 use ethers_core::abi::*;
 
 use ethers_core::utils::keccak256;
@@ -31,10 +31,9 @@ use crate::{
     util::{Challenges, SubCircuit, SubCircuitConfig},
     witness::{self, BlockContext},
 };
+use alloy_dyn_abi::DynSolValue::FixedBytes;
 use core::result::Result;
 use halo2_proofs::plonk::Error;
-use alloy_dyn_abi::DynSolValue::FixedBytes;
-
 
 const S1: PiCellType = PiCellType::StoragePhase1;
 const S2: PiCellType = PiCellType::StoragePhase2;
@@ -151,7 +150,7 @@ impl<F: Field> Default for PublicData<F> {
 impl<F: Field> PublicData<F> {
     fn new(block: &witness::Block<F>, prover: Option<Address>) -> Self {
         Self {
-            protocol_instance:  block.protocol_instance.clone().unwrap(),
+            protocol_instance: block.protocol_instance.clone().unwrap(),
             prover: prover.unwrap_or_default(),
             block_context: block.context.clone(),
             _phantom: PhantomData,
@@ -160,10 +159,14 @@ impl<F: Field> PublicData<F> {
 
     /// Returns the keccak hash of the public inputs
     pub fn encode_raw(&self) -> Vec<u8> {
-        self.protocol_instance.abi_encode(
-            // TODO(Cecilia): who's the prover?
-            EvidenceType::PseZk { prover: self.prover}
-        ).to_vec()
+        self.protocol_instance
+            .abi_encode(
+                // TODO(Cecilia): who's the prover?
+                EvidenceType::PseZk {
+                    prover: self.prover,
+                },
+            )
+            .to_vec()
     }
 
     fn encode_field(&self, idx: usize) -> Vec<u8> {
@@ -474,4 +477,3 @@ impl<F: Field> SubCircuit<F> for TaikoPiCircuit<F> {
         config.assign(layouter, challenges, &self.evidence)
     }
 }
-
