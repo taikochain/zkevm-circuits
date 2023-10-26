@@ -7,13 +7,12 @@ mod public_data_test {
 
     use crate::get_client;
     use bus_mapping::{
-        circuit_input_builder::{BuilderClient, CircuitsParams, MetaData, ProtocolInstance},
+        circuit_input_builder::{BuilderClient, CircuitsParams, ProtocolInstance, BlockMetadata},
         rpc::BlockNumber,
     };
     use eth_types::{Address, Block as EthBlock, Hash, Transaction};
     use ethers::{
         abi::{Function, Param, ParamType, StateMutability},
-        utils::hex,
     };
     use halo2_proofs::{arithmetic::Field, dev::MockProver, halo2curves::bn256::Fr};
     use log::error;
@@ -39,7 +38,7 @@ mod public_data_test {
                     .map(|to| {
                         to == protocol_address
                             && tx.input.len() > 4
-                            && tx.input[0..4] == hex::decode(PROPOSAL_TX_METHOD_SIGNATURE).unwrap()
+                            && &tx.input[0..4] == parse_hash(PROPOSAL_TX_METHOD_SIGNATURE).unwrap().as_bytes()
                     })
                     .unwrap_or(false)
             })
@@ -156,7 +155,7 @@ mod public_data_test {
 
         let txlist_bytes = get_txlist_bytes(&proposal_txs[2]);
 
-        let expected_txlist_bytes = hex::decode(
+        let expected_txlist_bytes = parse_hash(
             concat!("f95973b90c3a02f90c3683028c5d8268e884600d0e6a84600d0e6c830748229421561e1c1c64e18ab02654f365f3b0f7509d948180b90bc4fee99b22000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000003e000000000000000000000000000000000000000000000000",
                 "0000000000000697c00000000000000000000000010007777000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000028c5e0000000000000000000000000000000000000000000000000000000000028c5d00000000000000000000000029c5dc4a469f868df9b799ef3c282a5883b06c9b000000000000000000000000d90d8e85d0472ebc61267ecbba544252b719745200000000",
                 "000000000000000029c5dc4a469f868df9b799ef3c282a5883b06c9b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000064c2f256035a000000000000000000000000000000000000000000000000000000000002fe9a0000000000000000000000000000000000",
@@ -291,7 +290,7 @@ mod public_data_test {
                 "0909e64d9966b0d80b844095ea7b300000000000000000000000010007777000000000000000000000000000000020000000000000000000000000000000000000000000000135541deabf44f6902c001a068108a0e7faeb0a2b420b980f9d6303d8004f6fbdfed61acf31340ada1acd60ba01c238069bbab8d81718624715691406a6946d63a2dcc9a614a850b5c9dceb998b8b502f8b283028c5d1d8459682f008459682f0182b4b8947b1a",
                 "3117b2b9be3a3c31e5a097c7f890199666ac80b844095ea7b3000000000000000000000000501f63210ae6d7eeb50dae74da5ae407515ee24600000000000000000000000000000000000000000000000000000000000b4801c080a07c21aae4318c817c8853f35560302ca83a6166bd1f92111f0b86b256aa213d13a04db98b7d01383ff2fb3435905b545c01182045c80e68380e66eaf47773c5d27e")
             ).unwrap();
-        assert_eq!(txlist_bytes, expected_txlist_bytes);
+        assert_eq!(&txlist_bytes, expected_txlist_bytes.as_bytes());
     }
 
     fn test_super_circuit(block: &Block<Fr>) {
@@ -337,59 +336,34 @@ mod public_data_test {
             max_keccak_rows: 0,
         };
 
+        let metadata = BlockMetadata {
+            l1Hash: parse_hash(
+                "6e3b781b2d9a04e21ecba49e67dc3fb0a8242408cc07fa6fed5d8bd0eca2c985"
+            ).unwrap().as_fixed_bytes().into(),
+            txListHash: parse_hash(
+                "569e75fc77c1a856f6daaf9e69d8a9566ca34aa47f9133711ce065a571af0cfd"
+            ).unwrap().as_fixed_bytes().into(),
+            id: 10,
+            timestamp: 1694510352,
+            l1Height: 4272887,
+            coinbase: parse_address(
+                "0000777700000000000000000000000000000001"
+            ).unwrap().as_fixed_bytes().into(),
+            ..Default::default()
+        };
+
         let protocol_instance = ProtocolInstance {
-            meta_data: MetaData {
-                id: 10,
-                timestamp: 1694510352,
-                l1_height: 4272887,
-                l1_hash: parse_hash(
-                    "6e3b781b2d9a04e21ecba49e67dc3fb0a8242408cc07fa6fed5d8bd0eca2c985",
-                )
-                .unwrap(),
-                l1_mix_hash: parse_hash(
-                    "0000000000000000000000000000000000000000000000000000000000000000",
-                )
-                .unwrap(),
-                deposits_processed: parse_hash(
-                    "56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
-                )
-                .unwrap(),
-                tx_list_hash: parse_hash(
-                    "569e75fc77c1a856f6daaf9e69d8a9566ca34aa47f9133711ce065a571af0cfd",
-                )
-                .unwrap(),
-                tx_list_byte_start: 0,
-                tx_list_byte_end: 0,
-                gas_limit: 820000000,
-                beneficiary: parse_address("0000777700000000000000000000000000000001").unwrap(),
-                treasury: parse_address("df09A0afD09a63fb04ab3573922437e1e637dE8b").unwrap(),
-            },
-            block_hash: parse_hash(
-                "c32ce5789b5ae9b2a3921e43fb16c429abcb520acf5e27dc717a9caf46c4319f",
-            )
-            .unwrap(),
-            parent_hash: parse_hash(
-                "a534f7f74d155fa0575ccfd9dbb2a7c4f89baa0fb48c3a312f0d97e3fbff7c47",
-            )
-            .unwrap(),
-            signal_root: parse_hash(
-                "95a87577b110954a0daf867bd574aa726ec9a061b4bf0903d5adef23872f7f1b",
-            )
-            .unwrap(),
-            graffiti: parse_hash(
-                "6162630000000000000000000000000000000000000000000000000000000000",
-            )
-            .unwrap(),
-            prover: parse_address("70997970C51812dc3A010C7d01b50e0d17dc79C8").unwrap(),
-            gas_used: 141003,
-            parent_gas_used: 123960,
-            block_max_gas_limit: 6000000,
-            max_transactions_per_block: 79,
-            max_bytes_per_tx_list: 120000,
-            l1_signal_service: parse_address("1000777700000000000000000000000000000001").unwrap(),
-            l2_signal_service: parse_address("1000777700000000000000000000000000000001").unwrap(),
-            l2_contract: parse_address("1000777700000000000000000000000000000001").unwrap(),
-            anchor_gas_limit: 180000,
+            blockMetadata: metadata,
+            parentHash: parse_hash(
+                "a534f7f74d155fa0575ccfd9dbb2a7c4f89baa0fb48c3a312f0d97e3fbff7c47"
+            ).unwrap().as_fixed_bytes().into(),
+            blockHash: parse_hash(
+                "c32ce5789b5ae9b2a3921e43fb16c429abcb520acf5e27dc717a9caf46c4319f"
+            ).unwrap().as_fixed_bytes().into(),
+            signalRoot: parse_hash(
+                "95a87577b110954a0daf867bd574aa726ec9a061b4bf0903d5adef23872f7f1b"
+            ).unwrap().as_fixed_bytes().into(),
+            ..Default::default()
         };
 
         let cli = BuilderClient::new(cli, circuits_params, Some(protocol_instance.clone()))
