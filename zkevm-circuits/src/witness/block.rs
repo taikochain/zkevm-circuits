@@ -112,9 +112,9 @@ impl<F: Field> Block<F> {
         self.protocol_instance.is_some()
     }
 
-    pub(crate) fn mock_protocol_instance(&mut self, prover: Option<H160>) {
-        self.protocol_instance = Some(ProtocolInstance::default());
-    }
+    // pub(crate) fn mock_protocol_instance(&mut self, prover: Option<H160>) {
+    //     self.protocol_instance = Some(ProtocolInstance::default());
+    // }
 
     /// Obtains the expected Circuit degree needed in order to be able to test
     /// the EvmCircuit with this block without needing to configure the

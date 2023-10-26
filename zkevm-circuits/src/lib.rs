@@ -28,7 +28,7 @@ pub mod root_circuit;
 pub mod state_circuit;
 pub mod super_circuit;
 pub mod table;
-pub mod taiko_pi_circuit_;
+pub mod taiko_pi_circuit;
 pub mod taiko_super_circuit;
 
 #[cfg(any(feature = "test", test))]

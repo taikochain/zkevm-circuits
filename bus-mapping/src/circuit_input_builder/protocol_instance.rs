@@ -144,7 +144,7 @@ impl BlockEvidence {
     //         newPubKey
     //     )
     // );
-    pub fn hash(&self, evidence_type: EvidenceType) -> B256 {
+    pub fn abi_encode(&self, evidence_type: EvidenceType) -> Vec<u8> {
         use DynSolValue::*;
         let mut abi_encode_tuple = vec![
             FixedBytes(self.blockMetadata.hash(), 32),
@@ -164,8 +164,12 @@ impl BlockEvidence {
                 abi_encode_tuple.push(Address(prover.to_fixed_bytes().into()));
             }
         };
-        let input: Vec<u8> = Tuple(abi_encode_tuple).abi_encode();
-        keccak(input).into()
+        // println!("BlockEvidence abi_encode_tuple: {:?}", abi_encode_tuple);
+        Tuple(abi_encode_tuple).abi_encode()
+    }
+
+    pub fn hash(&self, evidence_type: EvidenceType) -> B256 {
+        keccak(self.abi_encode(evidence_type)).into()
     }
 
 }

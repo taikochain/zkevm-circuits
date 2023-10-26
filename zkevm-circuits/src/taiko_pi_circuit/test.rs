@@ -55,6 +55,7 @@ fn mock_public_data() -> PublicData<Fr> {
     };
     PublicData {
         protocol_instance,
+        prover: *PROVER_ADDR,
         block_context,
         ..Default::default()
     }
@@ -64,7 +65,6 @@ fn mock(
     number: Option<U256>,
     this_hash: Option<H256>,
     last_hash: Option<H256>,
-    prover: Option<H160>,
 ) -> witness::Block<Fr> {
     let eth_block = eth_types::Block::<eth_types::Transaction> {
         hash: this_hash,
@@ -77,19 +77,24 @@ fn mock(
         block_hash: this_hash.unwrap_or_default().to_word(),
         ..Default::default()
     };
+    let protocol_instance = ProtocolInstance {
+        parentHash: last_hash.unwrap_or_default().as_fixed_bytes().into(),
+        blockHash: this_hash.unwrap_or_default().as_fixed_bytes().into(),
+        ..Default::default()
+    };
     let mut block = witness::Block::<Fr> {
         eth_block,
         context,
+        protocol_instance: Some(protocol_instance),
         ..Default::default()
     };
-    block.mock_protocol_instance(prover);
     block
 }
 
 #[test]
 fn test_default_pi() {
-    let block = mock(Some(1.into()), None, Some(H256::default()), None);
-    let evidence = PublicData::new(&block);
+    let block = mock(Some(1.into()), None, Some(H256::default()));
+    let evidence = PublicData::new(&block, None);
     let k = 17;
     assert_eq!(run::<Fr>(k, evidence, None), Ok(()));
 }
@@ -100,9 +105,8 @@ fn test_simple_pi() {
         Some(300.into()),
         Some(*THIS_HASH),
         Some(*LAST_HASH),
-        Some(*PROVER_ADDR),
     );
-    let evidence = PublicData::new(&block);
+    let evidence = PublicData::new(&block, Some(*PROVER_ADDR));
 
     let k = 17;
     assert_eq!(run::<Fr>(k, evidence, None), Ok(()));
@@ -110,8 +114,8 @@ fn test_simple_pi() {
 
 #[test]
 fn test_fail_hi_lo() {
-    let block = mock(Some(300.into()), Some(*THIS_HASH), Some(*LAST_HASH), None);
-    let evidence = PublicData::new(&block);
+    let block = mock(Some(300.into()), Some(*THIS_HASH), Some(*LAST_HASH));
+    let evidence = PublicData::new(&block, None);
     let k = 17;
     match run::<Fr>(k, evidence, Some(vec![vec![Fr::zero(), Fr::one()]])) {
         Ok(_) => unreachable!("this case must fail"),
@@ -131,8 +135,8 @@ fn test_fail_hi_lo() {
 fn test_fail_historical_hash() {
     // ProtocolInstance has default parent hash
     // but context.history_hashes is empty
-    let block = mock(Some(300.into()), Some(*THIS_HASH), None, None);
-    let evidence = PublicData::new(&block);
+    let block = mock(Some(300.into()), Some(*THIS_HASH), None);
+    let evidence = PublicData::new(&block, None);
 
     let k = 17;
     match run::<Fr>(k, evidence, None) {
@@ -152,17 +156,16 @@ fn test_fail_historical_hash() {
 #[ignore = "takes too long"]
 #[test]
 fn test_from_integration() {
-    let block = mock(Some(300.into()), Some(*THIS_HASH), Some(*LAST_HASH), None);
-    let evidence1 = PublicData::new(&block);
+    let block = mock(Some(300.into()), Some(*THIS_HASH), Some(*LAST_HASH));
+    let evidence1 = PublicData::new(&block, None);
     let circuit1 = TaikoPiCircuit::new(evidence1);
 
     let block = mock(
         Some(454.into()),
         Some(*THIS_HASH),
         Some(*LAST_HASH),
-        Some(*PROVER_ADDR),
     );
-    let evidence2 = PublicData::new(&block);
+    let evidence2 = PublicData::new(&block, Some(*PROVER_ADDR));
     let circuit2 = TaikoPiCircuit::new(evidence2);
 
     let k = 22;
