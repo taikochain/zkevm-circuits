@@ -14,7 +14,7 @@ use bus_mapping::{
     Error,
 };
 use eth_types::{
-    Address, Field, ToBigEndian, ToLittleEndian, ToScalar, ToWord, Word, H160, H256, U256,
+    Address, Field, ToBigEndian, ToLittleEndian, ToScalar, ToWord, Word, H256,
 };
 use halo2_proofs::circuit::Value;
 
@@ -77,13 +77,13 @@ pub fn protocol_instancetable_assignments<F: Field>(
         [
             Value::known(F::from(PiFieldTag::L1Hash as u64)),
             rlc_be_bytes(
-                &protocol_instance.blockMetadata.l1Hash.as_slice(),
+                protocol_instance.blockMetadata.l1Hash.as_slice(),
                 randomness,
             ),
         ],
         [
             Value::known(F::from(PiFieldTag::L1SignalRoot as u64)),
-            rlc_be_bytes(&protocol_instance.signalRoot.as_slice(), randomness),
+            rlc_be_bytes(protocol_instance.signalRoot.as_slice(), randomness),
         ],
         [
             Value::known(F::from(PiFieldTag::L1Height as u64)),

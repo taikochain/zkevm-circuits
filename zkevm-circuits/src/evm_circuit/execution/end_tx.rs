@@ -21,7 +21,7 @@ use crate::{
     util::Expr,
 };
 use bus_mapping::{
-    circuit_input_builder::protocol_instance::{self, TREASURY},
+    circuit_input_builder::protocol_instance::{self},
     operation::Target,
 };
 use eth_types::{evm_types::MAX_REFUND_QUOTIENT_OF_GAS_USED, Field, ToLittleEndian, ToScalar};

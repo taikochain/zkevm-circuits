@@ -15,6 +15,8 @@ use lazy_static::lazy_static;
 use snark_verifier_sdk::halo2::gen_srs;
 
 lazy_static! {
+    use eth_types::H160;
+    
     static ref LAST_HASH: H256 = H256::from_slice(
         &hex::decode("1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347").unwrap(),
     );

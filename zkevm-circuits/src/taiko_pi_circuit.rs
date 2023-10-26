@@ -5,19 +5,19 @@ mod param;
 #[cfg(any(test))]
 mod test;
 use bus_mapping::circuit_input_builder::{protocol_instance::EvidenceType, ProtocolInstance};
-use dev::*;
+
 use param::*;
 
 // use bus_mapping::circuit_input_builder::ProtocolInstance;
-use eth_types::{Address, Field, ToBigEndian, ToWord, H160, U256};
-use ethers_core::abi::*;
+use eth_types::{Address, Field, ToBigEndian, ToWord, U256};
+
 
 use ethers_core::utils::keccak256;
 use halo2_proofs::circuit::{AssignedCell, Layouter, SimpleFloorPlanner, Value};
 
 use gadgets::util::{Expr, Scalar};
 use halo2_proofs::plonk::{Circuit, Column, ConstraintSystem, Expression, Instance, Selector};
-use std::{convert::TryInto, marker::PhantomData};
+use std::{marker::PhantomData};
 
 use crate::{
     assign, circuit,

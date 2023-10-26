@@ -182,9 +182,9 @@ impl ProtocolInstance {
     pub fn anchor_call(&self) -> Bytes {
         let mut result = Vec::new();
         result.extend_from_slice(&ANCHOR_METHOD_SIGNATURE.to_be_bytes());
-        result.extend_from_slice(&self.blockMetadata.l1Hash.as_slice());
-        result.extend_from_slice(&self.signalRoot.as_slice());
-        result.extend_from_slice(&self.blockMetadata.l1Hash.as_slice());
+        result.extend_from_slice(self.blockMetadata.l1Hash.as_slice());
+        result.extend_from_slice(self.signalRoot.as_slice());
+        result.extend_from_slice(self.blockMetadata.l1Hash.as_slice());
         result.extend_from_slice(&[0]);
         result.into()
     }

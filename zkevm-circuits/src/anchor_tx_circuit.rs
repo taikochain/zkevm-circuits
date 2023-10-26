@@ -218,7 +218,7 @@ impl<F: Field> AnchorTxCircuitConfig<F> {
         &self,
         region: &mut Region<'_, F>,
         _anchor_tx: &Transaction,
-        protocol_instance: &ProtocolInstance,
+        _protocol_instance: &ProtocolInstance,
         _challenges: &Challenges<Value<F>>,
     ) -> Result<(), Error> {
         // Gas, GasPrice, CallerAddress, CalleeAddress, IsCreate, Value, CallDataLength,
