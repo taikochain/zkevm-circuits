@@ -3,7 +3,7 @@
 //! used to generate witnesses for circuits.
 
 mod block;
-pub use block::{block_convert, protocol_instance_table_assignments, Block, BlockContext};
+pub use block::{block_convert, protocol_instancetable_assignments, Block, BlockContext};
 mod bytecode;
 pub use bytecode::Bytecode;
 mod mpt;

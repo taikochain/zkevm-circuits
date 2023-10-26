@@ -1,16 +1,15 @@
 //! TaikoPiCircuit
-mod protocol_instance;
 mod param;
 #[cfg(any(feature = "test", test, feature = "test-circuits"))]
 mod dev;
-#[cfg(any(feature = "test", test))]
+#[cfg(any(test))]
 mod test;
+use bus_mapping::circuit_input_builder::{ProtocolInstance, protocol_instance::EvidenceType};
 use param::*;
 use dev::*;
 
-
-use bus_mapping::circuit_input_builder::ProtocolInstance;
-use eth_types::{Field, ToBigEndian, ToWord, H160, U256};
+// use bus_mapping::circuit_input_builder::ProtocolInstance;
+use eth_types::{Field, ToBigEndian, ToWord, H160, U256, Address};
 use ethers_core::abi::*;
 
 use ethers_core::utils::keccak256;
@@ -18,7 +17,6 @@ use halo2_proofs::circuit::{AssignedCell, Layouter, SimpleFloorPlanner, Value};
 
 use gadgets::util::{Expr, Scalar};
 use halo2_proofs::plonk::{Circuit, Column, ConstraintSystem, Expression, Instance, Selector};
-
 use std::{convert::TryInto, marker::PhantomData};
 
 use crate::{
@@ -35,6 +33,8 @@ use crate::{
 };
 use core::result::Result;
 use halo2_proofs::plonk::Error;
+use alloy_dyn_abi::DynSolValue::FixedBytes;
+
 
 const S1: PiCellType = PiCellType::StoragePhase1;
 const S2: PiCellType = PiCellType::StoragePhase2;
@@ -129,7 +129,7 @@ impl Default for PiCellType {
 /// Public Inputs data known by the verifier
 #[derive(Debug, Clone)]
 pub struct PublicData<F> {
-    evidence: Token,
+    protocol_instance: ProtocolInstance,
     block_context: BlockContext,
     _phantom: PhantomData<F>,
 }
@@ -149,80 +149,30 @@ impl<F: Field> Default for PublicData<F> {
 
 impl<F: Field> PublicData<F> {
     fn new(block: &witness::Block<F>) -> Self {
-        let protocol_instance = block.protocol_instance.clone().unwrap();
-        let meta_data = Token::FixedBytes(
-            protocol_instance
-                .meta_data
-                .hash()
-                .to_word()
-                .to_be_bytes()
-                .to_vec(),
-        );
-        let parent_hash = Token::FixedBytes(
-            protocol_instance
-                .parent_hash
-                .to_word()
-                .to_be_bytes()
-                .to_vec(),
-        );
-        let block_hash = Token::FixedBytes(
-            protocol_instance
-                .block_hash
-                .to_word()
-                .to_be_bytes()
-                .to_vec(),
-        );
-        let signal_root = Token::FixedBytes(
-            protocol_instance
-                .signal_root
-                .to_word()
-                .to_be_bytes()
-                .to_vec(),
-        );
-        let graffiti =
-            Token::FixedBytes(protocol_instance.graffiti.to_word().to_be_bytes().to_vec());
-        let prover = Token::Address(protocol_instance.prover);
         Self {
-            evidence: Token::FixedArray(vec![
-                meta_data,
-                parent_hash,
-                block_hash,
-                signal_root,
-                graffiti,
-                prover,
-            ]),
+            protocol_instance:  block.protocol_instance.clone().unwrap(),
             block_context: block.context.clone(),
             _phantom: PhantomData,
         }
     }
 
-    fn set_field(&mut self, idx: usize, bytes: Vec<u8>) {
-        match self.evidence {
-            Token::FixedArray(ref mut tokens) => {
-                tokens[idx] = match tokens[idx].clone() {
-                    Token::Bytes(_) => Token::Bytes(bytes),
-                    Token::FixedBytes(_) => Token::FixedBytes(bytes),
-                    Token::Address(_) => Token::Address(H160::from(
-                        &bytes.try_into().expect("Wrong number of bytes for address"),
-                    )),
-                    _ => unreachable!(),
-                };
-            }
-            _ => unreachable!(),
-        }
-    }
-
     /// Returns the keccak hash of the public inputs
     pub fn encode_raw(&self) -> Vec<u8> {
-        encode(&[self.evidence.clone()])
+        self.protocol_instance.hash(
+            // TODO(Cecilia): who's the prover?
+            EvidenceType::PseZk { prover: Address::default().to_fixed_bytes().into()}
+        ).to_vec()
     }
 
     fn encode_field(&self, idx: usize) -> Vec<u8> {
-        let field = match self.evidence {
-            Token::FixedArray(ref tokens) => tokens[idx].clone(),
-            _ => unreachable!(),
-        };
-        encode(&[field])
+        let fields = vec![
+            FixedBytes(self.protocol_instance.blockMetadata.hash(), 32),
+            FixedBytes(self.protocol_instance.parentHash, 32),
+            FixedBytes(self.protocol_instance.blockHash, 32),
+            FixedBytes(self.protocol_instance.signalRoot, 32),
+            FixedBytes(self.protocol_instance.graffiti, 32),
+        ];
+        fields[idx].abi_encode()
     }
 
     fn total_acc(&self, r: Value<F>) -> F {

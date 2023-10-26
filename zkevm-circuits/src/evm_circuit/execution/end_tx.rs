@@ -20,7 +20,7 @@ use crate::{
     table::{BlockContextFieldTag, CallContextFieldTag, TxContextFieldTag, TxReceiptFieldTag},
     util::Expr,
 };
-use bus_mapping::operation::Target;
+use bus_mapping::{operation::Target, circuit_input_builder::protocol_instance::{TREASURY, self}};
 use eth_types::{evm_types::MAX_REFUND_QUOTIENT_OF_GAS_USED, Field, ToLittleEndian, ToScalar};
 use gadgets::util::not;
 use halo2_proofs::{circuit::Value, plonk::Error};
@@ -378,12 +378,7 @@ impl<F: Field> ExecutionGadget<F> for EndTxGadget<F> {
                 region,
                 offset,
                 Value::known(
-                    block
-                        .protocol_instance
-                        .as_ref()
-                        .unwrap()
-                        .meta_data
-                        .treasury
+                    protocol_instance::TREASURY
                         .to_scalar()
                         .expect("unexpected Address -> Scalar conversion failure"),
                 ),

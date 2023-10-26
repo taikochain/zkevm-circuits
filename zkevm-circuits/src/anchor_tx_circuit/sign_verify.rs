@@ -203,7 +203,7 @@ impl<F: Field> SignVerifyConfig<F> {
         meta.lookup_any("sig_r or msg_hash in tx_table", |meta| {
             let q_sig_end = meta.query_selector(q_sig_end);
 
-            let tx_id = super::ANCHOR_TX_ID.expr();
+            let tx_id = super::ANCHOR_ID.expr();
             let tag = meta.query_fixed(tag, Rotation::cur());
             let index = 0.expr();
             let value = meta.query_advice(sig_rlc_acc, Rotation::cur());

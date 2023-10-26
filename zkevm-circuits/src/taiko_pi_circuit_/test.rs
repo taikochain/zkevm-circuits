@@ -1,7 +1,8 @@
 #![allow(unused_imports)]
-use super::{dev::*, *};
+use super::{dev::*, param::*, *};
 use std::vec;
 
+use bus_mapping::circuit_input_builder::protocol_instance;
 use eth_types::H256;
 use halo2_proofs::{
     dev::{MockProver, VerifyFailure},
@@ -9,8 +10,9 @@ use halo2_proofs::{
     plonk::{keygen_pk, keygen_vk},
 };
 use lazy_static::lazy_static;
-use pretty_assertions::assert_eq;
 use snark_verifier_sdk::halo2::gen_srs;
+use core::result::Result;
+use alloy_primitives::FixedBytes;
 
 lazy_static! {
     static ref LAST_HASH: H256 = H256::from_slice(
@@ -40,14 +42,22 @@ fn run<F: Field>(
 }
 
 fn mock_public_data() -> PublicData<Fr> {
-    let mut evidence = PublicData::default();
-    evidence.set_field(PARENT_HASH, LAST_HASH.to_fixed_bytes().to_vec());
-    evidence.set_field(BLOCK_HASH, THIS_HASH.to_fixed_bytes().to_vec());
-    evidence.block_context.number = 300.into();
-    evidence.block_context.block_hash = THIS_HASH.to_word();
-    // has to have at least one history block
-    evidence.block_context.history_hashes = vec![LAST_HASH.to_word()];
-    evidence
+    let protocol_instance = ProtocolInstance {
+        parentHash: LAST_HASH.as_fixed_bytes().into(),
+        blockHash: THIS_HASH.as_fixed_bytes().into(),
+        ..Default::default()
+    };
+    let block_context = BlockContext {
+        number: 300.into(),
+        history_hashes: vec![LAST_HASH.to_word()],
+        block_hash: THIS_HASH.to_word(),
+        ..Default::default()
+    };
+    PublicData {
+        protocol_instance,
+        block_context,
+        ..Default::default()
+    }
 }
 
 fn mock(

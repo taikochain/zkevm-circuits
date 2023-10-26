@@ -470,6 +470,7 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
         for (i, cell) in hi_lo_cells.iter().enumerate() {
             layouter.constrain_instance(cell.cell(), self.keccak_instance, i)?;
         }
+        
         Ok(())
     }
 }

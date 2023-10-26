@@ -6,7 +6,10 @@ mod block;
 mod call;
 mod execution;
 mod input_state_ref;
-mod protocol_instance;
+// mod protocol_instance;
+///
+pub mod protocol_instance;
+
 #[cfg(test)]
 mod tracer_tests;
 mod transaction;
@@ -35,7 +38,7 @@ pub use execution::{
 pub use input_state_ref::CircuitInputStateRef;
 use itertools::Itertools;
 use log::warn;
-pub use protocol_instance::{left_shift, MetaData, ProtocolInstance, ANCHOR_TX_METHOD_SIGNATURE};
+pub use protocol_instance::{BlockMetadata, ProtocolInstance, ANCHOR_METHOD_SIGNATURE};
 use std::collections::HashMap;
 pub use transaction::{Transaction, TransactionContext};
 
@@ -437,7 +440,7 @@ pub fn get_state_accesses(
             None,
             RW::WRITE,
             AccessValue::Account {
-                address: pi.meta_data.treasury,
+                address: *protocol_instance::TREASURY,
             },
         ));
     }

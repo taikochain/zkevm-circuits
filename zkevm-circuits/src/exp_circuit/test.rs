@@ -17,6 +17,7 @@ use mock::TestContext;
 
 #[test]
 fn exp_circuit_unusable_rows() {
+    
     assert_eq!(
         ExpCircuit::<Fr>::unusable_rows(),
         unusable_rows::<Fr, ExpCircuit::<Fr>>(()),

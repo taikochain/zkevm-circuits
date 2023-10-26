@@ -584,6 +584,9 @@ checksum = "0d261e256854913907f67ed06efbc3338dfe6179796deefc1ff763fc1aee5535"
 name = "bus-mapping"
 version = "0.1.0"
 dependencies = [
+ "alloy-dyn-abi",
+ "alloy-primitives",
+ "alloy-sol-types",
  "eth-types",
  "ethers-core",
  "ethers-providers",
@@ -595,11 +598,13 @@ dependencies = [
  "lazy_static",
  "log",
  "mock",
+ "once_cell",
  "pretty_assertions",
  "rand",
  "revm-precompile",
  "serde",
  "serde_json",
+ "sha3 0.10.7",
  "strum",
  "strum_macros",
  "tokio",

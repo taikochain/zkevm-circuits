@@ -8,7 +8,7 @@ use crate::{
 };
 use bus_mapping::{
     circuit_input_builder::{
-        self, CircuitsParams, CopyEvent, ExpEvent, ProtocolInstance, ANCHOR_TX_METHOD_SIGNATURE,
+        self, CircuitsParams, CopyEvent, ExpEvent, ProtocolInstance, ANCHOR_METHOD_SIGNATURE, protocol_instance,
     },
     Error,
 };
@@ -60,10 +60,10 @@ pub struct Block<F> {
 }
 
 /// Assignments for pi table
-pub fn protocol_instance_table_assignments<F: Field>(
+pub fn protocol_instancetable_assignments<F: Field>(
     protocol_instance: &ProtocolInstance,
     randomness: Value<F>,
-) -> [[Value<F>; 2]; 6] {
+) -> [[Value<F>; 2]; 5] {
     [
         [
             Value::known(F::from(PiFieldTag::Null as u64)),
@@ -71,39 +71,33 @@ pub fn protocol_instance_table_assignments<F: Field>(
         ],
         [
             Value::known(F::from(PiFieldTag::MethodSign as u64)),
-            Value::known(F::from(ANCHOR_TX_METHOD_SIGNATURE as u64)),
+            Value::known(F::from(ANCHOR_METHOD_SIGNATURE as u64)),
         ],
         [
             Value::known(F::from(PiFieldTag::L1Hash as u64)),
             rlc_be_bytes(
-                &protocol_instance.meta_data.l1_hash.to_fixed_bytes(),
+                &protocol_instance.blockMetadata.l1Hash.as_slice(),
                 randomness,
             ),
         ],
         [
             Value::known(F::from(PiFieldTag::L1SignalRoot as u64)),
-            rlc_be_bytes(&protocol_instance.signal_root.to_fixed_bytes(), randomness),
+            rlc_be_bytes(&protocol_instance.signalRoot.as_slice(), randomness),
         ],
         [
             Value::known(F::from(PiFieldTag::L1Height as u64)),
             rlc_be_bytes(
-                &protocol_instance
-                    .meta_data
-                    .l1_height
-                    .to_word()
-                    .to_be_bytes(),
+                &Word::from(protocol_instance.blockMetadata.l1Hash.0).to_be_bytes(),
                 randomness,
             ),
         ],
-        [
-            Value::known(F::from(PiFieldTag::ParentGasUsed as u64)),
-            rlc_be_bytes(
-                &(protocol_instance.parent_gas_used as u64)
-                    .to_word()
-                    .to_be_bytes(),
-                randomness,
-            ),
-        ],
+        // [
+        //     Value::known(F::from(PiFieldTag::ParentGasUsed as u64)),
+        //     rlc_be_bytes(
+        //         &Word::zero().to_be_bytes(),
+        //         randomness,
+        //     ),
+        // ],
     ]
 }
 
@@ -119,20 +113,7 @@ impl<F: Field> Block<F> {
     }
 
     pub(crate) fn mock_protocol_instance(&mut self, prover: Option<H160>) {
-        let protocol_instance = ProtocolInstance {
-            prover: prover.unwrap_or_default(),
-            gas_used: self.eth_block.gas_used.as_u32(),
-            block_hash: H256::from(self.context.block_hash.to_be_bytes()),
-            parent_hash: H256::from(
-                self.context
-                    .history_hashes
-                    .last()
-                    .unwrap_or(&U256::default())
-                    .to_be_bytes(),
-            ),
-            ..Default::default()
-        };
-        self.protocol_instance = Some(protocol_instance);
+        self.protocol_instance = Some(ProtocolInstance::default());
     }
 
     /// Obtains the expected Circuit degree needed in order to be able to test
@@ -296,10 +277,7 @@ impl From<&circuit_input_builder::Block> for BlockContext {
     fn from(block: &circuit_input_builder::Block) -> Self {
         Self {
             coinbase: block.coinbase,
-            treasury: block
-                .protocol_instance
-                .as_ref()
-                .map(|pi| pi.meta_data.treasury),
+            treasury: Some(*protocol_instance::TREASURY),
             gas_limit: block.gas_limit,
             number: block.number,
             timestamp: block.timestamp,
