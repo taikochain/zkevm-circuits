@@ -129,7 +129,6 @@ impl Default for PiCellType {
 #[derive(Debug, Clone)]
 pub struct PublicData<F> {
     protocol_instance: ProtocolInstance,
-    prover: Address,
     block_context: BlockContext,
     _phantom: PhantomData<F>,
 }
@@ -141,17 +140,16 @@ impl<F: Field> Default for PublicData<F> {
             protocol_instance: Some(ProtocolInstance::default()),
             ..Default::default()
         };
-        let mut ret = Self::new(&block, None);
+        let mut ret = Self::new(&block);
         ret.block_context.history_hashes = vec![U256::default()];
         ret
     }
 }
 
 impl<F: Field> PublicData<F> {
-    fn new(block: &witness::Block<F>, prover: Option<Address>) -> Self {
+    fn new(block: &witness::Block<F>) -> Self {
         Self {
             protocol_instance: block.protocol_instance.clone().unwrap(),
-            prover: prover.unwrap_or_default(),
             block_context: block.context.clone(),
             _phantom: PhantomData,
         }
@@ -160,10 +158,11 @@ impl<F: Field> PublicData<F> {
     /// Returns the keccak hash of the public inputs
     pub fn encode_raw(&self) -> Vec<u8> {
         self.protocol_instance
+            .block_evidence
             .abi_encode(
                 // TODO(Cecilia): who's the prover?
                 EvidenceType::PseZk {
-                    prover: self.prover,
+                    prover: self.protocol_instance.prover,
                 },
             )
             .to_vec()
@@ -171,13 +170,12 @@ impl<F: Field> PublicData<F> {
 
     fn encode_field(&self, idx: usize) -> Vec<u8> {
         let fields = vec![
-            FixedBytes(self.protocol_instance.blockMetadata.hash(), 32),
-            FixedBytes(self.protocol_instance.parentHash, 32),
-            FixedBytes(self.protocol_instance.blockHash, 32),
-            FixedBytes(self.protocol_instance.signalRoot, 32),
-            FixedBytes(self.protocol_instance.graffiti, 32),
-            // TODO(Cecilia): who's the prover?
-            FixedBytes(self.prover.to_word().to_be_bytes().into(), 32),
+            FixedBytes(self.protocol_instance.block_evidence.blockMetadata.hash(), 32),
+            FixedBytes(self.protocol_instance.block_evidence.parentHash, 32),
+            FixedBytes(self.protocol_instance.block_evidence.blockHash, 32),
+            FixedBytes(self.protocol_instance.block_evidence.signalRoot, 32),
+            FixedBytes(self.protocol_instance.block_evidence.graffiti, 32),
+            FixedBytes(self.protocol_instance.prover.to_word().to_be_bytes().into(), 32),
         ];
         fields[idx].abi_encode()
     }
@@ -455,11 +453,11 @@ impl<F: Field> SubCircuit<F> for TaikoPiCircuit<F> {
     }
 
     fn min_num_rows_block(block: &witness::Block<F>) -> (usize, usize) {
-        (0, PublicData::new(block, None).total_len())
+        (0, PublicData::new(block).total_len())
     }
 
     fn new_from_block(block: &witness::Block<F>) -> Self {
-        TaikoPiCircuit::new(PublicData::new(block, None))
+        TaikoPiCircuit::new(PublicData::new(block))
     }
 
     /// Compute the public inputs for this circuit.

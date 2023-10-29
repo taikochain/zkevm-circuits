@@ -406,8 +406,8 @@ impl<F: Field> SuperCircuit<F> {
         let block_data =
             BlockData::new_from_geth_data_with_params(geth_data.clone(), circuits_params);
         let mut builder = block_data.new_circuit_input_builder();
-        protocol_instance.blockHash = geth_data.eth_block.hash.unwrap().as_fixed_bytes().into();
-        protocol_instance.parentHash = geth_data.eth_block.parent_hash.as_fixed_bytes().into();
+        protocol_instance.block_evidence.blockHash = geth_data.eth_block.hash.unwrap().as_fixed_bytes().into();
+        protocol_instance.block_evidence.parentHash = geth_data.eth_block.parent_hash.as_fixed_bytes().into();
         builder.block.protocol_instance = Some(protocol_instance);
         builder
             .handle_block(&geth_data.eth_block, &geth_data.geth_traces)

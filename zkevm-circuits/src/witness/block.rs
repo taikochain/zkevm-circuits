@@ -77,18 +77,18 @@ pub fn protocol_instancetable_assignments<F: Field>(
         [
             Value::known(F::from(PiFieldTag::L1Hash as u64)),
             rlc_be_bytes(
-                protocol_instance.blockMetadata.l1Hash.as_slice(),
+                protocol_instance.block_evidence.blockMetadata.l1Hash.as_slice(),
                 randomness,
             ),
         ],
         [
             Value::known(F::from(PiFieldTag::L1SignalRoot as u64)),
-            rlc_be_bytes(protocol_instance.signalRoot.as_slice(), randomness),
+            rlc_be_bytes(protocol_instance.block_evidence.signalRoot.as_slice(), randomness),
         ],
         [
             Value::known(F::from(PiFieldTag::L1Height as u64)),
             rlc_be_bytes(
-                &Word::from(protocol_instance.blockMetadata.l1Hash.0).to_be_bytes(),
+                &Word::from(protocol_instance.block_evidence.blockMetadata.l1Hash.0).to_be_bytes(),
                 randomness,
             ),
         ],

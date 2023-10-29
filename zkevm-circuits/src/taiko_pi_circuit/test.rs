@@ -3,7 +3,7 @@ use super::{dev::*, param::*, *};
 use std::vec;
 
 use alloy_primitives::FixedBytes;
-use bus_mapping::circuit_input_builder::protocol_instance;
+use bus_mapping::circuit_input_builder::protocol_instance::{self, BlockEvidence};
 use core::result::Result;
 use eth_types::{H256, H160};
 use halo2_proofs::{
@@ -43,9 +43,12 @@ fn run<F: Field>(
 
 fn mock_public_data() -> PublicData<Fr> {
     let protocol_instance = ProtocolInstance {
-        parentHash: LAST_HASH.as_fixed_bytes().into(),
-        blockHash: THIS_HASH.as_fixed_bytes().into(),
-        ..Default::default()
+        block_evidence: BlockEvidence {
+            parentHash: LAST_HASH.as_fixed_bytes().into(),
+            blockHash: THIS_HASH.as_fixed_bytes().into(),
+            ..Default::default()
+        },
+        prover: *PROVER_ADDR,
     };
     let block_context = BlockContext {
         number: 300.into(),
@@ -55,7 +58,6 @@ fn mock_public_data() -> PublicData<Fr> {
     };
     PublicData {
         protocol_instance,
-        prover: *PROVER_ADDR,
         block_context,
         ..Default::default()
     }
@@ -66,20 +68,25 @@ fn mock(
     this_hash: Option<H256>,
     last_hash: Option<H256>,
 ) -> witness::Block<Fr> {
+    let this_hash = this_hash.unwrap_or_default();
+    let last_hash = last_hash.unwrap_or_default();
     let eth_block = eth_types::Block::<eth_types::Transaction> {
-        hash: this_hash,
-        parent_hash: last_hash.unwrap_or_default(),
+        hash: Some(this_hash),
+        parent_hash: last_hash,
         ..Default::default()
     };
     let context = BlockContext {
         number: number.unwrap_or_default(),
-        history_hashes: last_hash.map_or(Vec::new(), |h| vec![h.to_word()]),
-        block_hash: this_hash.unwrap_or_default().to_word(),
+        history_hashes: vec![last_hash.to_word()],
+        block_hash: this_hash.to_word(),
         ..Default::default()
     };
     let protocol_instance = ProtocolInstance {
-        parentHash: last_hash.unwrap_or_default().as_fixed_bytes().into(),
-        blockHash: this_hash.unwrap_or_default().as_fixed_bytes().into(),
+        block_evidence: BlockEvidence {
+            parentHash: last_hash.as_fixed_bytes().into(),
+            blockHash: this_hash.as_fixed_bytes().into(),
+            ..Default::default()
+        },
         ..Default::default()
     };
     
@@ -93,8 +100,8 @@ fn mock(
 
 #[test]
 fn test_default_pi() {
-    let block = mock(Some(1.into()), None, Some(H256::default()));
-    let evidence = PublicData::new(&block, None);
+    let block = mock(Some(2.into()), None, None);
+    let evidence = PublicData::new(&block);
     let k = 17;
     assert_eq!(run::<Fr>(k, evidence, None), Ok(()));
 }
@@ -102,7 +109,7 @@ fn test_default_pi() {
 #[test]
 fn test_simple_pi() {
     let block = mock(Some(300.into()), Some(*THIS_HASH), Some(*LAST_HASH));
-    let evidence = PublicData::new(&block, Some(*PROVER_ADDR));
+    let evidence = PublicData::new(&block);
 
     let k = 17;
     assert_eq!(run::<Fr>(k, evidence, None), Ok(()));
@@ -111,7 +118,7 @@ fn test_simple_pi() {
 #[test]
 fn test_fail_hi_lo() {
     let block = mock(Some(300.into()), Some(*THIS_HASH), Some(*LAST_HASH));
-    let evidence = PublicData::new(&block, None);
+    let evidence = PublicData::new(&block);
     let k = 17;
     match run::<Fr>(k, evidence, Some(vec![vec![Fr::zero(), Fr::one()]])) {
         Ok(_) => unreachable!("this case must fail"),
@@ -131,8 +138,9 @@ fn test_fail_hi_lo() {
 fn test_fail_historical_hash() {
     // ProtocolInstance has default parent hash
     // but context.history_hashes is empty
-    let block = mock(Some(300.into()), Some(*THIS_HASH), None);
-    let evidence = PublicData::new(&block, None);
+    let mut block = mock(Some(300.into()), Some(*THIS_HASH), None);
+    block.context.history_hashes = vec![];
+    let evidence = PublicData::new(&block);
 
     let k = 17;
     match run::<Fr>(k, evidence, None) {
@@ -153,11 +161,12 @@ fn test_fail_historical_hash() {
 #[test]
 fn test_from_integration() {
     let block = mock(Some(300.into()), Some(*THIS_HASH), Some(*LAST_HASH));
-    let evidence1 = PublicData::new(&block, None);
+    let evidence1 = PublicData::new(&block);
     let circuit1 = TaikoPiCircuit::new(evidence1);
 
     let block = mock(Some(454.into()), Some(*THIS_HASH), Some(*LAST_HASH));
-    let evidence2 = PublicData::new(&block, Some(*PROVER_ADDR));
+    let mut evidence2 = PublicData::new(&block);
+    evidence2.protocol_instance.prover = *PROVER_ADDR;
     let circuit2 = TaikoPiCircuit::new(evidence2);
 
     let k = 22;

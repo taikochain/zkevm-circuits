@@ -172,7 +172,12 @@ impl BlockEvidence {
     }
 }
 
-pub type ProtocolInstance = BlockEvidence;
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProtocolInstance {
+    pub block_evidence: BlockEvidence,
+    pub prover: Address,
+}
 
 pub const ANCHOR_METHOD_SIGNATURE: u32 = 0xda69d3db;
 
@@ -182,9 +187,9 @@ impl ProtocolInstance {
     pub fn anchor_call(&self) -> Bytes {
         let mut result = Vec::new();
         result.extend_from_slice(&ANCHOR_METHOD_SIGNATURE.to_be_bytes());
-        result.extend_from_slice(self.blockMetadata.l1Hash.as_slice());
-        result.extend_from_slice(self.signalRoot.as_slice());
-        result.extend_from_slice(self.blockMetadata.l1Hash.as_slice());
+        result.extend_from_slice(self.block_evidence.blockMetadata.l1Hash.as_slice());
+        result.extend_from_slice(self.block_evidence.signalRoot.as_slice());
+        result.extend_from_slice(self.block_evidence.blockMetadata.l1Hash.as_slice());
         result.extend_from_slice(&[0]);
         result.into()
     }

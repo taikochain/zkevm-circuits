@@ -42,6 +42,7 @@ const ANCHOR_GAS_LIMIT: u64 = 0;
 const MAX_DEGREE: usize = 9;
 const BYTE_POW_BASE: u64 = 1 << 8;
 
+/// L2 contract address
 pub static L2_CONTRACT: Lazy<Address> = Lazy::new(|| {
     Address::from_str("0x1000777700000000000000000000000000000001")
         .expect("invalid l2 contract address")
