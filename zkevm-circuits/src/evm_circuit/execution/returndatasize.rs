@@ -123,6 +123,7 @@ mod test {
                 txs[0].to(accs[1].address).from(accs[2].address);
             },
             |block, _tx| block,
+            false,
         )
         .unwrap();
 

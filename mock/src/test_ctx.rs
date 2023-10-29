@@ -70,7 +70,7 @@ use itertools::Itertools;
 ///             .from(accs[2].address)
 ///             .nonce(1);
 ///     },
-///     |block, _tx| block.number(0xcafeu64),
+///     |block, _tx| block.number(0xcafeu64), false
 /// )
 /// .unwrap()
 /// .into();
@@ -93,6 +93,8 @@ pub struct TestContext<const NACC: usize, const NTX: usize> {
     pub geth_traces: Vec<eth_types::GethExecTrace>,
     /// In taiko context
     pub is_taiko: bool,
+    /// enable invalid tx
+    pub enbalbe_invalid_tx: bool,
 }
 
 impl<const NACC: usize, const NTX: usize> From<TestContext<NACC, NTX>> for GethData {
@@ -114,6 +116,7 @@ impl<const NACC: usize, const NTX: usize> TestContext<NACC, NTX> {
         func_tx: FTx,
         func_block: Fb,
         logger_config: LoggerConfig,
+        enbalbe_invalid_tx: bool,
     ) -> Result<Self, Error>
     where
         FTx: FnOnce(Vec<&mut MockTransaction>, [MockAccount; NACC]),
@@ -127,6 +130,7 @@ impl<const NACC: usize, const NTX: usize> TestContext<NACC, NTX> {
             func_block,
             logger_config,
             false,
+            enbalbe_invalid_tx,
         )
     }
 
@@ -137,6 +141,7 @@ impl<const NACC: usize, const NTX: usize> TestContext<NACC, NTX> {
         func_block: Fb,
         logger_config: LoggerConfig,
         is_taiko: bool,
+        enbalbe_invalid_tx: bool,
     ) -> Result<Self, Error>
     where
         FTx: FnOnce(Vec<&mut MockTransaction>, [MockAccount; NACC]),
@@ -196,7 +201,9 @@ impl<const NACC: usize, const NTX: usize> TestContext<NACC, NTX> {
                 .iter()
                 .find_position(|acc| acc.address == tx.from.address())
             {
-                tx.nonce(from_acc.nonce + acc_tx_count[pos]);
+                if !enbalbe_invalid_tx {
+                    tx.nonce(from_acc.nonce + acc_tx_count[pos]);
+                }
                 acc_tx_count[pos] += 1;
             }
         });
@@ -207,7 +214,7 @@ impl<const NACC: usize, const NTX: usize> TestContext<NACC, NTX> {
         // Build Block modifiers
         let mut block = MockBlock::default();
         block.transactions.extend_from_slice(&transactions);
-        func_block(&mut block, transactions).build();
+        func_block(&mut block, transactions.clone()).build();
 
         let chain_id = block.chain_id;
         let block = Block::<Transaction>::from(block);
@@ -220,6 +227,7 @@ impl<const NACC: usize, const NTX: usize> TestContext<NACC, NTX> {
             history_hashes.clone(),
             logger_config,
             is_taiko,
+            enbalbe_invalid_tx,
         )?;
 
         Ok(Self {
@@ -229,6 +237,7 @@ impl<const NACC: usize, const NTX: usize> TestContext<NACC, NTX> {
             eth_block: block,
             geth_traces,
             is_taiko,
+            enbalbe_invalid_tx,
         })
     }
 
@@ -243,6 +252,7 @@ impl<const NACC: usize, const NTX: usize> TestContext<NACC, NTX> {
         acc_fns: FAcc,
         func_tx: FTx,
         func_block: Fb,
+        enbalbe_invalid_tx: bool,
     ) -> Result<Self, Error>
     where
         FTx: FnOnce(Vec<&mut MockTransaction>, [MockAccount; NACC]),
@@ -255,6 +265,7 @@ impl<const NACC: usize, const NTX: usize> TestContext<NACC, NTX> {
             func_tx,
             func_block,
             LoggerConfig::default(),
+            enbalbe_invalid_tx,
         )
     }
 
@@ -264,6 +275,7 @@ impl<const NACC: usize, const NTX: usize> TestContext<NACC, NTX> {
         acc_fns: FAcc,
         func_tx: FTx,
         func_block: Fb,
+        enbalbe_invalid_tx: bool,
     ) -> Result<Self, Error>
     where
         FTx: FnOnce(Vec<&mut MockTransaction>, [MockAccount; NACC]),
@@ -277,6 +289,7 @@ impl<const NACC: usize, const NTX: usize> TestContext<NACC, NTX> {
             func_block,
             LoggerConfig::default(),
             true,
+            enbalbe_invalid_tx,
         )
     }
 
@@ -291,7 +304,13 @@ impl<const NACC: usize, const NTX: usize> TestContext<NACC, NTX> {
             account_0_code_account_1_no_code(bytecode),
             tx_from_1_to_0,
             |block, _txs| block,
+            false,
         )
+    }
+
+    pub fn enable_invalid_tx(mut self) -> Self {
+        self.enbalbe_invalid_tx = true;
+        self
     }
 }
 
@@ -304,6 +323,7 @@ pub fn gen_geth_traces(
     history_hashes: Option<Vec<Word>>,
     logger_config: LoggerConfig,
     is_taiko: bool,
+    enbalbe_invalid_tx: bool,
 ) -> Result<Vec<GethExecTrace>, Error> {
     let trace_config = TraceConfig {
         chain_id,
@@ -320,6 +340,7 @@ pub fn gen_geth_traces(
             .collect(),
         logger_config,
         taiko: is_taiko,
+        enbalbe_invalid_tx,
     };
     let traces = trace(&trace_config)?;
     Ok(traces)
@@ -328,6 +349,8 @@ pub fn gen_geth_traces(
 /// Collection of helper functions which contribute to specific rutines on the
 /// builder pattern used to construct [`TestContext`]s.
 pub mod helpers {
+    use eth_types::evm_types::{GasCost, OpcodeId};
+
     use super::*;
     use crate::MOCK_ACCOUNTS;
 
@@ -350,5 +373,38 @@ pub mod helpers {
     /// first one.
     pub fn tx_from_1_to_0(mut txs: Vec<&mut MockTransaction>, accs: [MockAccount; 2]) {
         txs[0].from(accs[1].address).to(accs[0].address);
+    }
+
+    pub fn gas(call_data: &[u8]) -> Word {
+        Word::from(
+            GasCost::TX.as_u64()
+                + 2 * OpcodeId::PUSH32.constant_gas_cost().as_u64()
+                + call_data
+                    .iter()
+                    .map(|&x| if x == 0 { 4 } else { 16 })
+                    .sum::<u64>(),
+        )
+    }
+
+    pub fn mock_tx_value_gas_calldata(
+        value: Word,
+        gas_price: Word,
+        calldata: Vec<u8>,
+    ) -> eth_types::Transaction {
+        let from = MOCK_ACCOUNTS[1];
+        let to = MOCK_ACCOUNTS[0];
+
+        let mock_transaction = MockTransaction::default()
+            .from(from)
+            .to(to)
+            .value(value)
+            .gas(gas(&calldata))
+            .gas_price(gas_price)
+            .max_priority_fee_per_gas(gas_price)
+            .max_fee_per_gas(gas_price)
+            .input(calldata.into())
+            .build();
+
+        eth_types::Transaction::from(mock_transaction)
     }
 }

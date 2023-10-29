@@ -113,6 +113,7 @@ mod test {
                     .gas_price(two_gwei);
             },
             |block, _tx| block.number(0xcafeu64),
+            false,
         )
         .unwrap();
 

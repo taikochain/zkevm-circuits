@@ -140,6 +140,7 @@ mod tests {
                     .gas((1e16 as u64).into());
             },
             |block, _txs| block.number(0xcafeu64),
+            false,
         )
         .unwrap();
         let block: GethData = test_ctx.into();

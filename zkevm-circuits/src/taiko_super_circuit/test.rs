@@ -78,6 +78,7 @@ pub fn block_1tx() -> GethData {
             txs[0].sig_data((sig.v, sig.r, sig.s));
         },
         |block, _tx| block.number(0xcafeu64),
+        false,
     )
     .unwrap()
     .into();
@@ -130,6 +131,7 @@ fn block_2tx() -> GethData {
             txs[1].sig_data((sig.v, sig.r, sig.s));
         },
         |block, _tx| block.number(0xcafeu64),
+        false,
     )
     .unwrap()
     .into();

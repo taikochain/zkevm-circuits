@@ -30,6 +30,7 @@ impl TxExecSteps for BeginEndTx {
 }
 
 fn gen_begin_tx_steps(state: &mut CircuitInputStateRef) -> Result<ExecStep, Error> {
+    println!("gen_begin_tx_steps {:?}", state.block_ctx.rwc.0);
     let mut exec_step = state.new_begin_tx_step();
     let call = state.call()?.clone();
 
@@ -228,6 +229,7 @@ fn gen_begin_tx_steps(state: &mut CircuitInputStateRef) -> Result<ExecStep, Erro
 }
 
 fn gen_end_tx_steps(state: &mut CircuitInputStateRef) -> Result<ExecStep, Error> {
+    println!("gen_end_tx_steps {:?}", state.block_ctx.rwc.0);
     let mut exec_step = state.new_end_tx_step();
     let call = state.tx.calls()[0].clone();
 

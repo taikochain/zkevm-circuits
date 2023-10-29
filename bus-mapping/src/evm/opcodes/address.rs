@@ -69,6 +69,7 @@ mod address_tests {
             account_0_code_account_1_no_code(code),
             tx_from_1_to_0,
             |block, _tx| block.number(0xcafe_u64),
+            false,
         )
         .unwrap()
         .into();

@@ -166,6 +166,7 @@ mod sstore_tests {
             },
             tx_from_1_to_0,
             |block, _tx| block.number(0xcafeu64),
+            false,
         )
         .unwrap()
         .into();

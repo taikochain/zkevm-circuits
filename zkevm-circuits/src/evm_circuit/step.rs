@@ -45,6 +45,7 @@ impl From<PrecompileCalls> for ExecutionState {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, EnumIter)]
 pub enum ExecutionState {
     // Internal state
+    InvalidTx,
     BeginTx,
     EndTx,
     EndBlock,
@@ -108,6 +109,7 @@ pub enum ExecutionState {
     RETURN_REVERT, // RETURN, REVERT
     CREATE2,
     SELFDESTRUCT,
+
     // Error cases
     ErrorInvalidOpcode,
     ErrorStack,
@@ -119,6 +121,7 @@ pub enum ExecutionState {
     ErrorMaxCodeSizeExceeded,
     ErrorInvalidJump,
     ErrorReturnDataOutOfBound,
+
     ErrorOutOfGasConstant,
     ErrorOutOfGasStaticMemoryExpansion,
     ErrorOutOfGasDynamicMemoryExpansion,
@@ -302,6 +305,7 @@ impl From<&ExecStep> for ExecutionState {
                 PrecompileCalls::Bn128Pairing => ExecutionState::PrecompileBn256Pairing,
                 PrecompileCalls::Blake2F => ExecutionState::PrecompileBlake2f,
             },
+            ExecState::InvalidTx => ExecutionState::InvalidTx,
             ExecState::BeginTx => ExecutionState::BeginTx,
             ExecState::EndTx => ExecutionState::EndTx,
             ExecState::EndBlock => ExecutionState::EndBlock,
@@ -755,6 +759,11 @@ impl<F: Field> Step<F> {
         self.state
             .rw_counter
             .assign(region, offset, Value::known(F::from(step.rwc.into())))?;
+        println!(
+            "assign_exec_step {:?}: rw_counter: {}",
+            step.execution_state(),
+            step.rwc.0
+        );
         self.state
             .call_id
             .assign(region, offset, Value::known(F::from(call.call_id as u64)))?;

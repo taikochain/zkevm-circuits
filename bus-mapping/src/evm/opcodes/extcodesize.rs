@@ -152,6 +152,7 @@ mod extcodesize_tests {
                 txs[0].to(accs[0].address).from(accs[2].address);
             },
             |block, _tx| block.author(*MOCK_COINBASE).number(0xcafeu64),
+            false,
         )
         .unwrap()
         .into();

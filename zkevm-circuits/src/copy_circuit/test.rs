@@ -78,6 +78,7 @@ fn gen_calldatacopy_data() -> CircuitInputBuilder {
                 .input(calldata.into());
         },
         |block, _txs| block.number(0xcafeu64),
+        false,
     )
     .unwrap();
     let block: GethData = test_ctx.into();
@@ -140,6 +141,7 @@ fn gen_extcodecopy_data() -> CircuitInputBuilder {
             txs[0].to(accs[0].address).from(accs[2].address);
         },
         |block, _tx| block.number(0xcafeu64),
+        false,
     )
     .unwrap();
     let block: GethData = test_ctx.into();
@@ -309,7 +311,7 @@ fn variadic_size_check() {
     let builder = gen_tx_log_data();
     let block1 = block_convert::<Fr>(&builder.block, &builder.code_db).unwrap();
 
-    let block: GethData = TestContext::<0, 0>::new(None, |_| {}, |_, _| {}, |b, _| b)
+    let block: GethData = TestContext::<0, 0>::new(None, |_| {}, |_, _| {}, |b, _| b, false)
         .unwrap()
         .into();
     let mut builder =

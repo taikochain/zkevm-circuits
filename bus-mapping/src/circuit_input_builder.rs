@@ -156,6 +156,7 @@ impl<'a> CircuitInputBuilder {
         eth_block: &EthBlock,
         eth_tx: &eth_types::Transaction,
         is_success: bool,
+        is_invalid: bool,
     ) -> Result<Transaction, Error> {
         let call_id = self.block_ctx.rwc.0;
 
@@ -169,6 +170,9 @@ impl<'a> CircuitInputBuilder {
                 0,
             ),
         );
+        if is_invalid {
+            self.block_ctx.invalid_tx_num += 1;
+        }
 
         Transaction::new(
             call_id,
@@ -177,6 +181,7 @@ impl<'a> CircuitInputBuilder {
             eth_block,
             eth_tx,
             is_success,
+            is_invalid,
             self.block.is_taiko(),
         )
     }
@@ -230,6 +235,7 @@ impl<'a> CircuitInputBuilder {
         let mut end_block_last = self.block.block_steps.end_block_last.clone();
         end_block_not_last.rwc = self.block_ctx.rwc;
         end_block_last.rwc = self.block_ctx.rwc;
+        println!("set_end_block {:?}", self.block_ctx.rwc.0);
 
         let mut dummy_tx = Transaction::default();
         let mut dummy_tx_ctx = TransactionContext::default();
@@ -284,31 +290,39 @@ impl<'a> CircuitInputBuilder {
         geth_trace: &GethExecTrace,
         is_last_tx: bool,
     ) -> Result<(), Error> {
-        let mut tx = self.new_tx(eth_block, eth_tx, !geth_trace.failed)?;
+        let mut tx = self.new_tx(eth_block, eth_tx, !geth_trace.failed, geth_trace.invalid)?;
         let mut tx_ctx = TransactionContext::new(eth_tx, geth_trace, is_last_tx)?;
 
-        // Generate BeginTx step
-        let begin_tx_step = gen_associated_steps(
-            &mut self.state_ref(&mut tx, &mut tx_ctx),
-            ExecState::BeginTx,
-        )?;
-        tx.steps_mut().push(begin_tx_step);
-
-        for (index, geth_step) in geth_trace.struct_logs.iter().enumerate() {
-            let mut state_ref = self.state_ref(&mut tx, &mut tx_ctx);
-            log::trace!("handle {}th opcode {:?} ", index, geth_step.op);
-            let exec_steps = gen_associated_ops(
-                &geth_step.op,
-                &mut state_ref,
-                &geth_trace.struct_logs[index..],
+        if tx.invalid_tx {
+            // Cecilia: ?
+            let invalid_tx_step = gen_associated_steps(
+                &mut self.state_ref(&mut tx, &mut tx_ctx),
+                ExecState::InvalidTx,
             )?;
-            tx.steps_mut().extend(exec_steps);
-        }
+            tx.steps_mut().push(invalid_tx_step);
+        } else {
+            // Generate BeginTx step
+            let begin_tx_step = gen_associated_steps(
+                &mut self.state_ref(&mut tx, &mut tx_ctx),
+                ExecState::BeginTx,
+            )?;
+            tx.steps_mut().push(begin_tx_step);
 
-        // Generate EndTx step
-        let end_tx_step =
-            gen_associated_steps(&mut self.state_ref(&mut tx, &mut tx_ctx), ExecState::EndTx)?;
-        tx.steps_mut().push(end_tx_step);
+            for (index, geth_step) in geth_trace.struct_logs.iter().enumerate() {
+                let mut state_ref = self.state_ref(&mut tx, &mut tx_ctx);
+                log::trace!("handle {}th opcode {:?} ", index, geth_step.op);
+                let exec_steps = gen_associated_ops(
+                    &geth_step.op,
+                    &mut state_ref,
+                    &geth_trace.struct_logs[index..],
+                )?;
+                tx.steps_mut().extend(exec_steps);
+            }
+            // Generate EndTx step
+            let end_tx_step =
+                gen_associated_steps(&mut self.state_ref(&mut tx, &mut tx_ctx), ExecState::EndTx)?;
+            tx.steps_mut().push(end_tx_step);
+        }
 
         self.sdb.commit_tx();
         self.block.txs.push(tx);

@@ -192,6 +192,7 @@ pub(crate) fn print_circuit_stats_by_states(
                         .input(vec![1, 2, 3, 4, 5, 6, 7].into());
                 },
                 |block, _tx| block.number(0xcafeu64),
+                false,
             )
             .unwrap()
             .into();

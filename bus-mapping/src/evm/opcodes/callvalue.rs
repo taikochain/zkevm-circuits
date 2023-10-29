@@ -67,6 +67,7 @@ mod callvalue_tests {
             account_0_code_account_1_no_code(code),
             tx_from_1_to_0,
             |block, _tx| block.number(0xcafeu64),
+            false,
         )
         .unwrap()
         .into();

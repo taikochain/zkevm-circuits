@@ -295,6 +295,7 @@ mod test {
                     .gas(150000.into());
             },
             |block, _tx| block.number(0xcafeu64),
+            false,
         )
         .unwrap();
 

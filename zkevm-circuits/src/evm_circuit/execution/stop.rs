@@ -160,6 +160,7 @@ mod test {
                         .gas(Word::from(30000));
                 },
                 |block, _tx| block.number(0xcafeu64),
+                false,
             )
             .unwrap();
 
@@ -197,6 +198,7 @@ mod test {
                         .gas(Word::from(30000));
                 },
                 |block, _tx| block.number(0xcafeu64),
+                false,
             )
             .unwrap();
 

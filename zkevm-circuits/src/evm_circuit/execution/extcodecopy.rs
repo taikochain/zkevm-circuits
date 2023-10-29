@@ -301,6 +301,7 @@ mod test {
                     .gas(1_000_000.into());
             },
             |block, _tx| block.number(0x1111111),
+            false,
         )
         .unwrap();
 

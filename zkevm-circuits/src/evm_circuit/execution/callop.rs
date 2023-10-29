@@ -1090,6 +1090,7 @@ mod test {
                     .value(1000.into());
             },
             |block, _tx| block.number(0xcafeu64),
+            false,
         )
         .unwrap();
 
@@ -1198,6 +1199,7 @@ mod test {
                     .gas(word!("0x2386F26FC10000"));
             },
             |block, _tx| block.number(0xcafeu64),
+            false,
         )
         .unwrap();
 

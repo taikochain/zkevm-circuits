@@ -12,8 +12,9 @@ use eth_types::{
     address, bytecode,
     evm_types::{stack::Stack, Gas, OpcodeId},
     geth_types::GethData,
-    word, Bytecode, Hash, ToAddress, ToWord, Word,
+    word, AccessList, Bytecode, Hash, ToAddress, ToWord, Word, H256,
 };
+use ethers_core::types::transaction::eip2930::AccessListItem;
 use lazy_static::lazy_static;
 use mock::{
     test_ctx::{helpers::*, LoggerConfig, TestContext},
@@ -37,13 +38,19 @@ impl CircuitInputBuilderTx {
         let block = crate::mock::BlockData::new_from_geth_data(geth_data.clone());
         let mut builder = block.new_circuit_input_builder();
         let tx = builder
-            .new_tx(&block.eth_block, &block.eth_block.transactions[0], true)
+            .new_tx(
+                &block.eth_block,
+                &block.eth_block.transactions[0],
+                true,
+                false,
+            )
             .unwrap();
         let tx_ctx = TransactionContext::new(
             &block.eth_block.transactions[0],
             &GethExecTrace {
                 gas: Gas(0),
                 failed: false,
+                invalid: false,
                 return_value: "".to_owned(),
                 struct_logs: vec![geth_step.clone()],
             },
@@ -178,6 +185,7 @@ fn tracer_err_depth() {
         },
         |block, _tx| block.number(0xcafeu64),
         LoggerConfig::enable_memory(),
+        false,
     )
     .unwrap()
     .into();
@@ -254,6 +262,7 @@ fn tracer_err_insufficient_balance() {
         },
         |block, _tx| block.number(0xcafeu64),
         LoggerConfig::enable_memory(),
+        false,
     )
     .unwrap()
     .into();
@@ -314,6 +323,7 @@ fn tracer_call_success() {
             txs[0].to(accs[0].address).from(accs[2].address);
         },
         |block, _tx| block.number(0xcafeu64),
+        false,
     )
     .unwrap()
     .into();
@@ -335,6 +345,130 @@ fn tracer_call_success() {
     let error = builder.state_ref().get_step_err(step, next_step);
     // expects no errors detected
     assert_eq!(error.unwrap(), None);
+}
+
+#[test]
+fn tracer_invalid_tx_nonce() {
+    let code_a = bytecode! {
+        PUSH1(0x0) // retLength
+        PUSH1(0x0) // retOffset
+        PUSH1(0x0) // argsLength
+        PUSH1(0x0) // argsOffset
+    };
+
+    // Get the execution steps from the external tracer
+    let block: GethData = TestContext::<3, 1>::new(
+        None,
+        |accs| {
+            accs[0]
+                .address(address!("0x0000000000000000000000000000000000000000"))
+                .code(code_a);
+            accs[1]
+                .address(address!("0x000000000000000000000000000000000cafe001"))
+                .nonce(3);
+        },
+        |mut txs, accs| {
+            txs[0].to(accs[0].address).from(accs[1].address).nonce(1);
+        },
+        |block, _tx| block.number(0xcafeu64),
+        true,
+    )
+    .unwrap()
+    .into();
+
+    assert!(block.geth_traces[0].invalid);
+}
+
+#[test]
+fn tracer_invalid_tx_balance_for_access_list() {
+    // Get the execution steps from the external tracer
+    let block: GethData = TestContext::<3, 1>::new(
+        None,
+        |accs| {
+            accs[0].address(address!("0x0000000000000000000000000000000000000000"));
+            accs[1]
+                .address(address!("0x000000000000000000000000000000000cafe001"))
+                .balance(Word::from(1));
+        },
+        |mut txs, accs| {
+            txs[0]
+                .to(accs[0].address)
+                .from(accs[1].address)
+                .access_list(AccessList::from(vec![
+                    AccessListItem {
+                        address: Address::zero(),
+                        storage_keys: vec![H256::zero()],
+                    },
+                    AccessListItem {
+                        address: address!("0x0000000000000000000000000000000012345678"),
+                        storage_keys: vec![H256::zero()],
+                    },
+                    AccessListItem {
+                        address: address!("0x0000000000000000000000000000000999999999"),
+                        storage_keys: vec![H256::zero()],
+                    },
+                ]));
+        },
+        |block, _tx| block.number(0xcafeu64),
+        true,
+    )
+    .unwrap()
+    .into();
+
+    assert!(block.geth_traces[0].invalid);
+}
+
+#[test]
+fn tracer_invalid_tx_balance_for_transfer() {
+    // Get the execution steps from the external tracer
+    let block: GethData = TestContext::<3, 1>::new(
+        None,
+        |accs| {
+            accs[0].address(address!("0x0000000000000000000000000000000000000000"));
+            accs[1]
+                .address(address!("0x000000000000000000000000000000000cafe001"))
+                .balance(Word::from(1));
+        },
+        |mut txs, accs| {
+            txs[0]
+                .to(accs[0].address)
+                .from(accs[1].address)
+                .value(100.into());
+        },
+        |block, _tx| block.number(0xcafeu64),
+        true,
+    )
+    .unwrap()
+    .into();
+
+    assert!(block.geth_traces[0].invalid);
+}
+
+#[test]
+fn tracer_invalid_tx_block_gas_limit() {
+    // Todo(Cecilia): this is not supported in InvalidTx
+    // Get the execution steps from the external tracer
+    let block: GethData = TestContext::<3, 1>::new(
+        None,
+        |accs| {
+            accs[0].address(address!("0x0000000000000000000000000000000000000000"));
+            accs[1]
+                .address(address!("0x000000000000000000000000000000000cafe001"))
+                .balance(Word::from(1));
+        },
+        |mut txs, accs| {
+            txs[0]
+                .to(accs[0].address)
+                .from(accs[1].address)
+                .gas(1000000.into());
+        },
+        |block, _tx| block.number(0xcafeu64).gas_limit(1.into()),
+        true,
+    )
+    .unwrap()
+    .into();
+
+    assert!(block.geth_traces[0].invalid);
 }
 
 #[test]
@@ -407,6 +541,7 @@ fn tracer_err_address_collision() {
         },
         |block, _tx| block.number(0xcafeu64),
         LoggerConfig::enable_memory(),
+        false,
     )
     .unwrap()
     .into();
@@ -527,6 +662,7 @@ fn tracer_create_collision_free() {
         },
         |block, _tx| block.number(0xcafeu64),
         LoggerConfig::enable_memory(),
+        false,
     )
     .unwrap()
     .into();
@@ -657,6 +793,7 @@ fn tracer_err_code_store_out_of_gas() {
         },
         |block, _tx| block.number(0xcafeu64),
         LoggerConfig::enable_memory(),
+        false,
     )
     .unwrap()
     .into();
@@ -708,6 +845,7 @@ fn tracer_err_code_store_out_of_gas_tx_deploy() {
         },
         |block, _tx| block.number(0x0264),
         LoggerConfig::enable_memory(),
+        false,
     )
     .unwrap()
     .into();
@@ -806,6 +944,7 @@ fn tracer_err_invalid_code() {
         },
         |block, _tx| block.number(0xcafeu64),
         LoggerConfig::enable_memory(),
+        false,
     )
     .unwrap()
     .into();
@@ -903,6 +1042,7 @@ fn tracer_err_max_code_size_exceeded() {
         },
         |block, _tx| block.number(0xcafeu64),
         LoggerConfig::enable_memory(),
+        false,
     )
     .unwrap()
     .into();
@@ -954,6 +1094,7 @@ fn tracer_err_max_code_size_exceeded_tx_deploy() {
         },
         |block, _tx| block.number(0x0264),
         LoggerConfig::enable_memory(),
+        false,
     )
     .unwrap()
     .into();
@@ -1044,6 +1185,7 @@ fn tracer_create_stop() {
         },
         |block, _tx| block.number(0xcafeu64),
         LoggerConfig::enable_memory(),
+        false,
     )
     .unwrap()
     .into();
@@ -1113,6 +1255,7 @@ fn tracer_err_invalid_jump() {
         },
         |block, _tx| block.number(0xcafeu64),
         LoggerConfig::enable_memory(),
+        false,
     )
     .unwrap()
     .into();
@@ -1162,6 +1305,7 @@ fn tracer_err_invalid_jump() {
         },
         |block, _tx| block.number(0xcafeu64),
         LoggerConfig::enable_memory(),
+        false,
     )
     .unwrap()
     .into();
@@ -1212,6 +1356,7 @@ fn tracer_err_execution_reverted() {
         },
         |block, _tx| block.number(0xcafeu64),
         LoggerConfig::enable_memory(),
+        false,
     )
     .unwrap()
     .into();
@@ -1262,6 +1407,7 @@ fn tracer_err_execution_reverted() {
         },
         |block, _tx| block.number(0xcafeu64),
         LoggerConfig::enable_memory(),
+        false,
     )
     .unwrap()
     .into();
@@ -1321,6 +1467,7 @@ fn tracer_stop() {
         },
         |block, _tx| block.number(0xcafeu64),
         LoggerConfig::enable_memory(),
+        false,
     )
     .unwrap()
     .into();
@@ -1389,6 +1536,7 @@ fn tracer_err_return_data_out_of_bounds() {
         },
         |block, _tx| block.number(0xcafeu64),
         LoggerConfig::enable_memory(),
+        false,
     )
     .unwrap()
     .into();
@@ -1438,6 +1586,7 @@ fn tracer_err_gas_uint_overflow() {
         },
         |block, _tx| block.number(0xcafeu64),
         LoggerConfig::enable_memory(),
+        false,
     )
     .unwrap()
     .into();
@@ -1477,6 +1626,7 @@ fn tracer_err_invalid_opcode() {
         },
         |block, _tx| block.number(0xcafeu64),
         LoggerConfig::enable_memory(),
+        false,
     )
     .unwrap()
     .into();
@@ -1542,6 +1692,7 @@ fn tracer_err_write_protection(is_call: bool) {
         },
         |block, _tx| block.number(0xcafeu64),
         LoggerConfig::enable_memory(),
+        false,
     )
     .unwrap()
     .into();
@@ -1608,6 +1759,7 @@ fn tracer_err_out_of_gas() {
         },
         |block, _tx| block.number(0xcafeu64),
         LoggerConfig::enable_memory(),
+        false,
     )
     .unwrap()
     .into();
@@ -1629,6 +1781,7 @@ fn tracer_err_stack_overflow() {
         tx_from_1_to_0,
         |block, _tx| block.number(0xcafeu64),
         LoggerConfig::enable_memory(),
+        false,
     )
     .unwrap()
     .into();
@@ -1660,6 +1813,7 @@ fn tracer_err_stack_underflow() {
         tx_from_1_to_0,
         |block, _tx| block.number(0xcafeu64),
         LoggerConfig::enable_memory(),
+        false,
     )
     .unwrap()
     .into();
@@ -1744,6 +1898,7 @@ fn create2_address() {
         },
         |block, _tx| block.number(0xcafeu64),
         LoggerConfig::enable_memory(),
+        false,
     )
     .unwrap()
     .into();
@@ -1842,6 +1997,7 @@ fn create_address() {
         },
         |block, _tx| block.number(0xcafeu64),
         LoggerConfig::enable_memory(),
+        false,
     )
     .unwrap()
     .into();
@@ -1926,6 +2082,7 @@ fn test_gen_access_trace() {
         },
         |block, _tx| block.number(0xcafeu64),
         LoggerConfig::enable_memory(),
+        false,
     )
     .unwrap()
     .into();
@@ -2013,6 +2170,7 @@ fn test_gen_access_trace_call_EOA_no_new_stack_frame() {
         tx_from_1_to_0,
         |block, _tx| block.number(0xcafeu64),
         LoggerConfig::enable_memory(),
+        false,
     )
     .unwrap()
     .into();
@@ -2148,6 +2306,7 @@ fn test_gen_access_trace_create_push_call_stack() {
         },
         |block, _tx| block.number(0xcafeu64),
         LoggerConfig::enable_memory(),
+        false,
     )
     .unwrap()
     .into();

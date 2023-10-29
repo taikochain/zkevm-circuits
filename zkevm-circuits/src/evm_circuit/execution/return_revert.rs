@@ -446,6 +446,7 @@ mod test {
                         .gas(100000u64.into());
                 },
                 |block, _tx| block.number(0xcafeu64),
+                false,
             )
             .unwrap();
 
@@ -469,6 +470,7 @@ mod test {
                     txs[0].from(accs[0].address).input(tx_input.into());
                 },
                 |block, _| block,
+                false,
             )
             .unwrap();
 
@@ -515,6 +517,7 @@ mod test {
                         .gas(100000u64.into());
                 },
                 |block, _| block,
+                false,
             )
             .unwrap();
 
@@ -566,6 +569,7 @@ mod test {
                     .gas(100000u64.into());
             },
             |block, _| block,
+            false,
         )
         .unwrap();
 

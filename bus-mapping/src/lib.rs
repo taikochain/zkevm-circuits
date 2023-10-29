@@ -125,7 +125,7 @@
 //!     None,
 //!     account_0_code_account_1_no_code(code),
 //!     tx_from_1_to_0,
-//!     |block, _tx| block.number(0xcafeu64),
+//!     |block, _tx| block.number(0xcafeu64), false
 //! )
 //! .unwrap()
 //! .into();
@@ -141,6 +141,7 @@
 //!     return_value: "".to_string(),
 //!     gas: Gas(block.eth_block.transactions[0].gas.as_u64()),
 //!     failed: false,
+//!     invalid: false,
 //!     struct_logs: geth_steps,
 //! };
 //!

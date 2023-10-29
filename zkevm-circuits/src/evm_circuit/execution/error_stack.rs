@@ -210,6 +210,7 @@ mod test {
                     .gas(23800.into());
             },
             |block, _tx| block.number(0xcafeu64),
+            false,
         )
         .unwrap();
 

@@ -204,38 +204,46 @@ impl<F: Field> ExecutionGadget<F> for EndTxGadget<F> {
         );
 
         let begin_tx_rw_counter = if cb.is_taiko { 11.expr() } else { 10.expr() };
-
-        cb.condition(
-            cb.next.execution_state_selector([ExecutionState::BeginTx]),
-            |cb| {
-                cb.call_context_lookup(
-                    true.expr(),
-                    Some(cb.next.state.rw_counter.expr()),
-                    CallContextFieldTag::TxId,
-                    tx_id.expr() + 1.expr(),
-                );
-
-                cb.require_step_state_transition(StepStateTransition {
-                    rw_counter: Delta(begin_tx_rw_counter - is_first_tx.expr()),
-                    ..StepStateTransition::any()
-                });
-            },
-        );
-
+        let invalid_tx_rw_counter = 4.expr();
         let end_block_rw_counter = if cb.is_taiko { 10.expr() } else { 9.expr() };
 
-        cb.condition(
-            cb.next.execution_state_selector([ExecutionState::EndBlock]),
-            |cb| {
-                cb.require_step_state_transition(StepStateTransition {
-                    rw_counter: Delta(end_block_rw_counter - is_first_tx.expr()),
-                    // We propagate call_id so that EndBlock can get the last tx_id
-                    // in order to count processed txs.
-                    call_id: Same,
-                    ..StepStateTransition::any()
-                });
-            },
-        );
+        [
+            ExecutionState::BeginTx,
+            ExecutionState::InvalidTx,
+            ExecutionState::EndBlock,
+        ]
+        .iter()
+        .zip(
+            [
+                begin_tx_rw_counter,
+                invalid_tx_rw_counter,
+                end_block_rw_counter,
+            ]
+            .iter(),
+        )
+        .for_each(|(state, rw_counter)| {
+            cb.condition(cb.next.execution_state_selector([*state]), |cb| {
+                if state == &ExecutionState::EndBlock {
+                    cb.require_step_state_transition(StepStateTransition {
+                        rw_counter: Delta(rw_counter.clone() - is_first_tx.expr()),
+                        call_id: Same,
+                        ..StepStateTransition::any()
+                    });
+                } else {
+                    cb.call_context_lookup(
+                        true.expr(),
+                        Some(cb.next.state.rw_counter.expr()),
+                        CallContextFieldTag::TxId,
+                        tx_id.expr() + 1.expr(),
+                    );
+                    cb.require_step_state_transition(StepStateTransition {
+                        // Cecilia: is_first_tx?
+                        rw_counter: Delta(rw_counter.clone() - is_first_tx.expr()),
+                        ..StepStateTransition::any()
+                    });
+                }
+            });
+        });
 
         Self {
             tx_id,
@@ -271,6 +279,7 @@ impl<F: Field> ExecutionGadget<F> for EndTxGadget<F> {
         call: &Call,
         step: &ExecStep,
     ) -> Result<(), Error> {
+        println!("-->EndTx rwc {:?}", step.rwc.0);
         let gas_used = tx.gas - step.gas_left.0;
         let (refund, _) = block.get_rws(step, 2).tx_refund_value_pair();
         let [(caller_balance, caller_balance_prev), (coinbase_balance, coinbase_balance_prev)] =
@@ -481,6 +490,7 @@ mod test {
                         .value(eth(1));
                 },
                 |block, _tx| block.number(0xcafeu64),
+                false,
             )
             .unwrap(),
         );

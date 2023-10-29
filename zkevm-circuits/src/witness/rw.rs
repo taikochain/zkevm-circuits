@@ -58,7 +58,9 @@ impl RwMap {
         let err_msg_first = "first access reads don't change value";
         let err_msg_non_first = "non-first access reads don't change value";
         let rows = self.table_assignments();
+        println!("rows: {:?}", rows);
         let updates = MptUpdates::mock_from(&rows);
+        println!("updates: {:?}", updates);
         let mut errs = Vec::new();
         for idx in 1..rows.len() {
             let row = &rows[idx];

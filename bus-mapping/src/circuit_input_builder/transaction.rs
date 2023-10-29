@@ -186,6 +186,10 @@ impl TransactionContext {
 pub struct Transaction {
     /// The raw transaction fields
     pub tx: geth_types::Transaction,
+    /// Invalid tx
+    pub invalid_tx: bool,
+    /// AccessListGasCost
+    pub access_list_gas_cost: u64,
     /// Calls made in the transaction
     pub(crate) calls: Vec<Call>,
     /// Execution steps
@@ -194,6 +198,7 @@ pub struct Transaction {
 
 impl Transaction {
     /// Create a new Self.
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         call_id: usize,
         sdb: &StateDB,
@@ -201,6 +206,7 @@ impl Transaction {
         eth_block: &EthBlock,
         eth_tx: &eth_types::Transaction,
         is_success: bool,
+        is_invalid: bool,
         is_taiko: bool,
     ) -> Result<Self, Error> {
         let (found, _) = sdb.get_account(&eth_tx.from);
@@ -264,6 +270,8 @@ impl Transaction {
 
         Ok(Self {
             tx,
+            invalid_tx: is_invalid,
+            access_list_gas_cost: 0,
             calls: vec![call],
             steps: Vec::new(),
         })

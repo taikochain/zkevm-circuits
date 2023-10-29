@@ -119,6 +119,8 @@ impl<F: Field> ExecutionGadget<F> for EndBlockGadget<F> {
         _: &Call,
         step: &ExecStep,
     ) -> Result<(), Error> {
+        println!("-->EndBlock rwc {:?}", step.rwc.0);
+
         self.is_empty_block
             .assign(region, offset, F::from(u64::from(step.rwc) - 1))?;
         let max_rws = F::from(block.circuits_params.max_rws as u64);
@@ -137,6 +139,7 @@ impl<F: Field> ExecutionGadget<F> for EndBlockGadget<F> {
             region.constrain_constant(max_rws_assigned, max_rws)?;
             region.constrain_constant(max_txs_assigned, max_txs)?;
         }
+
         Ok(())
     }
 }

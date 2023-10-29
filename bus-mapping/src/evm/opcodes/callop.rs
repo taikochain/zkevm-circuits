@@ -867,6 +867,7 @@ pub mod tests {
                     enable_memory: true,
                     ..Default::default()
                 },
+                false,
             )
             .unwrap()
             .into();

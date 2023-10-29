@@ -203,6 +203,7 @@ mod test {
                     .gas(Word::from(gas_limit));
             },
             |block, _tx| block.number(0xcafeu64),
+            false,
         )
         .unwrap();
 

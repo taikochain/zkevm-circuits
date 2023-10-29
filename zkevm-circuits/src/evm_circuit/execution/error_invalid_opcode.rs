@@ -90,6 +90,7 @@ mod test {
 
     #[test]
     fn invalid_opcode_root() {
+        // Todo(Cecilia): Should pass after changing circuit
         for invalid_code in TESTING_INVALID_CODES.iter() {
             test_root_ok(invalid_code);
         }
@@ -97,6 +98,7 @@ mod test {
 
     #[test]
     fn invalid_opcode_internal() {
+        // Todo(Cecilia): Should pass after changing circuit
         for invalid_code in TESTING_INVALID_CODES.iter() {
             test_internal_ok(0x20, 0x00, invalid_code);
         }
@@ -145,6 +147,7 @@ mod test {
                 txs[0].to(accs[1].address).from(accs[2].address);
             },
             |block, _tx| block,
+            false,
         )
         .unwrap();
 
