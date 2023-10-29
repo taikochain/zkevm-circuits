@@ -9,15 +9,14 @@ use bus_mapping::circuit_input_builder::{protocol_instance::EvidenceType, Protoc
 use param::*;
 
 // use bus_mapping::circuit_input_builder::ProtocolInstance;
-use eth_types::{Address, Field, ToBigEndian, ToWord, U256};
-
+use eth_types::{Field, ToBigEndian, ToWord, U256};
 
 use ethers_core::utils::keccak256;
 use halo2_proofs::circuit::{AssignedCell, Layouter, SimpleFloorPlanner, Value};
 
 use gadgets::util::{Expr, Scalar};
 use halo2_proofs::plonk::{Circuit, Column, ConstraintSystem, Expression, Instance, Selector};
-use std::{marker::PhantomData};
+use std::marker::PhantomData;
 
 use crate::{
     assign, circuit,
@@ -170,12 +169,18 @@ impl<F: Field> PublicData<F> {
 
     fn encode_field(&self, idx: usize) -> Vec<u8> {
         let fields = vec![
-            FixedBytes(self.protocol_instance.block_evidence.blockMetadata.hash(), 32),
+            FixedBytes(
+                self.protocol_instance.block_evidence.blockMetadata.hash(),
+                32,
+            ),
             FixedBytes(self.protocol_instance.block_evidence.parentHash, 32),
             FixedBytes(self.protocol_instance.block_evidence.blockHash, 32),
             FixedBytes(self.protocol_instance.block_evidence.signalRoot, 32),
             FixedBytes(self.protocol_instance.block_evidence.graffiti, 32),
-            FixedBytes(self.protocol_instance.prover.to_word().to_be_bytes().into(), 32),
+            FixedBytes(
+                self.protocol_instance.prover.to_word().to_be_bytes().into(),
+                32,
+            ),
         ];
         fields[idx].abi_encode()
     }

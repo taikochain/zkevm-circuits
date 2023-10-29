@@ -7,13 +7,11 @@ mod public_data_test {
 
     use crate::get_client;
     use bus_mapping::{
-        circuit_input_builder::{BuilderClient, CircuitsParams, ProtocolInstance, BlockMetadata},
+        circuit_input_builder::{BlockMetadata, BuilderClient, CircuitsParams, ProtocolInstance, protocol_instance::{BlockEvidence}},
         rpc::BlockNumber,
     };
     use eth_types::{Address, Block as EthBlock, Hash, Transaction};
-    use ethers::{
-        abi::{Function, Param, ParamType, StateMutability},
-    };
+    use ethers::abi::{Function, Param, ParamType, StateMutability};
     use halo2_proofs::{arithmetic::Field, dev::MockProver, halo2curves::bn256::Fr};
     use log::error;
     use std::str::FromStr;
@@ -38,7 +36,8 @@ mod public_data_test {
                     .map(|to| {
                         to == protocol_address
                             && tx.input.len() > 4
-                            && &tx.input[0..4] == parse_hash(PROPOSAL_TX_METHOD_SIGNATURE).unwrap().as_bytes()
+                            && &tx.input[0..4]
+                                == parse_hash(PROPOSAL_TX_METHOD_SIGNATURE).unwrap().as_bytes()
                     })
                     .unwrap_or(false)
             })
@@ -337,32 +336,51 @@ mod public_data_test {
         };
 
         let metadata = BlockMetadata {
-            l1Hash: parse_hash(
-                "6e3b781b2d9a04e21ecba49e67dc3fb0a8242408cc07fa6fed5d8bd0eca2c985"
-            ).unwrap().as_fixed_bytes().into(),
+            l1Hash: parse_hash("6e3b781b2d9a04e21ecba49e67dc3fb0a8242408cc07fa6fed5d8bd0eca2c985")
+                .unwrap()
+                .as_fixed_bytes()
+                .into(),
             txListHash: parse_hash(
-                "569e75fc77c1a856f6daaf9e69d8a9566ca34aa47f9133711ce065a571af0cfd"
-            ).unwrap().as_fixed_bytes().into(),
+                "569e75fc77c1a856f6daaf9e69d8a9566ca34aa47f9133711ce065a571af0cfd",
+            )
+            .unwrap()
+            .as_fixed_bytes()
+            .into(),
             id: 10,
             timestamp: 1694510352,
             l1Height: 4272887,
-            coinbase: parse_address(
-                "0000777700000000000000000000000000000001"
-            ).unwrap().as_fixed_bytes().into(),
+            coinbase: parse_address("0000777700000000000000000000000000000001")
+                .unwrap()
+                .as_fixed_bytes()
+                .into(),
+            ..Default::default()
+        };
+
+        let block_evidence = BlockEvidence {
+            blockMetadata: metadata,
+            parentHash: parse_hash(
+                "a534f7f74d155fa0575ccfd9dbb2a7c4f89baa0fb48c3a312f0d97e3fbff7c47",
+            )
+            .unwrap()
+            .as_fixed_bytes()
+            .into(),
+            blockHash: parse_hash(
+                "c32ce5789b5ae9b2a3921e43fb16c429abcb520acf5e27dc717a9caf46c4319f",
+            )
+            .unwrap()
+            .as_fixed_bytes()
+            .into(),
+            signalRoot: parse_hash(
+                "95a87577b110954a0daf867bd574aa726ec9a061b4bf0903d5adef23872f7f1b",
+            )
+            .unwrap()
+            .as_fixed_bytes()
+            .into(),
             ..Default::default()
         };
 
         let protocol_instance = ProtocolInstance {
-            blockMetadata: metadata,
-            parentHash: parse_hash(
-                "a534f7f74d155fa0575ccfd9dbb2a7c4f89baa0fb48c3a312f0d97e3fbff7c47"
-            ).unwrap().as_fixed_bytes().into(),
-            blockHash: parse_hash(
-                "c32ce5789b5ae9b2a3921e43fb16c429abcb520acf5e27dc717a9caf46c4319f"
-            ).unwrap().as_fixed_bytes().into(),
-            signalRoot: parse_hash(
-                "95a87577b110954a0daf867bd574aa726ec9a061b4bf0903d5adef23872f7f1b"
-            ).unwrap().as_fixed_bytes().into(),
+            block_evidence,
             ..Default::default()
         };
 

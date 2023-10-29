@@ -5,7 +5,7 @@ use std::vec;
 use alloy_primitives::FixedBytes;
 use bus_mapping::circuit_input_builder::protocol_instance::{self, BlockEvidence};
 use core::result::Result;
-use eth_types::{H256, H160};
+use eth_types::{H160, H256};
 use halo2_proofs::{
     dev::{MockProver, VerifyFailure},
     halo2curves::bn256::Fr,
@@ -14,9 +14,7 @@ use halo2_proofs::{
 use lazy_static::lazy_static;
 use snark_verifier_sdk::halo2::gen_srs;
 
-
 lazy_static! {
-    
     static ref LAST_HASH: H256 = H256::from_slice(
         &hex::decode("1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347").unwrap(),
     );
@@ -89,7 +87,7 @@ fn mock(
         },
         ..Default::default()
     };
-    
+
     witness::Block::<Fr> {
         eth_block,
         context,
