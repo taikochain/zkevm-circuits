@@ -4,7 +4,7 @@
 
 use std::str::FromStr;
 
-use bus_mapping::circuit_input_builder::{BuilderClient, MetaData, ProtocolInstance};
+use bus_mapping::circuit_input_builder::{BuilderClient, ProtocolInstance, protocol_instance::BlockEvidence, BlockMetadata};
 use eth_types::{Address, Block as EthBlock, Hash, Transaction};
 use ethers::{
     abi::{Function, Param, ParamType, StateMutability},
@@ -34,14 +34,18 @@ pub const TAIKO_BLOCK_ANCHOR_ONLY: u64 = 5368;
 pub const TAIKO_BLOCK_TRANSFER_SUCCEED: u64 = 1270;
 
 /// sepolia protocal address
-const ID: u64 = 10;
+const ID: u64 = 31336;
+
 const TIMESTAMP: u64 = 1694510352;
 const L1_HEIGHT: u64 = 4272887;
-const PROTOCOL_ADDRESS: &str = "6375394335f34848b850114b66a49d6f47f2cda8";
+
+const PROTOCOL_ADDRESS: &str = "0x610178dA211FEF7D417bC0e6FeD39F05609AD788";
 const PROPOSAL_TX_METHOD_SIGNATURE: &str = "ef16e845";
+
 /// testnet golden touch address
 const GOLDEN_TOUCH_ADDRESS: &str = "0000777735367b36bC9B61C50022d9D0700dB4Ec";
 const L1_HASH: &str = "6e3b781b2d9a04e21ecba49e67dc3fb0a8242408cc07fa6fed5d8bd0eca2c985";
+const DIFICULTY: &str = "000000";
 const L1_MIX_HASH: &str = "0000000000000000000000000000000000000000000000000000000000000000";
 const DEPOSITS_PROCESSED: &str = "56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421";
 const TX_LIST_HASH: &str = "569e75fc77c1a856f6daaf9e69d8a9566ca34aa47f9133711ce065a571af0cfd";
@@ -67,35 +71,27 @@ const ANCHOR_GAS_LIMIT: u64 = 180000;
 
 
 async fn gen_block_with_instance(block_num: u64) -> Block<Fr> {
-    let instance = ProtocolInstance {
-        meta_data: MetaData {
+    let block_evidence = BlockEvidence {
+        blockMetadata: BlockMetadata {
+            l1Hash: L1_HASH,
+            difficulty: DIFICULTY,
+            txListHash: L1_MIX_HASH,
             id: ID,
             timestamp: TIMESTAMP,
-            l1_height: L1_HEIGHT,
-            l1_hash: parse_hash(L1_HASH).unwrap(),
-            l1_mix_hash: parse_hash(L1_MIX_HASH).unwrap(),
-            deposits_processed: parse_hash(DEPOSITS_PROCESSED).unwrap(),
-            tx_list_hash: parse_hash(TX_LIST_HASH).unwrap(),
-            tx_list_byte_start: TX_LIST_BYTE_START,
-            tx_list_byte_end: TX_LIST_BYTE_END,
-            gas_limit: GAS_LIMIT,
-            beneficiary: parse_address(BENEFICIARY).unwrap(),
-            treasury: parse_address(TREASURY).unwrap(),
+            l1Height: L1_HEIGHT,
+            gasLimit: GAS_LIMIT,
+            coinbase: BENEFICIARY,
+            depositsProcessed: vec![],
         },
-        block_hash: parse_hash(BLOCK_HASH).unwrap(),
-        parent_hash: parse_hash(PARENT_HASH).unwrap(),
-        signal_root: parse_hash(SIGNAL_ROOT).unwrap(),
-        graffiti: parse_hash(GRAFFITI).unwrap(),
-        prover: parse_address(PROVER).unwrap(),
-        gas_used: GAS_USED,
-        parent_gas_used: PARENT_GAS_USED,
-        block_max_gas_limit: BLOCK_MAX_GAS_LIMIT,
-        max_transactions_per_block: MAX_TRANSACTIONS_PER_BLOCK,
-        max_bytes_per_tx_list: MAX_BYTES_PER_TX_LIST,
-        l1_signal_service: parse_address(L1_SIGNAL_SERVICE).unwrap(),
-        l2_signal_service: parse_address(L2_SIGNAL_SERVICE).unwrap(),
-        l2_contract: parse_address(L2_CONTRACT).unwrap(),
-        anchor_gas_limit: ANCHOR_GAS_LIMIT,
+        parentHash: PARENT_HASH,
+        blockHash: BLOCK_HASH,
+        signalRoot: SIGNAL_ROOT,
+        graffiti: GRAFFITI,
+    };
+
+    let instance = ProtocolInstance {
+        block_evidence,
+        prover: PROVER,
     };
     let cli = get_client(&GETH_L2_URL);
     let cli = BuilderClient::new(cli, CIRCUITS_PARAMS, Some(instance.clone()))
