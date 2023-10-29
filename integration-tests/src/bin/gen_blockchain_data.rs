@@ -15,7 +15,7 @@ use ethers::{
 };
 use integration_tests::{
     get_client, get_provider, get_wallet, log_init, CompiledContract, GenDataOutput, CONTRACTS,
-    CONTRACTS_PATH,
+    CONTRACTS_PATH, GETH_L2_URL,
 };
 use log::{error, info};
 use std::{collections::HashMap, fs::File, path::Path, sync::Arc, thread::sleep, time::Duration};
@@ -110,7 +110,7 @@ async fn main() {
         contracts.insert(name.to_string(), compiled_contract);
     }
 
-    let prov = get_provider();
+    let prov = get_provider(&GETH_L2_URL);
 
     // Wait for geth to be online.
     loop {
@@ -164,7 +164,7 @@ async fn main() {
     //
 
     let mut deployments = HashMap::new();
-    let prov_wallet0 = Arc::new(SignerMiddleware::new(get_provider(), wallet0));
+    let prov_wallet0 = Arc::new(SignerMiddleware::new(get_provider(&GETH_L2_URL), wallet0));
 
     // Greeter
     let contract = deploy(
@@ -205,10 +205,15 @@ async fn main() {
     info!("Generating block with multiple transfers...");
     const NUM_TXS: usize = 4; // NUM_TXS must be >= 4 for the rest of the cases to work.
     let wallets: Vec<_> = (0..NUM_TXS + 1)
-        .map(|i| Arc::new(SignerMiddleware::new(get_provider(), get_wallet(i as u32))))
+        .map(|i| {
+            Arc::new(SignerMiddleware::new(
+                get_provider(&GETH_L2_URL),
+                get_wallet(i as u32),
+            ))
+        })
         .collect();
 
-    let cli = get_client();
+    let cli = get_client(&GETH_L2_URL);
 
     // Fund NUM_TXS wallets from coinbase
     cli.miner_stop().await.expect("cannot stop miner");

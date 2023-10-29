@@ -2,6 +2,7 @@
 
 #![deny(rustdoc::broken_intra_doc_links)]
 #![deny(missing_docs)]
+#![feature(async_fn_in_trait)]
 
 use bus_mapping::{
     circuit_input_builder::{
@@ -18,6 +19,7 @@ use ethers::{
     signers::{coins_bip39::English, MnemonicBuilder, Signer, Wallet},
 };
 use lazy_static::lazy_static;
+
 use log::trace;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -28,6 +30,9 @@ use std::{
     time::Duration,
 };
 use url::Url;
+
+/// Utils for taiko tests
+pub mod taiko_utils;
 
 /// Geth dev chain ID
 pub const CHAIN_ID: u64 = 1337;
@@ -44,15 +49,23 @@ pub const CONTRACTS: &[(&str, &str)] = &[
 /// Path to gen_blockchain_data output file
 pub const GENDATA_OUTPUT_PATH: &str = "gendata_output.json";
 
-const GETH0_URL_DEFAULT: &str = "http://localhost:8545";
+const GETH_L2_URL_DEFAULT: &str = "http://localhost:8545";
+const GETH_L1_URL_DEFAULT: &str = "http://localhost:8546";
 
 lazy_static! {
-    /// URL of the integration test geth0 instance, which contains blocks for which proofs will be
+    /// URL of the integration test geth_l2 instance, which contains blocks for which proofs will be
     /// generated.
-    pub static ref GETH0_URL: String = match env::var("GETH0_URL") {
+    pub static ref GETH_L2_URL: String = match env::var("GETH_L2_URL") {
         Ok(val) => val,
-        Err(VarError::NotPresent) => GETH0_URL_DEFAULT.to_string(),
-        Err(e) => panic!("Error in GETH0_URL env var: {:?}", e),
+        Err(VarError::NotPresent) => GETH_L2_URL_DEFAULT.to_string(),
+        Err(e) => panic!("Error in GETH_L2_URL env var: {:?}", e),
+    };
+
+    /// URL of the integration test geth_l1 instance, which contains proposed txlist
+    pub static ref GETH_L1_URL: String = match env::var("GETH_L1_URL") {
+        Ok(val) => val,
+        Err(VarError::NotPresent) => GETH_L1_URL_DEFAULT.to_string(),
+        Err(e) => panic!("Error in GETH_L1_URL env var: {:?}", e),
     };
 
     /// create GEN_DATA
@@ -69,20 +82,20 @@ pub fn log_init() {
 }
 
 /// Get the integration test [`GethClient`]
-pub fn get_client() -> GethClient<Http> {
-    let transport = Http::new(Url::parse(&GETH0_URL).expect("invalid url"));
+pub fn get_client(url: &'static str) -> GethClient<Http> {
+    let transport = Http::new(Url::parse(url).expect("invalid url"));
     GethClient::new(transport)
 }
 
 /// Get the integration test [`Provider`]
-pub fn get_provider() -> Provider<Http> {
-    let transport = Http::new(Url::parse(&GETH0_URL).expect("invalid url"));
+pub fn get_provider(url: &'static str) -> Provider<Http> {
+    let transport = Http::new(Url::parse(url).expect("invalid url"));
     Provider::new(transport).interval(Duration::from_millis(100))
 }
 
 /// Get the chain id by querying the geth client.
-pub async fn get_chain_id() -> u64 {
-    let client = get_client();
+pub async fn get_chain_id(url: &'static str) -> u64 {
+    let client = get_client(url);
     client.get_chain_id().await.unwrap()
 }
 
@@ -150,7 +163,7 @@ pub struct CompiledContract {
 
 /// Build circuit input builder for a block
 pub async fn build_circuit_input_builder_block(block_num: u64) {
-    let cli = get_client();
+    let cli = get_client(&GETH_L2_URL);
     let cli = BuilderClient::new(
         cli,
         CircuitsParams {
@@ -199,14 +212,5 @@ pub async fn build_circuit_input_builder_block(block_num: u64) {
     trace!("CircuitInputBuilder: {:#?}", builder);
 }
 
-/// Block explorer URL is https://explorer.internal.taiko.xyz
-/// The block that has only one anchor
-pub const TAIKO_BLOCK_ANCHOR_ONLY: u64 = 5368;
-/// The block that has ERC20 transfer
-pub const TAIKO_BLOCK_TRANSFER_SUCCEED: u64 = 1270;
-
 /// Common code for integration tests of circuits.
-pub mod integration_test_circuits;
-
-/// Common code for integration public data tests of circuits.
-pub mod integration_public_data_circuits;
+pub mod circuits_utils;

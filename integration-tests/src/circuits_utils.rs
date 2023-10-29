@@ -1,13 +1,13 @@
-use crate::{get_client, GenDataOutput};
+use crate::{get_client, GenDataOutput, GETH_L2_URL};
 use bus_mapping::{
     circuit_input_builder::{BuilderClient, CircuitInputBuilder, CircuitsParams},
     mock::BlockData,
 };
-use eth_types::geth_types::GethData;
+use eth_types::{geth_types::GethData, Field};
 use halo2_proofs::{
-    dev::{CellValue, MockProver},
-    halo2curves::bn256::{Bn256, Fr, G1Affine},
-    plonk::{create_proof, keygen_pk, keygen_vk, verify_proof, Circuit, ProvingKey, VerifyingKey},
+    dev::{CellValue, MockProver, CircuitCost, cost::{ProofSize, ProofContribution}},
+    halo2curves::{bn256::{Bn256, Fr, G1Affine, G1}, pasta::EqAffine},
+    plonk::{create_proof, keygen_pk, keygen_vk, verify_proof, Circuit, ProvingKey, VerifyingKey, ConstraintSystem},
     poly::{
         commitment::ParamsProver,
         kzg::{
@@ -25,7 +25,7 @@ use mock::TestContext;
 use rand_chacha::rand_core::SeedableRng;
 use rand_core::RngCore;
 use rand_xorshift::XorShiftRng;
-use std::{collections::HashMap, marker::PhantomData, sync::Mutex};
+use std::{collections::HashMap, marker::PhantomData, sync::Mutex, fmt::Debug};
 use tokio::sync::Mutex as TokioMutex;
 use zkevm_circuits::{
     bytecode_circuit::TestBytecodeCircuit,
@@ -37,9 +37,12 @@ use zkevm_circuits::{
     super_circuit::SuperCircuit,
     tx_circuit::TestTxCircuit,
     util::SubCircuit,
-    witness::{block_convert, Block},
+    witness::{block_convert, Block}, table,
 };
-
+use cli_table::{
+    format::{Justify, Separator},
+    print_stdout, Table, WithTitle,
+};
 /// TEST_MOCK_RANDOMNESS
 const TEST_MOCK_RANDOMNESS: u64 = 0x100;
 
@@ -54,13 +57,14 @@ const MAX_BYTECODE: usize = 5000;
 /// MAX_COPY_ROWS
 const MAX_COPY_ROWS: usize = 5888;
 /// MAX_EVM_ROWS
-const MAX_EVM_ROWS: usize = 10000;
+const MAX_EVM_ROWS: usize = 100000;
 /// MAX_EXP_STEPS
 const MAX_EXP_STEPS: usize = 1000;
 
 const MAX_KECCAK_ROWS: usize = 15000;
 
-const CIRCUITS_PARAMS: CircuitsParams = CircuitsParams {
+///
+pub const CIRCUITS_PARAMS: CircuitsParams = CircuitsParams {
     max_rws: MAX_RWS,
     max_txs: MAX_TXS,
     max_calldata: MAX_CALLDATA,
@@ -129,43 +133,66 @@ lazy_static! {
 
 /// Generic implementation for integration tests
 pub struct IntegrationTest<C: SubCircuit<Fr> + Circuit<Fr>> {
-    name: &'static str,
-    degree: u32,
-    key: Option<ProvingKey<G1Affine>>,
-    fixed: Option<Vec<Vec<CellValue<Fr>>>>,
+    ///
+    pub name: &'static str,
+    ///
+    pub degree: u32,
+    ///
+    pub block: HashMap<u64, Block<Fr>>,
+    ///
+    pub key: HashMap<u64, ProvingKey<G1Affine>>,
+    ///
+    pub fixed: HashMap<u64, Vec<Vec<CellValue<Fr>>>>,
+
     _marker: PhantomData<C>,
 }
 
-impl<C: SubCircuit<Fr> + Circuit<Fr>> IntegrationTest<C> {
-    fn new(name: &'static str, degree: u32) -> Self {
+impl<C: SubCircuit<Fr> + Circuit<Fr> + Debug> IntegrationTest<C> {
+    ///
+    pub fn new(name: &'static str, degree: u32) -> Self {
         Self {
             name,
             degree,
-            key: None,
-            fixed: None,
+            block:HashMap::new(),
+            key: HashMap::new(),
+            fixed: HashMap::new(),
             _marker: PhantomData,
         }
     }
 
-    fn get_key(&mut self) -> ProvingKey<G1Affine> {
-        match self.key.clone() {
-            Some(key) => key,
-            None => {
-                let block = new_empty_block();
-                let circuit = C::new_from_block(&block);
-                let general_params = get_general_params(self.degree);
 
-                let verifying_key =
-                    keygen_vk(&general_params, &circuit).expect("keygen_vk should not fail");
-                let key = keygen_pk(&general_params, verifying_key, &circuit)
-                    .expect("keygen_pk should not fail");
-                self.key = Some(key.clone());
-                key
+    async fn get_block(&mut self, block_num: u64) -> Block<Fr> {
+        match self.block.get(&block_num) {
+            Some(block) => block.clone(),
+            None => {
+                let mut block = gen_block(block_num).await;
+                block.randomness = Fr::from(TEST_MOCK_RANDOMNESS);
+                self.block.insert(block_num, block.clone());
+                block
             }
         }
     }
 
-    fn test_actual(&self, circuit: C, instance: Vec<Vec<Fr>>, proving_key: ProvingKey<G1Affine>) {
+    ///
+    pub async fn get_key(&mut self, block_num: u64, circuit: &C) -> ProvingKey<G1Affine> {
+        match self.key.get(&block_num) {
+            Some(key) => key.clone(),
+            None => {
+                let key = gen_key(circuit, self.degree);
+                self.key_veriadic(&key.get_vk());
+                self.key.insert(block_num, key.clone());
+                key
+            }
+        }
+    }
+    ///
+    pub fn test_actual(
+        &self,
+        circuit: C,
+        instance: Vec<Vec<Fr>>,
+        proving_key: ProvingKey<G1Affine>,
+    ) {
+        print_cs_info(proving_key.get_vk().cs());
         fn test_gen_proof<C: Circuit<Fr>, R: RngCore>(
             rng: R,
             circuit: C,
@@ -228,6 +255,7 @@ impl<C: SubCircuit<Fr> + Circuit<Fr>> IntegrationTest<C> {
         // change instace to slice
         let instance: Vec<&[Fr]> = instance.iter().map(|v| v.as_slice()).collect();
 
+        log::info!("create proof");
         let proof = test_gen_proof(
             RNG.clone(),
             circuit,
@@ -237,6 +265,7 @@ impl<C: SubCircuit<Fr> + Circuit<Fr>> IntegrationTest<C> {
             &instance,
         );
 
+        log::info!("verify proof with vk");
         let verifying_key = proving_key.get_vk();
         test_verify(
             &general_params,
@@ -246,34 +275,46 @@ impl<C: SubCircuit<Fr> + Circuit<Fr>> IntegrationTest<C> {
             &instance,
         );
     }
-
-    fn test_mock(&mut self, circuit: &C, instance: Vec<Vec<Fr>>) {
+    
+    ///
+    pub fn test_mock(&mut self, circuit: &C, instance: Vec<Vec<Fr>>) {
         let mock_prover = MockProver::<Fr>::run(self.degree, circuit, instance).unwrap();
-
-        self.test_variadic(&mock_prover);
-
+        print_cs_info(mock_prover.cs());
+        self.fixed_variadic(&mock_prover);
         mock_prover
             .verify_par()
             .expect("mock prover verification failed");
     }
 
-    fn test_variadic(&mut self, mock_prover: &MockProver<Fr>) {
+    ///
+    pub fn fixed_variadic(&mut self, mock_prover: &MockProver<Fr>) {
         let fixed = mock_prover.fixed();
-
-        match self.fixed.clone() {
-            Some(prev_fixed) => {
-                assert!(
-                    fixed.eq(&prev_fixed),
-                    "circuit fixed columns are not constant for different witnesses"
-                );
-            }
-            None => {
-                self.fixed = Some(fixed.clone());
-            }
-        };
-
+        log::info!("compare fixed columns with recorded vals from prev blocks");
+        self.fixed.values().for_each(|prev_fixed| {
+            assert!(
+                fixed.eq(prev_fixed),
+                "circuit fixed columns are not constant for different witnesses"
+            );
+        });
         // TODO: check mock_prover.permutation(), currently the returning type
         // is private so cannot store.
+    }
+
+    ///
+    pub fn key_veriadic(&self, cur: &VerifyingKey<G1Affine>) {
+        log::info!("compare verfiying key with recorded vals from prev blocks");
+        self.key.values().for_each(|key| {
+            let prev = key.get_vk();
+            assert_eq!(prev.get_domain().extended_k(), cur.get_domain().extended_k());
+            assert_eq!(prev.fixed_commitments(), cur.fixed_commitments());
+            assert_eq!(prev.permutation().commitments(), cur.permutation().commitments());
+
+            let mut transcript = Blake2bWrite::<_, G1Affine, Challenge255<_>>::init(vec![]);
+            assert_eq!(
+                prev.hash_into(&mut transcript.clone()).unwrap(),
+                cur.hash_into(&mut transcript).unwrap()
+            );
+        });
     }
 
     /// Run integration test at a block identified by a tag.
@@ -285,24 +326,28 @@ impl<C: SubCircuit<Fr> + Circuit<Fr>> IntegrationTest<C> {
 
     /// Run integration test for a block number
     pub async fn test_block_by_number(&mut self, block_num: u64, actual: bool) {
-        let (builder, _) = gen_inputs(block_num).await;
-
         log::info!("test {} circuit, block: #{}", self.name, block_num);
-        let mut block = block_convert(&builder.block, &builder.code_db).unwrap();
-        block.randomness = Fr::from(TEST_MOCK_RANDOMNESS);
+        let block = self.get_block(block_num).await;
+        let min_rows = C::min_num_rows_block(&block);
         let circuit = C::new_from_block(&block);
         let instance = circuit.instance();
+        print_circuit_cost(&circuit, self.degree, min_rows);
 
         if actual {
-            let key = self.get_key();
+            log::info!("generate (pk, vk)");
+            let key = self.get_key(block_num, &circuit).await;
             self.test_actual(circuit, instance, key);
         } else {
+            log::info!("init mock prover");
             self.test_mock(&circuit, instance);
         }
     }
+
 }
 
-fn new_empty_block() -> Block<Fr> {
+
+///
+pub fn new_empty_block() -> Block<Fr> {
     let block: GethData = TestContext::<0, 0>::new(None, |_| {}, |_, _| {}, |b, _| b)
         .unwrap()
         .into();
@@ -314,11 +359,13 @@ fn new_empty_block() -> Block<Fr> {
     block_convert(&builder.block, &builder.code_db).unwrap()
 }
 
-fn get_general_params(degree: u32) -> ParamsKZG<Bn256> {
+///
+pub fn get_general_params(degree: u32) -> ParamsKZG<Bn256> {
     let mut map = GEN_PARAMS.lock().unwrap();
     match map.get(&degree) {
         Some(params) => params.clone(),
         None => {
+            log::info!("initialize degree #{} params", degree);
             let params = ParamsKZG::<Bn256>::setup(degree, RNG.clone());
             map.insert(degree, params.clone());
             params
@@ -327,16 +374,103 @@ fn get_general_params(degree: u32) -> ParamsKZG<Bn256> {
 }
 
 /// returns gen_inputs for a block number
-async fn gen_inputs(
+pub async fn gen_block(
     block_num: u64,
-) -> (
-    CircuitInputBuilder,
-    eth_types::Block<eth_types::Transaction>,
-) {
-    let cli = get_client();
+) -> Block<Fr> {
+    let cli = get_client(&GETH_L2_URL);
     let cli = BuilderClient::new(cli, CIRCUITS_PARAMS, Default::default())
         .await
         .unwrap();
 
-    cli.gen_inputs(block_num).await.unwrap()
+    let (builder, _) = cli.gen_inputs(block_num).await.unwrap();
+    block_convert(&builder.block, &builder.code_db).unwrap()
+}
+
+/// 
+pub fn gen_key<C: SubCircuit<Fr> + Circuit<Fr>>(circuit: &C, degree: u32) ->  ProvingKey<G1Affine> {
+    let general_params = get_general_params(degree);
+    let verifying_key =
+        keygen_vk(&general_params, circuit).expect("keygen_vk should not fail");
+    let key = keygen_pk(&general_params, verifying_key, circuit)
+        .expect("keygen_pk should not fail");
+    key
+}
+
+///
+pub fn print_cs_info<Fr: Field>(cs: &ConstraintSystem<Fr>) {
+    println!(
+        "Constraint System\nminimum_rows: {}\nblinding_factors: {}\ngates count: {}", 
+        cs.minimum_rows(),
+        cs.blinding_factors(),
+        cs.gates().len()
+    );
+}
+
+#[derive(Table)]
+struct Row {
+    #[table(title = "")]
+    name: &'static str,
+    #[table(title = "commitments")]
+    commitments: usize,
+    #[table(title = "evaluations")]
+    evaluations: usize,
+}
+
+impl Row {
+    fn set_name(&mut self, name: &'static str) {
+        self.name = name;
+    }
+}
+
+impl From<ProofContribution> for Row {
+    fn from(contribution: ProofContribution) -> Self {
+        Self {
+            name: "",
+            commitments: contribution.commitments,
+            evaluations: contribution.evaluations,
+        }
+    }
+}
+
+///
+pub fn print_circuit_cost<C: SubCircuit<Fr> + Circuit<Fr> + Debug>(
+    circuit: &C, 
+    degree: u32,
+    min_rows: (usize, usize),
+) {
+    let cost = CircuitCost::<G1, C>::measure(degree as usize, &circuit);
+    let ProofSize {
+        instance,
+        advice,
+        fixed,
+        lookups,
+        equality,
+        vanishing,
+        multiopen,
+        polycomm,
+        ..
+    } = cost.proof_size(1);
+    let mut rows: Vec<Row> = vec![
+        instance.into(),
+        advice.into(),
+        fixed.into(),
+        lookups.into(),
+        equality.into(),
+        vanishing.into(),
+        multiopen.into(),
+        polycomm.into(),
+    ];
+    rows[0].set_name("instance");
+    rows[1].set_name("advice");
+    rows[2].set_name("fixed");
+    rows[3].set_name("lookups");
+    rows[4].set_name("equality");
+    rows[5].set_name("vanishing");
+    rows[6].set_name("multiopen");
+    rows[7].set_name("polycomm");
+    
+    print_stdout(rows.with_title().separator(Separator::builder().build()))
+        .expect("the table renders");
+
+    println!("min_rows of block: {:?} min_rows with padding: {:?}\n{:?}", min_rows.0, min_rows.1, cost);
 }

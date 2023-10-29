@@ -12,21 +12,21 @@ lazy_static! {
 
 #[tokio::test]
 async fn test_get_chain_id() {
-    let cli = get_client();
+    let cli = get_client(&GETH_L2_URL);
     let chain_id = cli.get_chain_id().await.unwrap();
     assert_eq!(CHAIN_ID, chain_id);
 }
 
 #[tokio::test]
 async fn test_get_coinbase() {
-    let cli = get_client();
+    let cli = get_client(&GETH_L2_URL);
     let coinbase = cli.get_coinbase().await.unwrap();
     assert_eq!(GEN_DATA.coinbase, coinbase);
 }
 
 #[tokio::test]
 async fn test_get_block_by_number_by_hash() {
-    let cli = get_client();
+    let cli = get_client(&GETH_L2_URL);
     let block_by_num = cli.get_block_by_number(1.into()).await.unwrap();
     let block_by_hash = cli
         .get_block_by_hash(block_by_num.hash.unwrap())
@@ -43,7 +43,7 @@ async fn test_get_block_by_number_by_hash() {
 async fn test_trace_block_by_number_by_hash() {
     let block_num = GEN_DATA.deployments.get("Greeter").unwrap().0;
 
-    let cli = get_client();
+    let cli = get_client(&GETH_L2_URL);
     let block = cli.get_block_by_number(block_num.into()).await.unwrap();
     let trace_by_number = cli.trace_block_by_number(block_num.into()).await.unwrap();
     let trace_by_hash = cli.trace_block_by_hash(block.hash.unwrap()).await.unwrap();
@@ -62,7 +62,7 @@ async fn test_get_contract_code() {
         serde_json::from_reader(File::open(path_json).expect("cannot read file"))
             .expect("cannot deserialize json from file");
 
-    let cli = get_client();
+    let cli = get_client(&GETH_L2_URL);
     let code = cli.get_code(*address, (*block_num).into()).await.unwrap();
     assert_eq!(compiled.bin_runtime.to_vec(), code);
 }
@@ -79,7 +79,7 @@ async fn test_get_proof() {
     let expected_storage_proof: StorageProof =
         serde_json::from_str(expected_storage_proof_json).unwrap();
 
-    let cli = get_client();
+    let cli = get_client(&GETH_L2_URL);
     let keys = vec![Word::from(0)];
     let proof = cli
         .get_proof(*address, keys, (*block_num).into())

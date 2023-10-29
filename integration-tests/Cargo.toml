@@ -20,18 +20,19 @@ url = "2.2.2"
 pretty_assertions = "1.0.0"
 log = "0.4.14"
 env_logger = "0.9"
-halo2_proofs = { git = "https://github.com/privacy-scaling-explorations/halo2.git", tag = "v2023_04_20" }
+halo2_proofs = { git = "https://github.com/taikoxyz/halo2.git", branch = "integration-dependency" }
 rand_chacha = "0.3"
 paste = "1.0"
 rand_xorshift = "0.3.0"
 rand_core = "0.6.4"
 mock = { path = "../mock" }
+cli-table = { version = "0.4"}
 
 [dev-dependencies]
 pretty_assertions = "1.0.0"
 
 [features]
-default = []
+default = ["circuit_input_builder"]
 rpc = []
 circuit_input_builder = []
 circuits = []

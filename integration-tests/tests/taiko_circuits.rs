@@ -1,4 +1,4 @@
-use integration_tests::{TAIKO_BLOCK_ANCHOR_ONLY, TAIKO_BLOCK_TRANSFER_SUCCEED};
+use integration_tests::taiko_utils::{TAIKO_BLOCK_ANCHOR_ONLY, TAIKO_BLOCK_TRANSFER_SUCCEED};
 
 macro_rules! run_test {
     ($test_instance:expr, $block_num:expr, $real_prover:expr) => {
@@ -23,7 +23,7 @@ macro_rules! declare_tests {
 macro_rules! unroll_tests {
     ($($arg:tt),*) => {
         use paste::paste;
-        use integration_tests::integration_test_circuits::{
+        use integration_tests::circuits_utils::{
             EVM_CIRCUIT_TEST,
         };
         use integration_tests::log_init;
