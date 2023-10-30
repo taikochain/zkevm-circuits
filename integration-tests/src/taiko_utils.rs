@@ -28,19 +28,20 @@ const GOLDEN_TOUCH_ADDRESS: &str = "0000777735367b36bC9B61C50022d9D0700dB4Ec";
 const L1_SIGNAL_SERVICE: &str = "0x4c5859f0F772848b2D91F1D83E2Fe57935348029";
 const L2_SIGNAL_SERVICE: &str = "0x1000777700000000000000000000000000000007";
 const L2_CONTRACT: &str = "0x1000777700000000000000000000000000000001";
+
 const PROPOSAL_TX_METHOD_SIGNATURE: &str = "04dc4c8b";
 const GAS_LIMIT: u32 = 820000000;
 
 // Stateful
-const SIGNAL_ROOT: &str = "df09A0afD09a63fb04ab3573922437e1e637dE8b";
-const PROVER: &str = "df09A0afD09a63fb04ab3573922437e1e637dE8b";
-const EXTRA_DATA: &str = "fuck off";
-const GRAFFITI: &str = "fuck off";
-const DIFICULTY: &str = "000000";
+const PROVER: &str = "0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF";
+const EXTRA_DATA: &str = "0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF000000000000000000000000";
+const GRAFFITI: &str = "0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF000000000000000000000000";
+const DIFICULTY: &str = "0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF000000000000000000000000";
 
 fn gen_protocol_instance(
     l1_block: EthBlock<Transaction>,
     l2_block: EthBlock<Transaction>,
+    signal_root: H256,
     l2_parent_hash: H256,
 ) -> ProtocolInstance {
     let proposal_tx = filter_proposal_txs(&l1_block)
@@ -48,6 +49,7 @@ fn gen_protocol_instance(
         .expect("proposal_tx not found")
         .clone();
     let txlist = get_txlist_bytes(&proposal_tx);
+    #[warn(deprecated)]
     let block_evidence = BlockEvidence {
         blockMetadata: BlockMetadata {
             l1Hash: l1_block.hash.unwrap().as_fixed_bytes().into(),
@@ -63,7 +65,7 @@ fn gen_protocol_instance(
         },
         parentHash: l2_parent_hash.as_fixed_bytes().into(),
         blockHash: l2_block.hash.unwrap().as_fixed_bytes().into(),
-        signalRoot: to_fixed_bytes(SIGNAL_ROOT),
+        signalRoot: signal_root.as_fixed_bytes().into(),
         graffiti: to_fixed_bytes(GRAFFITI),
     };
 
@@ -87,7 +89,7 @@ pub async fn gen_block_with_instance(block_num: u64) -> Block<Fr> {
         block_convert(&builder.block, &builder.code_db).expect("block convert failed");
 
     // Get L1 block
-    let (_, _, l1_height, _) = get_anchor_tx_info(&filter_anchor_tx(&l2_block));
+    let (_, signal_root, l1_height, _) = get_anchor_tx_info(&filter_anchor_tx(&l2_block));
     let l1_block = get_client(&GETH_L1_URL)
         .get_block_by_number(BlockNumber::from(l1_height))
         .await
@@ -96,6 +98,7 @@ pub async fn gen_block_with_instance(block_num: u64) -> Block<Fr> {
     let protocol_instance = gen_protocol_instance(
         l1_block,
         l2_block,
+        signal_root,
         H256::from(
             witness_block.context.history_hashes[witness_block.context.history_hashes.len() - 1]
                 .to_be_bytes(),
@@ -186,7 +189,6 @@ pub fn get_anchor_tx_info(tx: &Transaction) -> (Hash, Hash, u64, u32) {
         decoded_calldata[2].clone().into_uint().unwrap().as_u64(),
         decoded_calldata[3].clone().into_uint().unwrap().as_u32(),
     );
-    println!("{:?}", res);
     res
 }
 
@@ -225,7 +227,6 @@ pub fn get_txlist_bytes(tx: &Transaction) -> Vec<u8> {
 
     let input_data = &tx.input[4..]; // Extract the remaining input data
     let decoded_calldata = function.decode_input(input_data).unwrap();
-    println!("{:?}", decoded_calldata);
     let txlist: Vec<u8> = decoded_calldata[3].clone().into_bytes().unwrap();
     txlist
 }

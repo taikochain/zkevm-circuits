@@ -44,5 +44,5 @@ macro_rules! unroll_tests {
 
 unroll_tests!(
     (circuit_block_anchor_only, 2000),
-    (circuit_block_transfer_succeed, 102)
+    (circuit_block_transfer_succeed, 2132)
 );
