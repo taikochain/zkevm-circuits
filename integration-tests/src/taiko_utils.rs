@@ -25,10 +25,10 @@ use zkevm_circuits::witness::{block_convert, Block};
 // Stateless
 const PROTOCOL_ADDRESS: &str = "0x610178dA211FEF7D417bC0e6FeD39F05609AD788";
 const GOLDEN_TOUCH_ADDRESS: &str = "0000777735367b36bC9B61C50022d9D0700dB4Ec";
-const L1_SIGNAL_SERVICE: &str = "1000777700000000000000000000000000000001";
-const L2_SIGNAL_SERVICE: &str = "1000777700000000000000000000000000000001";
-const L2_CONTRACT: &str = "1000777700000000000000000000000000000001";
-const PROPOSAL_TX_METHOD_SIGNATURE: &str = "ef16e845";
+const L1_SIGNAL_SERVICE: &str = "0x4c5859f0F772848b2D91F1D83E2Fe57935348029";
+const L2_SIGNAL_SERVICE: &str = "0x1000777700000000000000000000000000000007";
+const L2_CONTRACT: &str = "0x1000777700000000000000000000000000000001";
+const PROPOSAL_TX_METHOD_SIGNATURE: &str = "04dc4c8b";
 const GAS_LIMIT: u32 = 820000000;
 
 // Stateful
@@ -180,12 +180,14 @@ pub fn get_anchor_tx_info(tx: &Transaction) -> (Hash, Hash, u64, u32) {
         .unwrap()
         .try_into()
         .unwrap();
-    (
+    let res = (
         l1hash_bytes.into(),
         l1_sig_root_bytes.into(),
         decoded_calldata[2].clone().into_uint().unwrap().as_u64(),
         decoded_calldata[3].clone().into_uint().unwrap().as_u32(),
-    )
+    );
+    println!("{:?}", res);
+    res
 }
 
 ///
@@ -195,7 +197,17 @@ pub fn get_txlist_bytes(tx: &Transaction) -> Vec<u8> {
         name: "proposeBlock".to_owned(), // Replace with the function name
         inputs: vec![
             Param {
-                name: "input".to_owned(),
+                name: "txListHash".to_owned(),
+                kind: ParamType::FixedBytes(32),
+                internal_type: None,
+            },
+            Param {
+                name: "extraData".to_owned(),
+                kind: ParamType::FixedBytes(32),
+                internal_type: None,
+            },
+            Param {
+                name: "assignment".to_owned(),
                 kind: ParamType::Bytes,
                 internal_type: None,
             },
@@ -213,7 +225,8 @@ pub fn get_txlist_bytes(tx: &Transaction) -> Vec<u8> {
 
     let input_data = &tx.input[4..]; // Extract the remaining input data
     let decoded_calldata = function.decode_input(input_data).unwrap();
-    let txlist: Vec<u8> = decoded_calldata[1].clone().into_bytes().unwrap();
+    println!("{:?}", decoded_calldata);
+    let txlist: Vec<u8> = decoded_calldata[3].clone().into_bytes().unwrap();
     txlist
 }
 

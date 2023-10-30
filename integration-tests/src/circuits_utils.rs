@@ -43,6 +43,7 @@ use zkevm_circuits::{
     state_circuit::TestStateCircuit,
     super_circuit::SuperCircuit,
     tx_circuit::TestTxCircuit,
+    taiko_pi_circuit::TestTaikoPiCircuit,
     util::SubCircuit,
     witness::{block_convert, Block},
 };
@@ -81,6 +82,7 @@ pub const CIRCUITS_PARAMS: CircuitsParams = CircuitsParams {
 const EVM_CIRCUIT_DEGREE: u32 = 20;
 const STATE_CIRCUIT_DEGREE: u32 = 17;
 const TX_CIRCUIT_DEGREE: u32 = 20;
+const PI_CIRCUIT_DEGREE: u32 = 20;
 const BYTECODE_CIRCUIT_DEGREE: u32 = 16;
 const COPY_CIRCUIT_DEGREE: u32 = 16;
 const KECCAK_CIRCUIT_DEGREE: u32 = 16;
@@ -112,6 +114,10 @@ lazy_static! {
     /// Integration test for State circuit
     pub static ref TX_CIRCUIT_TEST: TokioMutex<IntegrationTest<TestTxCircuit<Fr>>> =
     TokioMutex::new(IntegrationTest::new("Tx", TX_CIRCUIT_DEGREE));
+
+    /// Integration test for State circuit
+    pub static ref PI_CIRCUIT_TEST: TokioMutex<IntegrationTest<TestTaikoPiCircuit<Fr>>> =
+    TokioMutex::new(IntegrationTest::new("Pi", PI_CIRCUIT_DEGREE));
 
     /// Integration test for Bytecode circuit
     pub static ref BYTECODE_CIRCUIT_TEST: TokioMutex<IntegrationTest<TestBytecodeCircuit<Fr>>> =

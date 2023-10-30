@@ -1,4 +1,4 @@
-use super::*;
+pub use super::*;
 
 #[cfg(any(feature = "test", test))]
 impl<F: Field> Circuit<F> for TaikoPiCircuit<F> {

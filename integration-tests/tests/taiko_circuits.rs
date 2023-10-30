@@ -13,7 +13,7 @@ macro_rules! declare_tests {
         paste! {
             #[tokio::test]
             async fn [<serial_test_evm_ $name>]() {
-                run_test! (EVM_CIRCUIT_TEST, $block_num, $real_prover);
+                run_test! (PI_CIRCUIT_TEST, $block_num, $real_prover);
             }
         }
     };
@@ -23,7 +23,7 @@ macro_rules! unroll_tests {
     ($($arg:tt),*) => {
         use paste::paste;
         use integration_tests::circuits_utils::{
-            EVM_CIRCUIT_TEST,
+            PI_CIRCUIT_TEST,
         };
         use integration_tests::log_init;
         mod real_prover {
@@ -43,6 +43,6 @@ macro_rules! unroll_tests {
 }
 
 unroll_tests!(
-    (circuit_block_anchor_only, 66),
-    (circuit_block_transfer_succeed, 88)
+    (circuit_block_anchor_only, 2000),
+    (circuit_block_transfer_succeed, 102)
 );

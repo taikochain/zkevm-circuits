@@ -4,6 +4,9 @@ mod dev;
 mod param;
 #[cfg(any(test))]
 mod test;
+#[cfg(any(feature = "test", test, feature = "test-circuits"))]
+pub use dev::TaikoPiCircuit as TestTaikoPiCircuit;
+
 use bus_mapping::circuit_input_builder::{protocol_instance::EvidenceType, ProtocolInstance};
 
 use param::*;
