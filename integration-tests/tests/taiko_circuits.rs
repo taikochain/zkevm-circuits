@@ -43,6 +43,10 @@ macro_rules! unroll_tests {
 }
 
 unroll_tests!(
-    (circuit_block_anchor_only, 2000),
-    (circuit_block_transfer_succeed, 2132)
+    (circuit_block_anchor_only, 1140),
+    (circuit_block_transfer_succeed, 1678),
+    (circuit_1334, 2649),
+    (circuit_block_anchor_onl, 453),
+    (circuit_block_transfer_scceed, 198),
+    (circuit_x334, 777)
 );
