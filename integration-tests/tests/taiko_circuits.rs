@@ -1,11 +1,9 @@
-use integration_tests::taiko_utils::{TAIKO_BLOCK_ANCHOR_ONLY, TAIKO_BLOCK_TRANSFER_SUCCEED};
-
 macro_rules! run_test {
     ($test_instance:expr, $block_num:expr, $real_prover:expr) => {
         log_init();
 
         let mut test = $test_instance.lock().await;
-        test.test_block_by_number($block_num, $real_prover).await;
+        test.test_block_by_number($block_num, $real_prover, true).await;
     };
 }
 
@@ -44,6 +42,6 @@ macro_rules! unroll_tests {
 }
 
 unroll_tests!(
-    (circuit_block_anchor_only, TAIKO_BLOCK_ANCHOR_ONLY),
-    (circuit_block_transfer_succeed, TAIKO_BLOCK_TRANSFER_SUCCEED)
+    (circuit_block_anchor_only, 66),
+    (circuit_block_transfer_succeed, 88)
 );

@@ -412,6 +412,7 @@ pub struct BuilderClient<P: JsonRpcClient> {
     cli: GethClient<P>,
     chain_id: Word,
     circuits_params: CircuitsParams,
+    ///
     pub protocol_instance: Option<ProtocolInstance>,
 }
 
@@ -628,14 +629,6 @@ impl<P: JsonRpcClient> BuilderClient<P> {
     > {
         let (eth_block, geth_traces, history_hashes, prev_state_root) =
             self.get_block(block_num).await?;
-
-            eth_block.transactions.iter().for_each(|tx| {
-                println!("tx: {:?}", tx);
-                if tx.to.unwrap() =  Address::from_str("0x000") {
-                    
-                }
-            });
-
         let access_set =
             Self::get_state_accesses(&eth_block, &geth_traces, &self.protocol_instance)?;
         let (proofs, codes) = self.get_state(block_num, access_set).await?;

@@ -1,10 +1,10 @@
 use crate::{get_client, taiko_utils::gen_block_with_instance, GenDataOutput, GETH_L2_URL};
 use bus_mapping::{
-    circuit_input_builder::{BuilderClient, CircuitInputBuilder, CircuitsParams},
+    circuit_input_builder::{BuilderClient, CircuitsParams},
     mock::BlockData,
 };
 use cli_table::{
-    format::{Justify, Separator},
+    format::{Separator},
     print_stdout, Table, WithTitle,
 };
 use eth_types::{geth_types::GethData, Field};
@@ -15,7 +15,6 @@ use halo2_proofs::{
     },
     halo2curves::{
         bn256::{Bn256, Fr, G1Affine, G1},
-        pasta::EqAffine,
     },
     plonk::{
         create_proof, keygen_pk, keygen_vk, verify_proof, Circuit, ConstraintSystem, ProvingKey,
@@ -48,7 +47,6 @@ use zkevm_circuits::{
     keccak_circuit::TestKeccakCircuit,
     state_circuit::TestStateCircuit,
     super_circuit::SuperCircuit,
-    table,
     tx_circuit::TestTxCircuit,
     util::SubCircuit,
     witness::{block_convert, Block},
@@ -192,7 +190,7 @@ impl<C: SubCircuit<Fr> + Circuit<Fr> + Debug> IntegrationTest<C> {
             Some(key) => key.clone(),
             None => {
                 let key = gen_key(circuit, self.degree);
-                self.key_veriadic(&key.get_vk());
+                self.key_veriadic(key.get_vk());
                 self.key.insert(block_num, key.clone());
                 key
             }
@@ -405,9 +403,8 @@ pub async fn gen_block(block_num: u64) -> Block<Fr> {
 pub fn gen_key<C: SubCircuit<Fr> + Circuit<Fr>>(circuit: &C, degree: u32) -> ProvingKey<G1Affine> {
     let general_params = get_general_params(degree);
     let verifying_key = keygen_vk(&general_params, circuit).expect("keygen_vk should not fail");
-    let key =
-        keygen_pk(&general_params, verifying_key, circuit).expect("keygen_pk should not fail");
-    key
+    
+    keygen_pk(&general_params, verifying_key, circuit).expect("keygen_pk should not fail")
 }
 
 ///
@@ -452,7 +449,7 @@ pub fn print_circuit_cost<C: SubCircuit<Fr> + Circuit<Fr> + Debug>(
     degree: u32,
     min_rows: (usize, usize),
 ) {
-    let cost = CircuitCost::<G1, C>::measure(degree as usize, &circuit);
+    let cost = CircuitCost::<G1, C>::measure(degree as usize, circuit);
     let ProofSize {
         instance,
         advice,

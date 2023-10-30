@@ -6,7 +6,7 @@ use std::str::FromStr;
 
 use bus_mapping::{
     circuit_input_builder::{
-        protocol_instance::{self, BlockEvidence},
+        protocol_instance::{BlockEvidence},
         BlockMetadata, BuilderClient, ProtocolInstance,
     },
     rpc::BlockNumber,
@@ -17,18 +17,16 @@ use ethers::{
     utils::{hex, keccak256},
 };
 use halo2_proofs::{
-    halo2curves::bn256::{Fr, G1Affine},
-    plonk::{keygen_pk, keygen_vk, Circuit, ProvingKey},
+    halo2curves::bn256::{Fr},
 };
 
 use crate::{
-    circuits_utils::{get_general_params, IntegrationTest, CIRCUITS_PARAMS},
+    circuits_utils::{CIRCUITS_PARAMS},
     get_client, GETH_L1_URL, GETH_L2_URL,
 };
 use alloy_primitives::FixedBytes;
-use testool::{parse_address, parse_hash};
+
 use zkevm_circuits::{
-    util::SubCircuit,
     witness::{block_convert, Block},
 };
 

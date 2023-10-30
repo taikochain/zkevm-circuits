@@ -2,7 +2,6 @@
 
 use integration_tests::{
     log_init,
-    taiko_utils::{TAIKO_BLOCK_ANCHOR_ONLY, TAIKO_BLOCK_TRANSFER_SUCCEED},
 };
 
 macro_rules! declare_tests {
@@ -20,11 +19,11 @@ macro_rules! declare_tests {
 // only one anchor
 declare_tests!(
     test_circuit_input_builder_block_anchor_only,
-    TAIKO_BLOCK_ANCHOR_ONLY
+    66
 );
 // This test builds the complete circuit inputs for the block that has
 // ERC20 transfer
 declare_tests!(
     test_circuit_input_builder_block_transfer_succeed,
-    TAIKO_BLOCK_TRANSFER_SUCCEED
+    88
 );
