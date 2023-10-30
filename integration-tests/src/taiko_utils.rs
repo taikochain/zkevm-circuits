@@ -1,14 +1,20 @@
-/// Public data circuits verifies the things related to public data, s///uch as rlp decoding txlist and
+/// Public data circuits verifies the things related to public data, s///uch as rlp decoding
+/// txlist and
 // public data itself. for examplp: rlp decoding, we need to parse pub fn calldata from every
 // proposalBlock call and give txlist bytes to the circuit.
-
 use std::str::FromStr;
 
-use bus_mapping::circuit_input_builder::{BuilderClient, ProtocolInstance, protocol_instance::BlockEvidence, BlockMetadata};
-use eth_types::{Address, Block as EthBlock, Hash, Transaction};
+use bus_mapping::{
+    circuit_input_builder::{
+        protocol_instance::{self, BlockEvidence},
+        BlockMetadata, BuilderClient, ProtocolInstance,
+    },
+    rpc::BlockNumber,
+};
+use eth_types::{Address, Block as EthBlock, Hash, ToBigEndian, Transaction, H256};
 use ethers::{
     abi::{Function, Param, ParamType, StateMutability},
-    utils::hex,
+    utils::{hex, keccak256},
 };
 use halo2_proofs::{
     halo2curves::bn256::{Fr, G1Affine},
@@ -16,94 +22,101 @@ use halo2_proofs::{
 };
 
 use crate::{
-    get_client,
     circuits_utils::{get_general_params, IntegrationTest, CIRCUITS_PARAMS},
-    GETH_L2_URL,
+    get_client, GETH_L1_URL, GETH_L2_URL,
 };
+use alloy_primitives::FixedBytes;
 use testool::{parse_address, parse_hash};
 use zkevm_circuits::{
     util::SubCircuit,
     witness::{block_convert, Block},
 };
 
-
-/// Block explorer URL is https://explorer.internal.taiko.xyz
-/// The block that has only one anchor
-pub const TAIKO_BLOCK_ANCHOR_ONLY: u64 = 5368;
-/// The block that has ERC20 transfer
-pub const TAIKO_BLOCK_TRANSFER_SUCCEED: u64 = 1270;
-
-/// sepolia protocal address
-const ID: u64 = 31336;
-
-const TIMESTAMP: u64 = 1694510352;
-const L1_HEIGHT: u64 = 4272887;
-
+// Stateless
 const PROTOCOL_ADDRESS: &str = "0x610178dA211FEF7D417bC0e6FeD39F05609AD788";
-const PROPOSAL_TX_METHOD_SIGNATURE: &str = "ef16e845";
-
-/// testnet golden touch address
 const GOLDEN_TOUCH_ADDRESS: &str = "0000777735367b36bC9B61C50022d9D0700dB4Ec";
-const L1_HASH: &str = "6e3b781b2d9a04e21ecba49e67dc3fb0a8242408cc07fa6fed5d8bd0eca2c985";
-const DIFICULTY: &str = "000000";
-const L1_MIX_HASH: &str = "0000000000000000000000000000000000000000000000000000000000000000";
-const DEPOSITS_PROCESSED: &str = "56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421";
-const TX_LIST_HASH: &str = "569e75fc77c1a856f6daaf9e69d8a9566ca34aa47f9133711ce065a571af0cfd";
-const TX_LIST_BYTE_START: u32 = 0;
-const TX_LIST_BYTE_END: u32 = 0;
-const GAS_LIMIT: u32 = 820000000;
-const BENEFICIARY: &str = "0000777700000000000000000000000000000001";
-const TREASURY: &str = "df09A0afD09a63fb04ab3573922437e1e637dE8b";
-const BLOCK_HASH: &str = "df09A0afD09a63fb04ab3573922437e1e637dE8b";
-const PARENT_HASH: &str = "df09A0afD09a63fb04ab3573922437e1e637dE8b";
-const SIGNAL_ROOT: &str = "df09A0afD09a63fb04ab3573922437e1e637dE8b";
-const GRAFFITI: &str = "df09A0afD09a63fb04ab3573922437e1e637dE8b";
-const PROVER: &str = "df09A0afD09a63fb04ab3573922437e1e637dE8b";
-const GAS_USED: u32 = 141003;
-const PARENT_GAS_USED: u32 = 123960;
-const BLOCK_MAX_GAS_LIMIT: u64 = 6000000;
-const MAX_TRANSACTIONS_PER_BLOCK: u64 = 79;
-const MAX_BYTES_PER_TX_LIST: u64 = 120000;
 const L1_SIGNAL_SERVICE: &str = "1000777700000000000000000000000000000001";
 const L2_SIGNAL_SERVICE: &str = "1000777700000000000000000000000000000001";
 const L2_CONTRACT: &str = "1000777700000000000000000000000000000001";
-const ANCHOR_GAS_LIMIT: u64 = 180000;
+const PROPOSAL_TX_METHOD_SIGNATURE: &str = "ef16e845";
+const GAS_LIMIT: u32 = 820000000;
 
+// Stateful
+const SIGNAL_ROOT: &str = "df09A0afD09a63fb04ab3573922437e1e637dE8b";
+const PROVER: &str = "df09A0afD09a63fb04ab3573922437e1e637dE8b";
+const EXTRA_DATA: &str = "fuck off";
+const GRAFFITI: &str = "fuck off";
+const DIFICULTY: &str = "000000";
 
-async fn gen_block_with_instance(block_num: u64) -> Block<Fr> {
+fn gen_protocol_instance(
+    l1_block: EthBlock<Transaction>,
+    l2_block: EthBlock<Transaction>,
+    l2_parent_hash: H256,
+) -> ProtocolInstance {
+    let proposal_tx = filter_proposal_txs(&l1_block)
+        .last()
+        .expect("proposal_tx not found")
+        .clone();
+    let txlist = get_txlist_bytes(&proposal_tx);
     let block_evidence = BlockEvidence {
         blockMetadata: BlockMetadata {
-            l1Hash: L1_HASH,
-            difficulty: DIFICULTY,
-            txListHash: L1_MIX_HASH,
-            id: ID,
-            timestamp: TIMESTAMP,
-            l1Height: L1_HEIGHT,
+            l1Hash: l1_block.hash.unwrap().as_fixed_bytes().into(),
+            difficulty: to_fixed_bytes(DIFICULTY),
+            txListHash: keccak256(txlist).into(),
+            extraData: to_fixed_bytes(EXTRA_DATA),
+            id: l2_block.number.unwrap().as_u64(),
+            timestamp: l1_block.timestamp.as_u64(),
+            l1Height: l1_block.number.unwrap().as_u64() - 1,
             gasLimit: GAS_LIMIT,
-            coinbase: BENEFICIARY,
+            coinbase: proposal_tx.from.as_fixed_bytes().into(),
             depositsProcessed: vec![],
         },
-        parentHash: PARENT_HASH,
-        blockHash: BLOCK_HASH,
-        signalRoot: SIGNAL_ROOT,
-        graffiti: GRAFFITI,
+        parentHash: l2_parent_hash.as_fixed_bytes().into(),
+        blockHash: l2_block.hash.unwrap().as_fixed_bytes().into(),
+        signalRoot: to_fixed_bytes(SIGNAL_ROOT),
+        graffiti: to_fixed_bytes(GRAFFITI),
     };
 
-    let instance = ProtocolInstance {
+    ProtocolInstance {
         block_evidence,
-        prover: PROVER,
-    };
+        prover: PROVER.parse().unwrap(),
+    }
+}
+
+/// Specify the target l2 block, then filter the Anchor for l1_height,
+/// retrieve the l1 block where the l2 block is proposed,
+/// then generate the protocol instance with both avaliable blocks info.
+pub async fn gen_block_with_instance(block_num: u64) -> Block<Fr> {
+    // Get L2 block
     let cli = get_client(&GETH_L2_URL);
-    let cli = BuilderClient::new(cli, CIRCUITS_PARAMS, Some(instance.clone()))
+    let cli = BuilderClient::new(cli, CIRCUITS_PARAMS, None)
+        .await
+        .unwrap();
+    let (builder, l2_block) = cli.gen_inputs(block_num).await.unwrap();
+    let mut witness_block =
+        block_convert(&builder.block, &builder.code_db).expect("block convert failed");
+
+    // Get L1 block
+    let (_, _, l1_height, _) = get_anchor_tx_info(&filter_anchor_tx(&l2_block));
+    let l1_block = get_client(&GETH_L1_URL)
+        .get_block_by_number(BlockNumber::from(l1_height))
         .await
         .unwrap();
 
-    let (builder, _) = cli.gen_inputs(block_num).await.unwrap();
-    block_convert(&builder.block, &builder.code_db).expect("block convert failed")
+    let protocol_instance = gen_protocol_instance(
+        l1_block,
+        l2_block,
+        H256::from(
+            witness_block.context.history_hashes[witness_block.context.history_hashes.len() - 1]
+                .to_be_bytes(),
+        ),
+    );
+    witness_block.protocol_instance = Some(protocol_instance);
+    witness_block
 }
 
-
-///
+/// Get the proposed txlist from L1 by filtering the txs to PROTOCOL_ADDRESS
+/// and blockPropose method signature.
 pub fn filter_proposal_txs(block: &EthBlock<Transaction>) -> Vec<Transaction> {
     let protocol_address = Address::from_str(PROTOCOL_ADDRESS).unwrap();
     block
@@ -129,7 +142,7 @@ pub fn filter_anchor_tx(block: &EthBlock<Transaction>) -> Transaction {
     block.transactions[0].clone()
 }
 
-///abi: anchor(bytes32 l1Hash, bytes32 l1SignalRoot, uint64 l1Height, uint32 parentGasUsed)
+/// abi: anchor(bytes32 l1Hash, bytes32 l1SignalRoot, uint64 l1Height, uint32 parentGasUsed)
 pub fn get_anchor_tx_info(tx: &Transaction) -> (Hash, Hash, u64, u32) {
     #[allow(deprecated)]
     let function = Function {
@@ -184,6 +197,7 @@ pub fn get_anchor_tx_info(tx: &Transaction) -> (Hash, Hash, u64, u32) {
         decoded_calldata[3].clone().into_uint().unwrap().as_u32(),
     )
 }
+
 ///
 pub fn get_txlist_bytes(tx: &Transaction) -> Vec<u8> {
     #[allow(deprecated)]
@@ -211,4 +225,9 @@ pub fn get_txlist_bytes(tx: &Transaction) -> Vec<u8> {
     let decoded_calldata = function.decode_input(input_data).unwrap();
     let txlist: Vec<u8> = decoded_calldata[1].clone().into_bytes().unwrap();
     txlist
+}
+
+#[inline]
+fn to_fixed_bytes(s: &str) -> FixedBytes<32> {
+    H256::from_str(s).unwrap().as_fixed_bytes().into()
 }

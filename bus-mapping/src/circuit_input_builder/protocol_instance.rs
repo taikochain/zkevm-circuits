@@ -8,6 +8,7 @@ use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use sha3::{Digest, Keccak256};
 use std::{iter, str::FromStr};
+use alloy_primitives::FixedBytes;
 
 ///
 pub static L1_SIGNAL_SERVICE: Lazy<Address> = Lazy::new(|| {

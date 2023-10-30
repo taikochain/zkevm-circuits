@@ -1,8 +1,8 @@
 #![cfg(feature = "circuit_input_builder")]
 
 use integration_tests::{
-    log_init, 
-    taiko_utils::{TAIKO_BLOCK_ANCHOR_ONLY, TAIKO_BLOCK_TRANSFER_SUCCEED}
+    log_init,
+    taiko_utils::{TAIKO_BLOCK_ANCHOR_ONLY, TAIKO_BLOCK_TRANSFER_SUCCEED},
 };
 
 macro_rules! declare_tests {

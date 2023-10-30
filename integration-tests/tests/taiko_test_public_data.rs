@@ -9,12 +9,13 @@ macro_rules! declare_l1_tests {
         /// Get the proposed txlist from L1 and compare the last tx bytes with the expected bytes.
         #[tokio::test]
         async fn $test_name() {
-            use integration_tests::{
-                get_client, log_init,GETH_L1_URL,
-                taiko_utils::{filter_proposal_txs, get_txlist_bytes},
-            };
-            use ethers::utils::hex;
             use bus_mapping::rpc::BlockNumber;
+            use ethers::utils::hex;
+            use integration_tests::{
+                get_client, log_init,
+                taiko_utils::{filter_proposal_txs, get_txlist_bytes},
+                GETH_L1_URL,
+            };
             log_init();
             let block = get_client(&GETH_L1_URL)
                 .get_block_by_number(BlockNumber::from($block_num))
@@ -30,11 +31,12 @@ macro_rules! declare_l1_tests {
         /// Decode each tx in txlist with rlp
         #[tokio::test]
         async fn $test_name() {
-            use integration_tests::{
-                get_client, log_init,GETH_L1_URL,
-                taiko_utils::{filter_proposal_txs, get_txlist_bytes},
-            };
             use bus_mapping::rpc::BlockNumber;
+            use integration_tests::{
+                get_client, log_init,
+                taiko_utils::{filter_proposal_txs, get_txlist_bytes},
+                GETH_L1_URL,
+            };
             log_init();
             let block = get_client(&GETH_L1_URL)
                 .get_block_by_number(BlockNumber::from($block_num))
@@ -65,11 +67,12 @@ macro_rules! declare_l2_tests {
         /// (l1Hash, l1SignalRoot, l1Height, parentGasUsed)
         #[tokio::test]
         async fn $test_name() {
-            use integration_tests::{
-                get_client, GETH_L2_URL,
-                taiko_utils::{filter_anchor_tx, get_anchor_tx_info},
-            };
             use bus_mapping::rpc::BlockNumber;
+            use integration_tests::{
+                get_client,
+                taiko_utils::{filter_anchor_tx, get_anchor_tx_info},
+                GETH_L2_URL,
+            };
             let block = get_client(&GETH_L2_URL)
                 .get_block_by_number(BlockNumber::from($block_num))
                 .await
@@ -84,12 +87,12 @@ macro_rules! declare_l2_tests {
         /// Decode each tx in txlist with rlp
         #[tokio::test]
         async fn $test_name() {
+            use halo2_proofs::{arithmetic::Field, halo2curves::bn256::Fr};
             use integration_tests::{
-                integration_tests::get_client,
                 circuits_utils::IntegrationTest,
+                integration_tests::get_client,
                 taiko_utils::{filter_anchor_tx, get_anchor_tx_info, ProtocolInstanceTest},
             };
-            use halo2_proofs::{arithmetic::Field, halo2curves::bn256::Fr};
             use lazy_static::lazy_static;
             use zkevm_circuits::{super_circuit::SuperCircuit, util::SubCircuit};
             let mut taiko_test = IntegrationTest::new("TAIKO_TEST", TAIKO_CIRCUIT_DEGREE);
@@ -105,7 +108,6 @@ macro_rules! declare_l2_tests {
         }
     };
 }
-
 
 declare_l2_tests!(
     test_get_anchor_tx,
