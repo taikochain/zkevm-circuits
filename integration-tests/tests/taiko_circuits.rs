@@ -3,7 +3,8 @@ macro_rules! run_test {
         log_init();
 
         let mut test = $test_instance.lock().await;
-        test.test_block_by_number($block_num, $real_prover, true).await;
+        test.test_block_by_number($block_num, $real_prover, true)
+            .await;
     };
 }
 

@@ -3,19 +3,14 @@ use bus_mapping::{
     circuit_input_builder::{BuilderClient, CircuitsParams},
     mock::BlockData,
 };
-use cli_table::{
-    format::{Separator},
-    print_stdout, Table, WithTitle,
-};
+use cli_table::{format::Separator, print_stdout, Table, WithTitle};
 use eth_types::{geth_types::GethData, Field};
 use halo2_proofs::{
     dev::{
         cost::{ProofContribution, ProofSize},
         CellValue, CircuitCost, MockProver,
     },
-    halo2curves::{
-        bn256::{Bn256, Fr, G1Affine, G1},
-    },
+    halo2curves::bn256::{Bn256, Fr, G1Affine, G1},
     plonk::{
         create_proof, keygen_pk, keygen_vk, verify_proof, Circuit, ConstraintSystem, ProvingKey,
         VerifyingKey,
@@ -403,7 +398,7 @@ pub async fn gen_block(block_num: u64) -> Block<Fr> {
 pub fn gen_key<C: SubCircuit<Fr> + Circuit<Fr>>(circuit: &C, degree: u32) -> ProvingKey<G1Affine> {
     let general_params = get_general_params(degree);
     let verifying_key = keygen_vk(&general_params, circuit).expect("keygen_vk should not fail");
-    
+
     keygen_pk(&general_params, verifying_key, circuit).expect("keygen_pk should not fail")
 }
 

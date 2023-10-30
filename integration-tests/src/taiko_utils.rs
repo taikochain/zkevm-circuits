@@ -6,8 +6,7 @@ use std::str::FromStr;
 
 use bus_mapping::{
     circuit_input_builder::{
-        protocol_instance::{BlockEvidence},
-        BlockMetadata, BuilderClient, ProtocolInstance,
+        protocol_instance::BlockEvidence, BlockMetadata, BuilderClient, ProtocolInstance,
     },
     rpc::BlockNumber,
 };
@@ -16,19 +15,12 @@ use ethers::{
     abi::{Function, Param, ParamType, StateMutability},
     utils::{hex, keccak256},
 };
-use halo2_proofs::{
-    halo2curves::bn256::{Fr},
-};
+use halo2_proofs::halo2curves::bn256::Fr;
 
-use crate::{
-    circuits_utils::{CIRCUITS_PARAMS},
-    get_client, GETH_L1_URL, GETH_L2_URL,
-};
+use crate::{circuits_utils::CIRCUITS_PARAMS, get_client, GETH_L1_URL, GETH_L2_URL};
 use alloy_primitives::FixedBytes;
 
-use zkevm_circuits::{
-    witness::{block_convert, Block},
-};
+use zkevm_circuits::witness::{block_convert, Block};
 
 // Stateless
 const PROTOCOL_ADDRESS: &str = "0x610178dA211FEF7D417bC0e6FeD39F05609AD788";

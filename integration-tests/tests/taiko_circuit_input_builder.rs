@@ -1,8 +1,6 @@
 #![cfg(feature = "circuit_input_builder")]
 
-use integration_tests::{
-    log_init,
-};
+use integration_tests::log_init;
 
 macro_rules! declare_tests {
     ($test_name:ident, $block_num:expr) => {
@@ -17,13 +15,7 @@ macro_rules! declare_tests {
 
 // This test builds the complete circuit inputs for the block that has
 // only one anchor
-declare_tests!(
-    test_circuit_input_builder_block_anchor_only,
-    66
-);
+declare_tests!(test_circuit_input_builder_block_anchor_only, 66);
 // This test builds the complete circuit inputs for the block that has
 // ERC20 transfer
-declare_tests!(
-    test_circuit_input_builder_block_transfer_succeed,
-    88
-);
+declare_tests!(test_circuit_input_builder_block_transfer_succeed, 88);
