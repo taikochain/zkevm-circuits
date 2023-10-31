@@ -4,7 +4,7 @@ set -eo pipefail
 GITHUB_RUN_ID=$1
 REPOSITORY_URL=$2
 BRANCH_NAME=$3
-CIRCUIT=$4
+PROVER=$4
 
 ensure_git_installed() {
   if ! command -v git &>/dev/null; then
@@ -19,9 +19,9 @@ ensure_git_installed() {
 ensure_git_installed
 
 clone_zkevm-circuits() {
-  git clone -q https://github.com/taikoxyz/zkevm-circuits.git
+  git clone -q https://github.com/krzysztofpaliga/zkevm-circuits.git
   cd zkevm-circuits || exit 1
-  git checkout "$BRANCH_NAME"
+  git checkout krzysztofpaliga/integration_bench
   echo "Cloned zkevm-circuits"
 }
 
@@ -31,9 +31,10 @@ cd "$directory_name" || exit 1
 
 clone_zkevm-circuits
 
-cd .github/cloudRun || exit 1
+cd .github/integrationBenchScripts || exit 1
 chmod u+x cloud-tests-local-trigger.sh
-./cloud-tests-local-trigger.sh "$GITHUB_RUN_ID" "$REPOSITORY_URL" "$BRANCH_NAME" "$CIRCUIT"
+echo "Triggering ./cloud-tests-local-trigger.sh with $GITHUB_RUN_ID $REPOSITORY_URL $BRANCH_NAME $PROVER"
+./cloud-tests-local-trigger.sh "$GITHUB_RUN_ID" "$REPOSITORY_URL" "$BRANCH_NAME" "$PROVER"
 RESULT=$?
 echo "exiting cloud-tests-trigger with result $RESULT"
 exit $RESULT

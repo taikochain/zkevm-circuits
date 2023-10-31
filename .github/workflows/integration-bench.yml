@@ -9,14 +9,19 @@ on:
       BRANCH_NAME:
         description: 'BRANCH_NAME'
         required: true
-      CIRCUIT:
-        description: 'CIRCUIT_NAME'
+#      CIRCUIT:
+#        description: 'CIRCUIT_NAME'
+#        required: true
+      PROVER:
+        description: 'Select Prover'
         required: true
+        type: choice
+        options: ["Mock", "Real"]
 env:
   BENCH_RESULTS_PASS: ${{ secrets.BENCH_RESULTS_PASS }}
 
 jobs:
-  taiko-cloud-run:
+  integration_benchmark:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout the repository
@@ -37,7 +42,8 @@ jobs:
           GITHUB_RUN_ID: ${{ vars.GITHUB_RUN_ID }}
           REPOSITORY_URL: ${{ inputs.REPOSITORY_URL || github.event.client_payload.REPOSITORY_URL }}
           BRANCH_NAME: ${{ inputs.BRANCH_NAME || github.event.client_payload.BRANCH_NAME }}
-          CIRCUIT: ${{ inputs.CIRCUIT || github.event.client_payload.CIRCUIT }}
+#          CIRCUIT: ${{ inputs.CIRCUIT || github.event.client_payload.CIRCUIT }}
+          PROVER: ${{ github.event.inputs.PROVER }}
 
       - name: Cleanup
         run: |
