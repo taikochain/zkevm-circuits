@@ -14,6 +14,7 @@ use eth_types::{self, Field, ToLittleEndian};
 use halo2_proofs::plonk::{Expression, Instance, SecondPhase};
 use itertools::Itertools;
 use param::*;
+use bus_mapping::circuit_input_builder::Chunk;
 
 use crate::{
     evm_circuit::{
@@ -1315,6 +1316,10 @@ impl<F: Field> SubCircuit<F> for PiCircuit<F> {
             block.circuits_params.max_calldata,
             public_data,
         )
+    }
+
+    fn new_from_chunk(chunk: &Chunk<F>) -> Self {
+        Self::new_from_block(chunk.block)
     }
 
     /// Return the minimum number of rows required to prove the block

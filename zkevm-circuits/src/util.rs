@@ -152,6 +152,8 @@ pub trait SubCircuit<F: Field> {
     /// Create a new SubCircuit from a witness Block
     fn new_from_block(block: &witness::Block<F>) -> Self;
 
+    fn new_from_chunk(chunk: &Chunk<F>) -> Self;
+
     /// Returns the instance columns required for this circuit.
     fn instance(&self) -> Vec<Vec<F>> {
         vec![]

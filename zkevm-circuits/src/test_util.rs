@@ -7,7 +7,7 @@ use crate::{
     witness::{Block, Rw},
 };
 use bus_mapping::{
-    circuit_input_builder::{ChunkContext, FixedCParams},
+    circuit_input_builder::{Chunk, ChunkContext, FixedCParams},
     mock::BlockData,
 };
 use eth_types::geth_types::GethData;
@@ -185,6 +185,12 @@ impl<const NACC: usize, const NTX: usize> CircuitTestBuilder<NACC, NTX> {
     /// circuit checks to the provers generated for the State and EVM circuits.
     pub fn run(self) {
         self.run_with_chunkctx(None);
+    }
+
+    // TODO(chunking)
+    fn chunk_block(block: &[Block]) -> Vec<Chunk>
+    {
+        
     }
 
     /// run with chunk context

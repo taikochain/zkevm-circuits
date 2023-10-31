@@ -248,14 +248,40 @@ impl<'a, C: CircuitsParams> CircuitInputBuilder<C> {
 
         for (index, geth_step) in geth_trace.struct_logs.iter().enumerate() {
             let mut state_ref = self.state_ref(&mut tx, &mut tx_ctx);
+            let chunk_index_before = state_ref.chunk_ctx.unwrap().chunk_index;
+
             log::trace!("handle {}th opcode {:?} ", index, geth_step.op);
-            let exec_steps = gen_associated_ops(
+            let mut exec_steps = gen_associated_ops(
                 &geth_step.op,
                 &mut state_ref,
                 &geth_trace.struct_logs[index..],
             )?;
+
+            // chunk_ctx.chunk_index;
+            // chunk_ctx.end_rwc;
+
+            // TODO(chunking): a TX could consume several chunks
+            let mut begin_chunk = self.block.block_steps.begin_chunk.clone();
+            let mut end_chunk = self.block.block_steps.end_chunk.clone().unwrap();
+            self.gen_chunk_associated_steps(&mut end_chunk, RW::WRITE);
+            self.gen_chunk_associated_steps(&mut begin_chunk, RW::WRITE);
+            if chunk_index_before < state_ref.chunk_ctx.unwrap().chunk_index {
+                for (i, step) in exec_steps.iter().enumerate() {
+                    // TODO(chunking): locate the last execop of the chunk
+                    // step.rwc_inner_chunk
+
+                    // TODO(chunking): insert BeginChunk and EndChunk only if we are not at the last chunk
+                    if !chunk_ctx.is_last_chunk() {
+
+                    }
+                };
+            }
+
             tx.steps_mut().extend(exec_steps);
+
         }
+
+
 
         // Generate EndTx step
         let end_tx_step =
@@ -268,8 +294,8 @@ impl<'a, C: CircuitsParams> CircuitInputBuilder<C> {
         Ok(())
     }
 
-    // TODO Fix this, for current logic on processing `call` is incorrect
-    // TODO re-design `gen_chunk_associated_steps` to separate RW
+    // TODO(chunking) Fix this, for current logic on processing `call` is incorrect
+    // TODO(chunking) re-design `gen_chunk_associated_steps` to separate RW
     fn gen_chunk_associated_steps(&mut self, step: &mut ExecStep, rw: RW) {
         let STEP_STATE_LEN = 10;
         let mut dummy_tx = Transaction::default();
@@ -428,7 +454,7 @@ impl CircuitInputBuilder<FixedCParams> {
                 StartOp {},
             );
         }
-        // TODO fix below to adapt multiple chunk
+        // TODO(chunking) fix below to adapt multiple chunk
         if max_rws - total_rws > 1 {
             let (padding_start, padding_end) = (total_rws + 1, max_rws - 1);
             push_op(
@@ -502,7 +528,7 @@ impl CircuitInputBuilder<FixedCParams> {
                 StartOp {},
             );
         }
-        // TODO fix below to adapt multiple chunk
+        // TODO(chunking) fix below to adapt multiple chunk
         if max_rws - total_inner_rws > 1 {
             let (padding_start, padding_end) = (total_inner_rws + 1, max_rws - 1);
             push_op(
@@ -969,4 +995,14 @@ impl<P: JsonRpcClient> BuilderClient<P> {
         )?;
         Ok((builder, eth_block))
     }
+}
+
+#[cfg(test)]
+mod test {
+
+    #[test]
+    fn test_chunking() {
+
+    }
+
 }

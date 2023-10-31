@@ -318,6 +318,30 @@ impl<F: Field> SubCircuit<F> for SuperCircuit<F> {
         }
     }
 
+    fn new_from_chunk(chunk: &Chunk<F>) -> Self {
+        let evm_circuit = EvmCircuit::new_from_chunk(block);
+        let state_circuit = StateCircuit::new_from_chunk(block);
+        let tx_circuit = TxCircuit::new_from_chunk(block);
+        let pi_circuit = PiCircuit::new_from_chunk(block);
+        let bytecode_circuit = BytecodeCircuit::new_from_chunk(block);
+        let copy_circuit = CopyCircuit::new_from_chunk_no_external(block);
+        let exp_circuit = ExpCircuit::new_from_chunk(block);
+        let keccak_circuit = KeccakCircuit::new_from_chunk(block);
+
+        SuperCircuit::<_> {
+            evm_circuit,
+            state_circuit,
+            tx_circuit,
+            pi_circuit,
+            bytecode_circuit,
+            copy_circuit,
+            exp_circuit,
+            keccak_circuit,
+            circuits_params: block.circuits_params,
+            mock_randomness: block.randomness,
+        }
+    }
+
     /// Returns suitable inputs for the SuperCircuit.
     fn instance(&self) -> Vec<Vec<F>> {
         let mut instance = Vec::new();

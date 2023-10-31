@@ -15,6 +15,7 @@ use crate::{
     witness,
 };
 use bus_mapping::circuit_input_builder::{ExpEvent, ExpStep};
+use bus_mapping::circuit_input_builder::Chunk;
 use eth_types::{Field, ToScalar, U256};
 use gadgets::{
     mul_add::{MulAddChip, MulAddConfig},
@@ -527,6 +528,13 @@ impl<F: Field> SubCircuit<F> for ExpCircuit<F> {
         Self::new(
             block.exp_events.clone(),
             block.circuits_params.max_exp_steps,
+        )
+    }
+
+    fn new_from_chunk(chunk: &Chunk<F>) -> Self {
+        Self::new(
+            chunk.block.exp_events.clone(), // TODO(chunking): do we split these events?
+            chunk.block.circuits_params.max_exp_steps,
         )
     }
 

@@ -23,6 +23,7 @@ use crate::{
     witness::{self},
 };
 use bus_mapping::state_db::{CodeDB, EMPTY_CODE_HASH_LE};
+use bus_mapping::circuit_input_builder::Chunk;
 use eth_types::{Bytecode, Field};
 use gadgets::is_zero::{IsZeroChip, IsZeroInstruction};
 use halo2_proofs::{
@@ -796,6 +797,10 @@ impl<F: Field> SubCircuit<F> for BytecodeCircuit<F> {
 
     fn new_from_block(block: &witness::Block<F>) -> Self {
         Self::new(block.bytecodes.clone(), block.circuits_params.max_bytecode)
+    }
+
+    fn new_from_chunk(chunk: &Chunk<F>) -> Self {
+        unimplemented!() // TODO(chunking)
     }
 
     /// Return the minimum number of rows required to prove the block

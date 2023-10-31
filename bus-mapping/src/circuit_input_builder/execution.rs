@@ -32,7 +32,7 @@ pub struct ExecStep {
     pub call_index: usize,
     /// The global counter when this step was executed.
     pub rwc: RWCounter,
-    /// The inner chunk counter when this step was executed.
+    /// The inner chunk counter right before this step gets executed.
     pub rwc_inner_chunk: RWCounter,
     /// Reversible Write Counter.  Counter of write operations in the call that
     /// will need to be undone in case of a revert.  Value at the beginning of

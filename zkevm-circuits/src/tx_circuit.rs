@@ -27,6 +27,7 @@ use itertools::Itertools;
 use log::error;
 use sign_verify::{AssignedSignatureVerify, SignVerifyChip, SignVerifyConfig};
 use std::{marker::PhantomData, ops::Deref};
+use bus_mapping::circuit_input_builder::Chunk;
 
 /// Number of static fields per tx: [nonce, gas, gas_price,
 /// caller_address, callee_address, is_create, value, call_data_length,
@@ -309,6 +310,15 @@ impl<F: Field> SubCircuit<F> for TxCircuit<F> {
             block.circuits_params.max_calldata,
             block.context.chain_id.as_u64(),
             block.txs.iter().map(|tx| tx.deref().clone()).collect_vec(),
+        )
+    }
+
+    fn new_from_chunk(chunk: &Chunk<F>) -> Self {
+        Self::new(
+            chunk.block.circuits_params.max_txs,
+            chunk.block.circuits_params.max_calldata,
+            chunk.block.context.chain_id.as_u64(),
+            block.txs.iter().map(|tx| tx.deref().clone()).collect_vec(), // TODO(chunking): do we split txs? What about incomplete txs?
         )
     }
 

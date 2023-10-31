@@ -130,14 +130,31 @@ impl<'a> CircuitInputStateRef<'a> {
         if let OpEnum::Account(op) = op.clone().into_enum() {
             self.check_update_sdb_account(rw, &op)
         }
+
         let op_ref = self.block.container.insert(Operation::new(
             self.block_ctx.rwc.inc_pre(),
             self.chunk_ctx
                 .as_mut()
-                .map_or_else(RWCounter::new, |chunk_ctx| chunk_ctx.rwc.inc_pre()),
+                .map_or_else(RWCounter::new, |chunk_ctx|
+                    // check if we filled the current chunk and update counters accordingly
+                    if chunk_ctx.end_rwc > chunk_ctx.rwc.0
+                    {
+                        chunk_ctx.rwc.inc_pre()
+                    } else {
+                        chunk_ctx.rwc.0 = 0;
+                        chunk_ctx.chunk_index += 1;
+                        chunk_ctx.rwc
+                    }
+                ),
             rw,
-            op,
+            op, // TODO(chunking): create new ops for Begin/EndChunk?
         ));
+
+        if step.exec_state != ExecState::BeginTx &&
+           step.exec_state != ExecState::EndTx{
+            // TODO(chunking)
+        }
+
         step.bus_mapping_instance.push(op_ref);
     }
 
@@ -202,7 +219,17 @@ impl<'a> CircuitInputStateRef<'a> {
             self.block_ctx.rwc.inc_pre(),
             self.chunk_ctx
                 .as_mut()
-                .map_or_else(RWCounter::new, |chunk_ctx| chunk_ctx.rwc.inc_pre()),
+                .map_or_else(RWCounter::new, |chunk_ctx|
+                    // check if we filled the current chunk and update counters accordingly
+                    if chunk_ctx.end_rwc > chunk_ctx.rwc.0
+                    {
+                        chunk_ctx.rwc.inc_pre()
+                    } else {
+                        chunk_ctx.rwc.0 = 0;
+                        chunk_ctx.chunk_index += 1;
+                        chunk_ctx.rwc
+                    }
+                ),
             RW::WRITE,
             op,
         ));

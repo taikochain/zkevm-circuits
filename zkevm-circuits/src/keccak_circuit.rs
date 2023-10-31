@@ -45,6 +45,7 @@ use halo2_proofs::{
     poly::Rotation,
 };
 use log::debug;
+use bus_mapping::circuit_input_builder::Chunk;
 
 pub(crate) static DEFAULT_CELL_TYPE: CellType = CellType::StoragePhase1;
 
@@ -1012,6 +1013,13 @@ impl<F: Field> SubCircuit<F> for KeccakCircuit<F> {
         Self::new(
             block.circuits_params.max_keccak_rows,
             block.keccak_inputs.clone(),
+        )
+    }
+
+    fn new_from_chunk(chunk: &Chunk<F>) -> Self {
+        Self::new(
+            chunk.block.circuits_params.max_keccak_rows,
+            chunk.block.keccak_inputs.clone(),
         )
     }
 

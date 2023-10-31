@@ -25,6 +25,8 @@ use bus_mapping::{
     operation::Target,
     state_db::CodeDB,
 };
+
+use bus_mapping::circuit_input_builder::Chunk;
 use eth_types::Field;
 use gadgets::{
     binary_number::{BinaryNumberChip, BinaryNumberConfig},
@@ -836,6 +838,13 @@ impl<F: Field> CopyCircuit<F> {
             block.circuits_params.max_copy_rows,
         )
     }
+
+    pub fn new_from_chunk_no_external(chunk: &Chunk<F>) -> Self {
+        Self::new(
+            chunk.block.copy_events.clone(), // TODO(chunking): split copy_events?
+            chunk.block.circuits_params.max_copy_rows,
+        )
+    }
 }
 
 impl<F: Field> SubCircuit<F> for CopyCircuit<F> {
@@ -858,6 +867,21 @@ impl<F: Field> SubCircuit<F> for CopyCircuit<F> {
                 max_rws: block.circuits_params.max_rws,
                 rws: block.rws.clone(),
                 bytecodes: block.bytecodes.clone(),
+            },
+        )
+    }
+
+    fn new_from_chunk(chunk: &Chunk) -> Self {
+        Self::new_with_external_data(
+            chunk.block.copy_events.clone(),
+            chunk.block.circuits_params.max_copy_rows,
+            ExternalData {
+                max_txs: chunk.block.circuits_params.max_txs,
+                max_calldata: chunk.block.circuits_params.max_calldata,
+                txs: block.txs.clone(), // TODO(chunking): do we need to split this? If so, what about incomplete txs?
+                max_rws: chunk.block.circuits_params.max_rws,
+                rws: chunk.rws.clone(),
+                bytecodes: chunk.block.bytecodes.clone(), // TODO(chunking): do we need to split this?
             },
         )
     }

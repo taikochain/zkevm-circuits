@@ -1,7 +1,17 @@
 use crate::operation::RWCounter;
+use super::{Block, CopyEvent};
+use zkevm_circuits::witness::RwMap;
+
+#[derive(Debug)]
+pub struct Chunk<F> {
+    pub block: Block,
+    pub rws: RwMap,
+    pub copy_events: Vec<CopyEvent>,
+    pub chunk_index: usize,
+}
 
 /// Context of a [`ChunkContext`].
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct ChunkContext {
     /// Used to track the inner chunk counter in every operation in the chunk.
     /// Contains the next available value.

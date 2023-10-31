@@ -9,7 +9,10 @@ mod param;
 mod dev;
 #[cfg(test)]
 mod test;
-use bus_mapping::operation::Target;
+use bus_mapping::{
+    operation::Target,
+    circuit_input_builder::Chunk};
+
 #[cfg(feature = "test-circuits")]
 pub use dev::StateCircuit as TestStateCircuit;
 
@@ -523,6 +526,18 @@ impl<F: Field> SubCircuit<F> for StateCircuit<F> {
             block.permu_rwtable_prev_continuous_fingerprint,
             block.permu_rwtable_next_continuous_fingerprint,
             block.chunk_context.chunk_index,
+        )
+    }
+
+    fn new_from_chunk(chunk: &Chunk<F>) -> Self {
+        Self::new(
+            chunk.rws.clone(),
+            chunk.block.circuits_params.max_rws,
+            chunk.block.permu_alpha,
+            chunk.block.permu_gamma,
+            chunk.block.permu_rwtable_prev_continuous_fingerprint,
+            chunk.block.permu_rwtable_next_continuous_fingerprint,
+            chunk.block.chunk_index,
         )
     }
 

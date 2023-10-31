@@ -38,6 +38,7 @@ use crate::{
     witness::RwMap,
 };
 use bus_mapping::{circuit_input_builder::ChunkContext, evm::OpcodeId};
+use bus_mapping::circuit_input_builder::Chunk;
 use eth_types::Field;
 use execution::ExecutionConfig;
 use itertools::Itertools;
@@ -427,6 +428,10 @@ impl<F: Field> SubCircuit<F> for EvmCircuit<F> {
 
     fn new_from_block(block: &witness::Block<F>) -> Self {
         Self::new(block.clone())
+    }
+
+    fn new_from_chunk(chunk: &Chunk<F>) -> Self {
+        unimplemented!() // TODO(chunking)
     }
 
     /// Return the minimum number of rows required to prove the block
