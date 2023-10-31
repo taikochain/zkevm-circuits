@@ -61,4 +61,4 @@ if ! command -v cc &>/dev/null; then
     fi
 fi
 
-sudo apt install -y pkg-config fontconfig libfontconfig-dev
+sudo apt install -y pkg-config fontconfig libfontconfig-dev clang libclang-14-dev

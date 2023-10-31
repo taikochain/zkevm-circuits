@@ -6,7 +6,8 @@ cd "$(dirname "$0")" || exit 1
 GITHUB_RUN_ID=$1
 REPOSITORY_URL=$2
 BRANCH_NAME=$3
-CIRCUIT=$4
+PROVER=$4
+DEGREE=19
 
 PROVER_INSTANCE=$(cat "$HOME/CI_Github_Trigger/$GITHUB_RUN_ID/prover_instance")
 echo "Prover instance at trigger: $PROVER_INSTANCE"
@@ -26,14 +27,14 @@ prepare_env() {
 prepare_repo() {
   ssh -i ~/.ssh/bench.pem -o StrictHostKeyChecking=no ubuntu@"$PROVER_IP" "bash -s" -- "$GITHUB_RUN_ID" <../weeklyBenchScripts/03_prepareProver.sh
   ssh -i ~/.ssh/bench.pem -o StrictHostKeyChecking=no ubuntu@"$PROVER_IP" "bash -s" -- "$GITHUB_RUN_ID" "$REPOSITORY_URL" "$BRANCH_NAME" <../integrationBenchScripts/04_clone.sh
-  ssh -i ~/.ssh/bench.pem -o StrictHostKeyChecking=no ubuntu@"$PROVER_IP" "bash -s" -- "$GITHUB_RUN_ID" <../weeklyBenchScripts/05_build.sh
+#  ssh -i ~/.ssh/bench.pem -o StrictHostKeyChecking=no ubuntu@"$PROVER_IP" "bash -s" -- "$GITHUB_RUN_ID" <../weeklyBenchScripts/05_build.sh
   ssh -i ~/.ssh/bench.pem -o StrictHostKeyChecking=no ubuntu@"$PROVER_IP" "bash -s" -- <../weeklyBenchScripts/06_rsSysstat.sh &
   sleep 5
 
-  ssh -i ~/.ssh/bench.pem -o StrictHostKeyChecking=no ubuntu@"$PROVER_IP" "bash -s" -- "$DEGREE" "$CIRCUIT" "$GITHUB_RUN_ID" <../integrationBenchScripts/07_execBench.sh
+  ssh -i ~/.ssh/bench.pem -o StrictHostKeyChecking=no ubuntu@"$PROVER_IP" "bash -s" -- "$DEGREE" "$GITHUB_RUN_ID" "$PROVER" <../integrationBenchScripts/07_execBench.sh
   declare -g RESULT=$?
   chmod u+x ../integrationBenchScripts/08_processResults.sh
-  ../integrationBenchScripts/08_processResults.sh "$CIRCUIT" "$DEGREE"
+  ../integrationBenchScripts/08_processResults.sh "$PROVER" "$DEGREE"
 }
 
 prepare_env
