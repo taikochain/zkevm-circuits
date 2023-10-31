@@ -39,10 +39,11 @@ prepare_repo() {
 prepare_env
 prepare_repo
 
+# Rationale: for some (?) reason the very last ssh session is not being closed (07_execBench.sh)
 kill_ssh() {
   sleep 30
-  # Get the list of process IDs with the given IP address
-  pids=$(ps aux | grep "$PROVER_IP" | grep -v "grep" | awk '{print $2}')
+  # Get the list of process IDs with the given IP address and Option which should normally be used only by a script
+  pids=$(ps aux | grep "StrictHostKeyChecking=no" | grep "$PROVER_IP" | grep -v "grep" | awk '{print $2}')
 
   # Loop through the process IDs and kill them
   for pid in $pids; do
