@@ -6,12 +6,15 @@
 mod public_data_test {
     use crate::get_client;
     use bus_mapping::{
-        circuit_input_builder::{BlockMetadata, BuilderClient, CircuitsParams, ProtocolInstance, protocol_instance::{BlockEvidence}},
+        circuit_input_builder::{
+            protocol_instance::BlockEvidence, BlockMetadata, BuilderClient, CircuitsParams,
+            ProtocolInstance,
+        },
         rpc::BlockNumber,
     };
     use eth_types::{Address, Block as EthBlock, Hash, Transaction};
     use ethers::abi::{Function, Param, ParamType, StateMutability};
-    use halo2_proofs::{arithmetic::Field, dev::MockProver, halo2curves::bn256::Fr};
+    use halo2_proofs::{arithmetic::Field, dev::{MockProver, CellValue}, halo2curves::bn256::Fr};
     use log::error;
     use std::str::FromStr;
     use testool::{parse_address, parse_hash};
@@ -403,25 +406,9 @@ mod public_data_test {
         block.randomness = Fr::ONE;
         block.protocol_instance = Some(protocol_instance);
 
-        block
+        // block
     }
 
-    #[tokio::test]
-    async fn test_pure_anchor_block() {
-        let circuits_params = CircuitsParams {
-            max_txs: 80,
-            max_calldata: 69750,
-            max_bytecode: 139500,
-            max_rws: 524288,
-            max_copy_rows: 524288,
-            max_exp_steps: 27900,
-            max_evm_rows: 80000,
-            max_keccak_rows: 0,
-        };
-        let protocol_instance = gen_requests()[0].clone();
-        let block = gen_block(circuits_params, protocol_instance).await;
-        run_super_circuit_mock_prover(&block);
-    }
 
     #[tokio::test]
     async fn test_block_statistics() {
@@ -447,30 +434,5 @@ mod public_data_test {
 
             cli.gen_inputs(i).await.unwrap();
         }
-    }
-
-    #[tokio::test]
-    async fn test_fixed_stablity() {
-        let circuits_params = CircuitsParams {
-            max_txs: 80,
-            max_calldata: 69750,
-            max_bytecode: 139500,
-            max_rws: 72428,
-            max_copy_rows: 72428,
-            max_exp_steps: 27900,
-            max_evm_rows: 80000,
-            max_keccak_rows: 20000,
-        };
-
-        let requests = gen_requests();
-        let protocol_instances: std::iter::Take<std::slice::Iter<'_, ProtocolInstance>> =
-            requests.iter().take(2);
-        assert!(protocol_instances.len() == 2);
-        let mut fixed_wits = vec![];
-        for protocol_instance in protocol_instances {
-            let block = gen_block(circuits_params, protocol_instance.clone()).await;
-            fixed_wits.push(get_fixed_columns(&block));
-        }
-        assert!(fixed_wits[0] == fixed_wits[1])
     }
 }

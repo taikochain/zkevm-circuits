@@ -125,7 +125,7 @@ impl<F: Field> SubCircuitConfig<F> for SuperCircuitConfig<F> {
         let evm_circuit = EvmCircuitConfig::new(
             meta,
             EvmCircuitConfigArgs {
-                challenges: challenges.clone(),
+                challenges,
                 tx_table: tx_table.clone(),
                 rw_table,
                 bytecode_table: bytecode_table.clone(),

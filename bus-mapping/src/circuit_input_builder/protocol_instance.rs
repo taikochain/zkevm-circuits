@@ -3,7 +3,7 @@
 use alloy_dyn_abi::DynSolValue;
 use alloy_primitives::{B256, U160, U256};
 use alloy_sol_types::{sol, SolValue};
-use eth_types::{Address, Bytes, ToWord, ToBigEndian};
+use eth_types::{Address, Bytes, ToBigEndian, ToWord};
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use sha3::{Digest, Keccak256};
@@ -21,7 +21,7 @@ pub static L2_SIGNAL_SERVICE: Lazy<Address> = Lazy::new(|| {
         .expect("invalid l2 signal service")
 });
 
-/// Taiko's treasury, which is used in EndTx 
+/// Taiko's treasury, which is used in EndTx
 /// trasury_balance = treasury_balance_prev + base_fee * gas_used;
 pub static TREASURY: Lazy<Address> = Lazy::new(|| {
     Address::from_str("0xdf09A0afD09a63fb04ab3573922437e1e637dE8b")
@@ -91,7 +91,7 @@ impl BlockMetadata {
         let field1 = self.difficulty;
         let field2 = self.txListHash;
         let field3 = self.extraData;
-        let field4 = U256::from(self.id)
+        let field4: U256 = U256::from(self.id)
             | U256::from(self.timestamp) << 64
             | U256::from(self.l1Height) << 128
             | U256::from(self.gasLimit) << 192;
