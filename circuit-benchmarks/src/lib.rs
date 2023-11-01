@@ -12,7 +12,6 @@ pub mod tx_circuit;
 #[cfg(feature = "benches")]
 pub mod super_circuit;
 
-#[cfg(test)]
 #[cfg(feature = "benches")]
 pub mod taiko_super_circuit;
 

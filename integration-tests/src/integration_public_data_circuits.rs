@@ -4,7 +4,6 @@
 
 #[cfg(test)]
 mod public_data_test {
-
     use crate::get_client;
     use bus_mapping::{
         circuit_input_builder::{BlockMetadata, BuilderClient, CircuitsParams, ProtocolInstance, protocol_instance::{BlockEvidence}},
@@ -292,17 +291,26 @@ mod public_data_test {
         assert_eq!(&txlist_bytes, expected_txlist_bytes.as_bytes());
     }
 
-    fn test_super_circuit(block: &Block<Fr>) {
+    fn run_super_circuit_mock_prover(block: &Block<Fr>) {
         let circuit = SuperCircuit::new_from_block(block);
         let instance = circuit.instance();
         // TODO: fix k from build
-        let k = 23;
+        let k = 20;
         let prover = MockProver::run(k, &circuit, instance).unwrap();
         let res = prover.verify_par();
         if let Err(err) = res {
             error!("Verification failures: {:#?}", err);
             panic!("Failed verification");
         }
+    }
+
+    fn get_fixed_columns(block: &Block<Fr>) -> Vec<Vec<CellValue<Fr>>> {
+        let circuit = SuperCircuit::new_from_block(block);
+        let instance = circuit.instance();
+        // TODO: fix k from build
+        let k = 20;
+        let prover = MockProver::run(k, &circuit, instance).unwrap();
+        prover.fixed().clone()
     }
 
     #[tokio::test]
@@ -395,70 +403,74 @@ mod public_data_test {
         block.randomness = Fr::ONE;
         block.protocol_instance = Some(protocol_instance);
 
-        test_super_circuit(&block);
+        block
     }
 
-    // #[tokio::test]
-    // async fn test_single_sepolia_txlist_call() {
-    //     let block_num = 3974689;
-    //     let cli = get_client();
-    //     let block = cli
-    //         .get_block_by_number(BlockNumber::from(block_num))
-    //         .await
-    //         .unwrap();
-    //     let proposal_txs = filter_proposal_txs(&block);
+    #[tokio::test]
+    async fn test_pure_anchor_block() {
+        let circuits_params = CircuitsParams {
+            max_txs: 80,
+            max_calldata: 69750,
+            max_bytecode: 139500,
+            max_rws: 524288,
+            max_copy_rows: 524288,
+            max_exp_steps: 27900,
+            max_evm_rows: 80000,
+            max_keccak_rows: 0,
+        };
+        let protocol_instance = gen_requests()[0].clone();
+        let block = gen_block(circuits_params, protocol_instance).await;
+        run_super_circuit_mock_prover(&block);
+    }
 
-    //     for tx in proposal_txs {
-    //         let txlist_bytes = get_txlist_bytes(&tx);
-    //         assert_eq!(run_rlp_circuit_for_valid_bytes(&txlist_bytes), Ok(()));
-    //     }
-    // }
+    #[tokio::test]
+    async fn test_block_statistics() {
+        let block_num = 526831;
+        let circuits_params = CircuitsParams {
+            max_txs: 80,
+            max_calldata: 69750,
+            max_bytecode: 139500,
+            max_rws: 1524288,
+            max_copy_rows: 524288,
+            max_exp_steps: 27900,
+            max_evm_rows: 80000,
+            max_keccak_rows: 0,
+        };
 
-    // #[tokio::test]
-    // #[tokio::test]
-    // async fn test_single_sepolia_txlist_call() {
-    //     let block_num = 3974689;
-    //     let cli = get_client();
-    //     let block = cli
-    //         .get_block_by_number(BlockNumber::from(block_num))
-    //         .await
-    //         .unwrap();
-    //     let proposal_txs = filter_proposal_txs(&block);
+        let protocol_instance: ProtocolInstance = ProtocolInstance::default();
+        for i in block_num..block_num + 1000 {
+            let w3_client = get_client();
+            let cli =
+                BuilderClient::new(w3_client, circuits_params, Some(protocol_instance.clone()))
+                    .await
+                    .unwrap();
 
-    //     for tx in proposal_txs {
-    //         let txlist_bytes = get_txlist_bytes(&tx);
-    //         assert_eq!(run_rlp_circuit_for_valid_bytes(&txlist_bytes), Ok(()));
-    //     }
-    // }
+            cli.gen_inputs(i).await.unwrap();
+        }
+    }
 
-    // #[tokio::test]
-    // async fn test_all_sepolia_txlist_calls() {
-    //     let begin_block_num: u64 = match env::var("SEPOLIA_BLOCK_NUM") {
-    //         Ok(val) => {
-    //             println!("Begins with {:?}", val);
-    //             val.parse().unwrap()
-    //         }
-    //         _ => 3980000u64,
-    //     };
+    #[tokio::test]
+    async fn test_fixed_stablity() {
+        let circuits_params = CircuitsParams {
+            max_txs: 80,
+            max_calldata: 69750,
+            max_bytecode: 139500,
+            max_rws: 72428,
+            max_copy_rows: 72428,
+            max_exp_steps: 27900,
+            max_evm_rows: 80000,
+            max_keccak_rows: 20000,
+        };
 
-    //     let cli = get_client();
-    //     for block_num in begin_block_num..begin_block_num * 2 {
-    //         print!("running block {} ", block_num);
-    //         io::stdout().flush().unwrap();
-    //         let block = cli
-    //             .get_block_by_number(BlockNumber::from(block_num))
-    //             .await
-    //             .unwrap();
-    //         let proposal_txs = filter_proposal_txs(&block);
-
-    //         println!("which has {} proposal txlists...", proposal_txs.len());
-    //         for (i, tx) in proposal_txs.iter().enumerate() {
-    //             let txlist_bytes = get_txlist_bytes(&tx);
-    //             print!("  running {} tx {:?} ... ", i, tx.hash);
-    //             io::stdout().flush().unwrap();
-    //             assert_eq!(run_rlp_circuit_for_valid_bytes(&txlist_bytes), Ok(()));
-    //             println!("succed!");
-    //         }
-    //     }
-    // }
+        let requests = gen_requests();
+        let protocol_instances: std::iter::Take<std::slice::Iter<'_, ProtocolInstance>> =
+            requests.iter().take(2);
+        assert!(protocol_instances.len() == 2);
+        let mut fixed_wits = vec![];
+        for protocol_instance in protocol_instances {
+            let block = gen_block(circuits_params, protocol_instance.clone()).await;
+            fixed_wits.push(get_fixed_columns(&block));
+        }
+        assert!(fixed_wits[0] == fixed_wits[1])
+    }
 }
