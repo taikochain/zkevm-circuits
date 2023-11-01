@@ -6,8 +6,9 @@
 mod public_data_test {
     use crate::get_client;
     use bus_mapping::{
-        circuit_input_builder::{BuilderClient, CircuitsParams, ProtocolInstance, 
-            protocol_instance::{BlockEvidence, BlockMetadata}
+        circuit_input_builder::{
+            protocol_instance::{BlockEvidence, BlockMetadata},
+            BuilderClient, CircuitsParams, ProtocolInstance,
         },
         rpc::BlockNumber,
     };
