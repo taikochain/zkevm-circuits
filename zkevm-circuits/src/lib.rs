@@ -18,6 +18,7 @@
 #![deny(clippy::debug_assert_with_mut_call)]
 
 pub mod bytecode_circuit;
+pub mod circuit_tools;
 pub mod copy_circuit;
 pub mod evm_circuit;
 pub mod exp_circuit;

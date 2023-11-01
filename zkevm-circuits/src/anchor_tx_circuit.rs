@@ -4,6 +4,8 @@
 mod dev;
 #[cfg(any(feature = "test", test, feature = "test-circuits"))]
 pub use dev::TestAnchorTxCircuit;
+use ethers_core::abi::Address;
+use once_cell::sync::Lazy;
 pub(crate) mod sign_verify;
 #[cfg(any(feature = "test", test))]
 mod test;
@@ -27,15 +29,24 @@ use sign_verify::SignVerifyConfig;
 use std::marker::PhantomData;
 
 use self::sign_verify::GOLDEN_TOUCH_ADDRESS;
+use std::str::FromStr;
 
 // The anchor tx is the first tx
-const ANCHOR_TX_ID: usize = 1;
-const ANCHOR_TX_VALUE: u64 = 0;
-const ANCHOR_TX_IS_CREATE: bool = false;
-const ANCHOR_TX_GAS_PRICE: u64 = 0;
-const ANCHOR_TX_GAS_TIP_CAP: u64 = 0;
+const ANCHOR_ID: usize = 1;
+const ANCHOR_VALUE: u64 = 0;
+const ANCHOR_IS_CREATE: bool = false;
+const ANCHOR_GAS_PRICE: u64 = 0;
+const ANCHOR_GAS_TIP_CAP: u64 = 0;
+const ANCHOR_GAS_LIMIT: u64 = 0;
+
 const MAX_DEGREE: usize = 9;
 const BYTE_POW_BASE: u64 = 1 << 8;
+
+/// L2 contract address
+pub static L2_CONTRACT: Lazy<Address> = Lazy::new(|| {
+    Address::from_str("0x1000777700000000000000000000000000000001")
+        .expect("invalid l2 contract address")
+});
 
 // function anchor(
 //     bytes32 l1Hash,
@@ -120,7 +131,7 @@ impl<F: Field> SubCircuitConfig<F> for AnchorTxCircuitConfig<F> {
         meta.lookup_any("anchor fixed fields", |meta| {
             let q_tag = meta.query_selector(q_tag);
             [
-                ANCHOR_TX_ID.expr(),
+                ANCHOR_ID.expr(),
                 meta.query_fixed(tag, Rotation::cur()),
                 0.expr(),
                 meta.query_fixed(tag, Rotation::next()),
@@ -208,23 +219,20 @@ impl<F: Field> AnchorTxCircuitConfig<F> {
         &self,
         region: &mut Region<'_, F>,
         _anchor_tx: &Transaction,
-        protocol_instance: &ProtocolInstance,
+        _protocol_instance: &ProtocolInstance,
         _challenges: &Challenges<Value<F>>,
     ) -> Result<(), Error> {
         // Gas, GasPrice, CallerAddress, CalleeAddress, IsCreate, Value, CallDataLength,
         let mut offset = 0;
         for (tag, value) in [
-            (
-                TxFieldTag::Gas,
-                Value::known(F::from(protocol_instance.anchor_gas_limit)),
-            ),
+            (TxFieldTag::Gas, Value::known(F::from(ANCHOR_GAS_LIMIT))),
             (
                 TxFieldTag::GasPrice,
-                Value::known(F::from(ANCHOR_TX_GAS_PRICE)),
+                Value::known(F::from(ANCHOR_GAS_PRICE)),
             ),
             (
                 TxFieldTag::GasTipCap,
-                Value::known(F::from(ANCHOR_TX_GAS_TIP_CAP)),
+                Value::known(F::from(ANCHOR_GAS_TIP_CAP)),
             ),
             (
                 TxFieldTag::CallerAddress,
@@ -236,18 +244,13 @@ impl<F: Field> AnchorTxCircuitConfig<F> {
             ),
             (
                 TxFieldTag::CalleeAddress,
-                Value::known(
-                    protocol_instance
-                        .l2_contract
-                        .to_scalar()
-                        .expect("anchor_tx.to too big"),
-                ),
+                Value::known(L2_CONTRACT.to_scalar().expect("anchor_tx.to too big")),
             ),
             (
                 TxFieldTag::IsCreate,
-                Value::known(F::from(ANCHOR_TX_IS_CREATE as u64)),
+                Value::known(F::from(ANCHOR_IS_CREATE as u64)),
             ),
-            (TxFieldTag::Value, Value::known(F::from(ANCHOR_TX_VALUE))),
+            (TxFieldTag::Value, Value::known(F::from(ANCHOR_VALUE))),
             (
                 TxFieldTag::CallDataLength,
                 Value::known(F::from(ANCHOR_CALL_DATA_LEN as u64)),
@@ -292,11 +295,11 @@ impl<F: Field> AnchorTxCircuitConfig<F> {
                 &anchor_tx.call_data[68..100],
                 PiFieldTag::L1Height,
             ),
-            (
-                "parent_gas_used",
-                &anchor_tx.call_data[100..132],
-                PiFieldTag::ParentGasUsed,
-            ),
+            // (
+            //     "parent_gas_used",
+            //     &anchor_tx.call_data[100..132],
+            //     PiFieldTag::ParentGasUsed,
+            // ),
         ] {
             let mut rlc_acc = Value::known(F::ZERO);
             // Use RLC encoding if the input doesn't fit within the field

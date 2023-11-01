@@ -3,9 +3,8 @@
 use crate::MOCK_BASEFEE;
 
 use super::{
-    GOLDEN_TOUCH, MOCK_ACCOUNTS, MOCK_ANCHOR_GAS_LIMIT, MOCK_ANCHOR_GAS_PRICE,
-    MOCK_ANCHOR_TX_VALUE, MOCK_CHAIN_ID, MOCK_GASFEECAP, MOCK_GASPRICE, MOCK_GASTIPCAP,
-    MOCK_TAIKO_L2_ADDRESS,
+    GOLDEN_TOUCH, MOCK_ACCOUNTS, MOCK_ANCHOR_GAS_LIMIT, MOCK_ANCHOR_GAS_PRICE, MOCK_ANCHOR_VALUE,
+    MOCK_CHAIN_ID, MOCK_GASFEECAP, MOCK_GASPRICE, MOCK_GASTIPCAP, MOCK_TAIKO_L2_ADDRESS,
 };
 use eth_types::{
     geth_types::Transaction as GethTransaction, word, AccessList, Address, Bytes, Hash,
@@ -219,7 +218,7 @@ impl MockTransaction {
             .to(*MOCK_TAIKO_L2_ADDRESS)
             .input(crate::anchor::anchor_call())
             .nonce(0)
-            .value(*MOCK_ANCHOR_TX_VALUE);
+            .value(*MOCK_ANCHOR_VALUE);
         crate::anchor::sign(&mut tx);
         tx
     }

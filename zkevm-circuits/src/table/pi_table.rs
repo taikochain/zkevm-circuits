@@ -1,4 +1,4 @@
-use crate::witness::protocol_instance_table_assignments;
+use crate::witness::protocol_instancetable_assignments;
 use bus_mapping::circuit_input_builder::ProtocolInstance;
 
 use super::*;
@@ -42,7 +42,7 @@ impl PiTable {
             |mut region| {
                 let randomness = challenges.evm_word();
                 for (offset, [tag, value]) in
-                    protocol_instance_table_assignments(protocol_instance, randomness)
+                    protocol_instancetable_assignments(protocol_instance, randomness)
                         .into_iter()
                         .enumerate()
                 {

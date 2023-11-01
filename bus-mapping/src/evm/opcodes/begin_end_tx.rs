@@ -1,6 +1,6 @@
 use super::TxExecSteps;
 use crate::{
-    circuit_input_builder::{CircuitInputStateRef, ExecState, ExecStep},
+    circuit_input_builder::{protocol_instance, CircuitInputStateRef, ExecState, ExecStep},
     operation::{AccountField, AccountOp, CallContextField, TxReceiptField, TxRefundOp, RW},
     state_db::CodeDB,
     Error,
@@ -296,13 +296,7 @@ fn gen_end_tx_steps(state: &mut CircuitInputStateRef) -> Result<ExecStep, Error>
 
     // transfer base fee to treasury account in taiko context
     if state.block.is_taiko() {
-        let treasury = state
-            .block
-            .protocol_instance
-            .clone()
-            .unwrap()
-            .meta_data
-            .treasury;
+        let treasury = *protocol_instance::TREASURY;
         // add treasury account
         let (found, treasury_account) = state.sdb.get_account(&treasury);
         if !found {

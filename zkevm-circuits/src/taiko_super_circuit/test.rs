@@ -1,6 +1,5 @@
 #![allow(unused_imports)]
 pub use super::*;
-use bus_mapping::circuit_input_builder::MetaData;
 use ethers_signers::{LocalWallet, Signer};
 use halo2_proofs::{dev::MockProver, halo2curves::bn256::Fr};
 use log::error;

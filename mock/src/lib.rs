@@ -13,7 +13,7 @@ pub mod test_ctx;
 mod transaction;
 
 pub use account::MockAccount;
-pub use anchor::ANCHOR_TX_METHOD_SIGNATURE;
+pub use anchor::ANCHOR_METHOD_SIGNATURE;
 pub(crate) use block::MockBlock;
 pub use test_ctx::TestContext;
 pub use transaction::{AddrOrWallet, MockTransaction, CORRECT_MOCK_TXS};
@@ -60,7 +60,7 @@ lazy_static! {
     pub static ref MOCK_ANCHOR_SIGNAL_ROOT: Hash = Hash::from_slice(&[0u8; 32]);
     pub static ref MOCK_ANCHOR_L1_HIGHT: u64 = 0;
     pub static ref MOCK_ANCHOR_PARENT_GAS_USED: u32 = 0;
-    pub static ref MOCK_ANCHOR_TX_VALUE: Word = Word::from(0);
+    pub static ref MOCK_ANCHOR_VALUE: Word = Word::from(0);
 
     /// pub
     /// Mock EVM codes to use for test cases.

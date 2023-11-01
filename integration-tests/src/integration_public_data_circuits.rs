@@ -6,7 +6,10 @@
 mod public_data_test {
     use crate::get_client;
     use bus_mapping::{
-        circuit_input_builder::{BuilderClient, CircuitsParams, MetaData, ProtocolInstance},
+        circuit_input_builder::{
+            protocol_instance::{BlockEvidence, BlockMetadata},
+            BuilderClient, CircuitsParams, ProtocolInstance,
+        },
         rpc::BlockNumber,
     };
     use eth_types::{Address, Block as EthBlock, Hash, Transaction};
@@ -334,127 +337,62 @@ mod public_data_test {
     }
 
     fn gen_requests() -> Vec<ProtocolInstance> {
-        vec![
-            ProtocolInstance {
-                meta_data: MetaData {
-                    id: 10,
-                    timestamp: 1694510352,
-                    l1_height: 4272887,
-                    l1_hash: parse_hash(
-                        "6e3b781b2d9a04e21ecba49e67dc3fb0a8242408cc07fa6fed5d8bd0eca2c985",
-                    )
-                    .unwrap(),
-                    l1_mix_hash: parse_hash(
-                        "0000000000000000000000000000000000000000000000000000000000000000",
-                    )
-                    .unwrap(),
-                    deposits_processed: parse_hash(
-                        "56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
-                    )
-                    .unwrap(),
-                    tx_list_hash: parse_hash(
-                        "569e75fc77c1a856f6daaf9e69d8a9566ca34aa47f9133711ce065a571af0cfd",
-                    )
-                    .unwrap(),
-                    tx_list_byte_start: 0,
-                    tx_list_byte_end: 0,
-                    gas_limit: 820000000,
-                    beneficiary: parse_address("0000777700000000000000000000000000000001").unwrap(),
-                    treasury: parse_address("df09A0afD09a63fb04ab3573922437e1e637dE8b").unwrap(),
-                },
-                block_hash: parse_hash(
-                    "c32ce5789b5ae9b2a3921e43fb16c429abcb520acf5e27dc717a9caf46c4319f",
-                )
-                .unwrap(),
-                parent_hash: parse_hash(
-                    "a534f7f74d155fa0575ccfd9dbb2a7c4f89baa0fb48c3a312f0d97e3fbff7c47",
-                )
-                .unwrap(),
-                signal_root: parse_hash(
-                    "95a87577b110954a0daf867bd574aa726ec9a061b4bf0903d5adef23872f7f1b",
-                )
-                .unwrap(),
-                graffiti: parse_hash(
-                    "6162630000000000000000000000000000000000000000000000000000000000",
-                )
-                .unwrap(),
-                prover: parse_address("70997970C51812dc3A010C7d01b50e0d17dc79C8").unwrap(),
-                gas_used: 141003,
-                parent_gas_used: 123960,
-                block_max_gas_limit: 6000000,
-                max_transactions_per_block: 79,
-                max_bytes_per_tx_list: 120000,
-                l1_signal_service: parse_address("1000777700000000000000000000000000000001")
-                    .unwrap(),
-                l2_signal_service: parse_address("1000777700000000000000000000000000000001")
-                    .unwrap(),
-                l2_contract: parse_address("1000777700000000000000000000000000000001").unwrap(),
-                anchor_gas_limit: 180000,
-            },
-            ProtocolInstance {
-                l1_signal_service: parse_address("1000777700000000000000000000000000000001")
-                    .unwrap(),
-                l2_signal_service: parse_address("1000777700000000000000000000000000000001")
-                    .unwrap(),
-                l2_contract: parse_address("1000777700000000000000000000000000000001").unwrap(),
-                meta_data: MetaData {
-                    id: 1045,
-                    timestamp: 1694590452,
-                    l1_height: 4278960,
-                    l1_hash: parse_hash(
-                        "7240c017af19dd18eb328bad5865bfd812e9c14053c354ecaae64ab8896f6e2a",
-                    )
-                    .unwrap(),
-                    l1_mix_hash: parse_hash(
-                        "0000000000000000000000000000000000000000000000000000000000000000",
-                    )
-                    .unwrap(),
-                    deposits_processed: parse_hash(
-                        "56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
-                    )
-                    .unwrap(),
-                    tx_list_hash: parse_hash(
-                        "569e75fc77c1a856f6daaf9e69d8a9566ca34aa47f9133711ce065a571af0cfd",
-                    )
-                    .unwrap(),
-                    tx_list_byte_start: 0,
-                    tx_list_byte_end: 0,
-                    gas_limit: 820000000,
-                    beneficiary: parse_address("0000777700000000000000000000000000000001").unwrap(),
-                    treasury: parse_address("df09A0afD09a63fb04ab3573922437e1e637dE8b").unwrap(),
-                },
-                block_hash: parse_hash(
-                    "19101b2b2c7fc6308f1b17657efb1adfa94aa2c6c64ab4d9e9d18675bd3e57c3",
-                )
-                .unwrap(),
-                parent_hash: parse_hash(
-                    "ccac2185fbfb904b6551b4fdedd240b5fc02e8f5508c05e58a2dc7d8f4ca9f0c",
-                )
-                .unwrap(),
-                signal_root: parse_hash(
-                    "55d8315a59fd224b008c28023824f40072e06e7ad7b25781ec7fd71ea4f8cad5",
-                )
-                .unwrap(),
-                graffiti: parse_hash(
-                    "6162630000000000000000000000000000000000000000000000000000000000",
-                )
-                .unwrap(),
-                prover: parse_address("70997970C51812dc3A010C7d01b50e0d17dc79C8").unwrap(),
-                gas_used: 814499,
-                parent_gas_used: 217799,
-                block_max_gas_limit: 6000000,
-                max_transactions_per_block: 79,
-                max_bytes_per_tx_list: 120000,
-                anchor_gas_limit: 180000,
-            },
-        ]
+        let metadata = BlockMetadata {
+            l1Hash: parse_hash("6e3b781b2d9a04e21ecba49e67dc3fb0a8242408cc07fa6fed5d8bd0eca2c985")
+                .unwrap()
+                .as_fixed_bytes()
+                .into(),
+            txListHash: parse_hash(
+                "569e75fc77c1a856f6daaf9e69d8a9566ca34aa47f9133711ce065a571af0cfd",
+            )
+            .unwrap()
+            .as_fixed_bytes()
+            .into(),
+            id: 10,
+            timestamp: 1694510352,
+            l1Height: 4272887,
+            coinbase: parse_address("0000777700000000000000000000000000000001")
+                .unwrap()
+                .as_fixed_bytes()
+                .into(),
+            ..Default::default()
+        };
+
+        let block_evidence = BlockEvidence {
+            blockMetadata: metadata,
+            parentHash: parse_hash(
+                "a534f7f74d155fa0575ccfd9dbb2a7c4f89baa0fb48c3a312f0d97e3fbff7c47",
+            )
+            .unwrap()
+            .as_fixed_bytes()
+            .into(),
+            blockHash: parse_hash(
+                "c32ce5789b5ae9b2a3921e43fb16c429abcb520acf5e27dc717a9caf46c4319f",
+            )
+            .unwrap()
+            .as_fixed_bytes()
+            .into(),
+            signalRoot: parse_hash(
+                "95a87577b110954a0daf867bd574aa726ec9a061b4bf0903d5adef23872f7f1b",
+            )
+            .unwrap()
+            .as_fixed_bytes()
+            .into(),
+            ..Default::default()
+        };
+
+        let protocol_instance = ProtocolInstance {
+            block_evidence,
+            ..Default::default()
+        };
+        vec![protocol_instance]
     }
 
     async fn gen_block(
         circuits_params: CircuitsParams,
         protocol_instance: ProtocolInstance,
     ) -> Block<Fr> {
-        let block_num = protocol_instance.meta_data.id;
+        let block_num = protocol_instance.block_evidence.blockMetadata.id;
         let cli = get_client();
 
         let cli = BuilderClient::new(cli, circuits_params, Some(protocol_instance.clone()))
