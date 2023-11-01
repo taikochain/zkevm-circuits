@@ -34,6 +34,7 @@ impl<F: Field> ExecutionGadget<F> for JumpGadget<F> {
 
         // Pop the value from the stack
         cb.stack_pop(destination.expr());
+        
         // Lookup opcode at destination
         cb.opcode_lookup_at(
             from_bytes::expr(&destination.cells),
