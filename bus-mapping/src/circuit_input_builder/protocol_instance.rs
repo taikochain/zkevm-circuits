@@ -3,7 +3,7 @@
 use alloy_dyn_abi::DynSolValue;
 use alloy_primitives::{B256, U160, U256};
 use alloy_sol_types::{sol, SolValue};
-use eth_types::{Address, Bytes};
+use eth_types::{Address, Bytes, ToWord, ToBigEndian};
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use sha3::{Digest, Keccak256};
@@ -184,13 +184,13 @@ pub const ANCHOR_METHOD_SIGNATURE: u32 = 0xda69d3db;
 impl ProtocolInstance {
     /// gen anchor call
     // anchor(l1_hash,signal_root,l1_height,parent_gas_used)
-    pub fn anchor_call(&self) -> Bytes {
+    pub fn anchor_call(&self, parent_gas_used: u32) -> Bytes {
         let mut result = Vec::new();
         result.extend_from_slice(&ANCHOR_METHOD_SIGNATURE.to_be_bytes());
         result.extend_from_slice(self.block_evidence.blockMetadata.l1Hash.as_slice());
         result.extend_from_slice(self.block_evidence.signalRoot.as_slice());
         result.extend_from_slice(self.block_evidence.blockMetadata.l1Hash.as_slice());
-        result.extend_from_slice(&[0]);
+        result.extend_from_slice(&(parent_gas_used as u64).to_word().to_be_bytes());
         result.into()
     }
 }
