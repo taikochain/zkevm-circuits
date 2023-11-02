@@ -9,11 +9,12 @@ members = [
     "eth-types",
     "external-tracer",
     "mock",
+    "circuit-benchmarks",
     "testool",
 ]
 
 [patch.crates-io]
-halo2_proofs = { git = "https://github.com/taikoxyz/halo2.git", branch = "taiko/unstable"}
+halo2_proofs = { git = "https://github.com/taikoxyz/halo2.git", branch = "taiko/unstable" }
 
 # Definition of benchmarks profile to use.
 [profile.bench]

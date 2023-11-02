@@ -12,7 +12,7 @@ use halo2_proofs::{
 use rand::SeedableRng;
 use serde::{Deserialize, Serialize};
 use snark_verifier::{
-    loader::evm::{encode_calldata, Address as VerifierAddress, EvmLoader, ExecutorBuilder},
+    loader::evm::{deploy_and_call, encode_calldata, EvmLoader},
     pcs::kzg::*,
     system::halo2::{compile, transcript::evm::EvmTranscript, Config},
     verifier::SnarkVerifier,
@@ -86,9 +86,9 @@ pub fn gen_verifier(
         }
     };
 
-    let yul = loader.yul_code();
-    fs::write(Path::new("./aggregation_plonk.yul"), &yul).unwrap();
-    yul
+    let sol = loader.solidity_code();
+    fs::write(Path::new("./aggregation_plonk.sol"), &sol).unwrap();
+    sol
 }
 
 /// for chain to verify
@@ -102,26 +102,13 @@ pub fn evm_verify(deployment_code: Vec<u8>, instances: Vec<Vec<Fr>>, proof: Vec<
         calldata.len(),
     );
 
-    let success = {
-        let mut evm = ExecutorBuilder::default()
-            .with_gas_limit(u64::MAX.into())
-            .build();
-        let caller = VerifierAddress::from_low_u64_be(0xfe);
-        let deploy = evm.deploy(caller, deployment_code.into(), 0.into());
-        match deploy.address {
-            Some(addr) => {
-                let result = evm.call_raw(caller, addr, calldata.into(), 0.into());
-                println!("Deployment cost: {} gas", deploy.gas_used);
-                println!("Verification cost: {} gas", result.gas_used);
-                !result.reverted
-            }
-            None => {
-                println!("Deployment failed due to {:?}", deploy.exit_reason);
-                false
-            }
+    match deploy_and_call(deployment_code, calldata) {
+        Ok(_) => println!("Verification success"),
+        Err(e) => {
+            // println!("Verification failed due to {:?}", e);
+            panic!("Verification failed due to {:?}", e);
         }
-    };
-    assert!(success);
+    }
 }
 
 #[cfg(test)]
@@ -215,7 +202,7 @@ mod tests {
         let params = gen_srs(MIN_AGG_DEGREE);
         let mut snark_roots = Vec::new();
         for snark in snarks {
-            let pcd_circuit = TaikoAggregationCircuit::<AS>::new(&params, [snark]).unwrap();
+            let agg_circuit = TaikoAggregationCircuit::<AS>::new(&params, [snark]).unwrap();
 
             let start0 = start_timer!(|| "gen vk & pk");
             // let pk = gen_pk(
@@ -224,8 +211,8 @@ mod tests {
             // Some(Path::new("./examples/agg.pk")),
             // agg_circuit.params(),
             // );
-            let vk = keygen_vk(&params, &pcd_circuit).expect("keygen_vk should not fail");
-            let pk = keygen_pk(&params, vk, &pcd_circuit).expect("keygen_pk should not fail");
+            let vk = keygen_vk(&params, &agg_circuit).expect("keygen_vk should not fail");
+            let pk = keygen_pk(&params, vk, &agg_circuit).expect("keygen_pk should not fail");
             end_timer!(start0);
 
             let _root = match aggregation_type {
@@ -233,7 +220,7 @@ mod tests {
                     gen_snark_gwc(
                         &params,
                         &pk,
-                        pcd_circuit.clone(),
+                        agg_circuit.clone(),
                         // Some(Path::new("./examples/agg.snark"))
                         None::<&str>,
                     )
@@ -242,7 +229,7 @@ mod tests {
                     gen_snark_shplonk(
                         &params,
                         &pk,
-                        pcd_circuit.clone(),
+                        agg_circuit.clone(),
                         // Some(Path::new("./examples/agg.snark"))
                         None::<&str>,
                     )
@@ -297,7 +284,7 @@ mod tests {
         )
         .unwrap();
 
-        let deployment_code = gen_verifier(
+        let deployment_sol = gen_verifier(
             &params,
             &vk,
             Config::kzg()
@@ -306,7 +293,7 @@ mod tests {
             num_instances,
             aggregation_type,
         );
-        let evm_verifier_bytecode = evm::compile_yul(&deployment_code);
+        let evm_verifier_bytecode = evm::compile_solidity(&deployment_sol);
 
         evm_verify(evm_verifier_bytecode, instances, proof_calldata);
     }
@@ -370,7 +357,7 @@ mod tests {
             num_instances,
             agg_type,
         );
-        let evm_verifier_bytecode = evm::compile_yul(&deployment_code);
+        let evm_verifier_bytecode = evm::compile_solidity(&deployment_code);
 
         evm_verify(evm_verifier_bytecode, instances, proof_calldata);
     }
@@ -382,7 +369,7 @@ mod tests {
         let mut deployment_code = String::new();
         file.read_to_string(&mut deployment_code)
             .expect("yul file read ok");
-        let evm_verifier_bytecode = evm::compile_yul(&deployment_code);
+        let evm_verifier_bytecode = evm::compile_solidity(&deployment_code);
 
         let proof_path = "./proof.json";
         let proof_file = fs::File::open(proof_path).expect("proof file open ok");
