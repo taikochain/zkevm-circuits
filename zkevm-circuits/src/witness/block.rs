@@ -93,7 +93,7 @@ pub fn protocol_instancetable_assignments<F: Field>(
         [
             Value::known(F::from(PiFieldTag::L1Height as u64)),
             rlc_be_bytes(
-                &Word::from(protocol_instance.block_evidence.blockMetadata.l1Hash.0).to_be_bytes(),
+                &Word::from(protocol_instance.block_evidence.blockMetadata.l1Height).to_be_bytes(),
                 randomness,
             ),
         ],
