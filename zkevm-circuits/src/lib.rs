@@ -23,6 +23,8 @@ pub mod evm_circuit;
 pub mod exp_circuit;
 pub mod keccak_circuit;
 pub mod pi_circuit;
+pub mod rlp_decoder;
+pub mod rlp_decoder_tables;
 pub mod root_circuit;
 pub mod state_circuit;
 pub mod super_circuit;

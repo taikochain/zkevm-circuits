@@ -183,11 +183,13 @@ fn gen_application_snark(
 }
 
 fn create_root_super_circuit_prover_sdk<const T: u64, AS: AccumulationSchemeSDK>() {
-    let params_app = gen_srs(18);
+    let app_degree = 18;
+    let params_app = gen_srs(app_degree);
     let aggregation_type = T.into();
     let snarks = [(); 1].map(|_| gen_application_snark(&params_app, aggregation_type));
 
-    let params = gen_srs(22);
+    let root_degree = 23;
+    let params = gen_srs(root_degree);
     let mut snark_roots = Vec::new();
     for snark in snarks {
         let pcd_circuit = TaikoAggregationCircuit::<AS>::new(&params, [snark]).unwrap();
@@ -228,9 +230,12 @@ fn create_root_super_circuit_prover_sdk<const T: u64, AS: AccumulationSchemeSDK>
     }
 
     println!("gen blocks agg snark");
-    let params = gen_srs(22);
+    let params = gen_srs(root_degree);
     let agg_circuit = TaikoAggregationCircuit::<AS>::new(&params, snark_roots).unwrap();
-    println!("new root agg circuit {}", agg_circuit);
+    println!(
+        "new root agg circuit {} with degree {}",
+        agg_circuit, root_degree
+    );
 
     let start0 = start_timer!(|| "gen vk & pk");
     // let pk = gen_pk(
@@ -289,8 +294,8 @@ fn create_root_super_circuit_prover_sdk<const T: u64, AS: AccumulationSchemeSDK>
 // for N super circuit -> 1 root circuit integration
 fn create_1_level_root_super_circuit_prover_sdk<const T: u64, AS: AccumulationSchemeSDK>() {
     let agg_type = T.into();
-    let app_degree = 18;
-    let min_k_aggretation = 22;
+    let app_degree = 14;
+    let min_k_aggretation = 23;
     let mut params_app = gen_srs(min_k_aggretation);
     params_app.downsize(app_degree);
     let snarks = [(); 1].map(|_| gen_application_snark(&params_app, agg_type));

@@ -50,7 +50,7 @@ lazy_static! {
     /// URL of the integration test geth0 instance, which contains blocks for which proofs will be
     /// generated.
     pub static ref GETH0_URL: String = match env::var("GETH0_URL") {
-        Ok(val) => val,
+        Ok(val) => {println!("Using GETH0_URL {:?}", val); val},
         Err(VarError::NotPresent) => GETH0_URL_DEFAULT.to_string(),
         Err(e) => panic!("Error in GETH0_URL env var: {:?}", e),
     };
@@ -206,3 +206,6 @@ pub const TAIKO_BLOCK_TRANSFER_SUCCEED: u64 = 1270;
 
 /// Common code for integration tests of circuits.
 pub mod integration_test_circuits;
+
+/// Common code for integration public data tests of circuits.
+pub mod integration_public_data_circuits;
