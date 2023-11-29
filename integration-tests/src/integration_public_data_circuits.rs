@@ -337,7 +337,7 @@ mod public_data_test {
 
     fn gen_requests() -> Vec<ProtocolInstance> {
         let metadata = BlockMetadata {
-            l1Hash: parse_hash("a277296df8ddc7c99e889806429e716a6f62f705afb9ebf4f2004e98b03c97ce")
+            l1Hash: parse_hash("8374d2fde2f3e5640f0ce4f6bb557e988336c2dae71e55cb3734c5c6be450820")
                 .unwrap()
                 .as_fixed_bytes()
                 .into(),
@@ -348,8 +348,8 @@ mod public_data_test {
             .as_fixed_bytes()
             .into(),
             id: 10,
-            timestamp: 1699374453,
-            l1Height: 55,
+            timestamp: 1699729048,
+            l1Height: 131,
             coinbase: parse_address("0x1000777700000000000000000000000000000001")
                 .unwrap()
                 .as_fixed_bytes()
@@ -360,13 +360,13 @@ mod public_data_test {
         let block_evidence = BlockEvidence {
             blockMetadata: metadata,
             parentHash: parse_hash(
-                "3d064573b6d5e7e64a6decc8cb09ef037e7e3903055469702fab62e5063cc7ba",
+                "beb327617555bd45c05ac7e33d2c509c77192eb8c372873483696b1a7367750a",
             )
             .unwrap()
             .as_fixed_bytes()
             .into(),
             blockHash: parse_hash(
-                "11c78d3cba04071165c4e3d583d2a794d44c69207feac1ace599c1c240d54acd",
+                "8a8c11d6c46c1e8cce87900b52854fc74975aab054355c2a060aeefc6419b606",
             )
             .unwrap()
             .as_fixed_bytes()
