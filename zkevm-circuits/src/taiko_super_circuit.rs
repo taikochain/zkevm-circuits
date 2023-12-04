@@ -5,11 +5,15 @@
 pub mod test;
 
 #[cfg(feature = "for-a7")]
+use crate::anchor_tx_circuit::{AnchorTxCircuit, AnchorTxCircuitConfig, AnchorTxCircuitConfigArgs};
+#[cfg(feature = "for-a7")]
 use crate::bytecode_circuit::circuit::{
     BytecodeCircuit, BytecodeCircuitConfig, BytecodeCircuitConfigArgs,
 };
 #[cfg(feature = "for-a7")]
 use crate::copy_circuit::{CopyCircuit, CopyCircuitConfig, CopyCircuitConfigArgs};
+#[cfg(feature = "for-a7")]
+use crate::evm_circuit::{EvmCircuit, EvmCircuitConfig, EvmCircuitConfigArgs};
 #[cfg(feature = "for-a7")]
 use crate::exp_circuit::{ExpCircuit, ExpCircuitConfig};
 #[cfg(feature = "for-a7")]
@@ -17,15 +21,12 @@ use crate::keccak_circuit::{KeccakCircuit, KeccakCircuitConfig, KeccakCircuitCon
 #[cfg(feature = "for-a7")]
 use crate::state_circuit::{StateCircuit, StateCircuitConfig, StateCircuitConfigArgs};
 #[cfg(feature = "for-a7")]
+use crate::table::{ByteTable, BytecodeTable, CopyTable, ExpTable};
+#[cfg(feature = "for-a7")]
 use crate::{table::MptTable, witness::MptUpdates};
 
 use crate::{
-    anchor_tx_circuit::{AnchorTxCircuit, AnchorTxCircuitConfig, AnchorTxCircuitConfigArgs},
-    evm_circuit::{EvmCircuit, EvmCircuitConfig, EvmCircuitConfigArgs},
-    table::{
-        BlockTable, ByteTable, BytecodeTable, CopyTable, ExpTable, KeccakTable, PiTable, RwTable,
-        TxTable,
-    },
+    table::{BlockTable, ByteTable, KeccakTable},
     taiko_pi_circuit::{
         PublicData, TaikoPiCircuit, TaikoPiCircuitConfig, TaikoPiCircuitConfigArgs,
     },
@@ -48,19 +49,27 @@ use snark_verifier_sdk::CircuitExt;
 /// Configuration of the Super Circuit
 #[derive(Clone)]
 pub struct SuperCircuitConfig<F: Field> {
+    #[cfg(feature = "for-a7")]
     tx_table: TxTable,
+    #[cfg(feature = "for-a7")]
     rw_table: RwTable,
     #[cfg(feature = "for-a7")]
     mpt_table: MptTable,
+    #[cfg(feature = "for-a7")]
     bytecode_table: BytecodeTable,
+    #[cfg(feature = "for-a7")]
     pi_table: PiTable,
     keccak_table: KeccakTable,
     block_table: BlockTable,
     byte_table: ByteTable,
+    #[cfg(feature = "for-a7")]
     copy_table: CopyTable,
+    #[cfg(feature = "for-a7")]
     exp_table: ExpTable,
     pi_circuit: TaikoPiCircuitConfig<F>,
+    #[cfg(feature = "for-a7")]
     anchor_tx_circuit: AnchorTxCircuitConfig<F>,
+    #[cfg(feature = "for-a7")]
     evm_circuit: EvmCircuitConfig<F>,
     #[cfg(feature = "for-a7")]
     keccak_circuit: KeccakCircuitConfig<F>,
@@ -88,17 +97,24 @@ impl<F: Field> SubCircuitConfig<F> for SuperCircuitConfig<F> {
         meta: &mut ConstraintSystem<F>,
         Self::ConfigArgs { challenges }: Self::ConfigArgs,
     ) -> Self {
+        #[cfg(feature = "for-a7")]
         let tx_table = TxTable::construct(meta);
+        #[cfg(feature = "for-a7")]
         let rw_table = RwTable::construct(meta);
         #[cfg(feature = "for-a7")]
         let mpt_table = MptTable::construct(meta);
+        #[cfg(feature = "for-a7")]
         let bytecode_table = BytecodeTable::construct(meta);
+        #[cfg(feature = "for-a7")]
         let pi_table = PiTable::construct(meta);
         let block_table = BlockTable::construct(meta);
         let keccak_table = KeccakTable::construct(meta);
         let byte_table = ByteTable::construct(meta);
+        #[cfg(feature = "for-a7")]
         let q_copy_table = meta.fixed_column();
+        #[cfg(feature = "for-a7")]
         let copy_table = CopyTable::construct(meta, q_copy_table);
+        #[cfg(feature = "for-a7")]
         let exp_table = ExpTable::construct(meta);
 
         let pi_circuit = TaikoPiCircuitConfig::new(
@@ -108,10 +124,11 @@ impl<F: Field> SubCircuitConfig<F> for SuperCircuitConfig<F> {
                 block_table: block_table.clone(),
                 keccak_table: keccak_table.clone(),
                 byte_table: byte_table.clone(),
-                challenges: challenges.clone(),
+                challenges,
             },
         );
 
+        #[cfg(feature = "for-a7")]
         let anchor_tx_circuit = AnchorTxCircuitConfig::new(
             meta,
             AnchorTxCircuitConfigArgs {
@@ -122,6 +139,7 @@ impl<F: Field> SubCircuitConfig<F> for SuperCircuitConfig<F> {
             },
         );
 
+        #[cfg(feature = "for-a7")]
         let evm_circuit = EvmCircuitConfig::new(
             meta,
             EvmCircuitConfigArgs {
@@ -188,19 +206,27 @@ impl<F: Field> SubCircuitConfig<F> for SuperCircuitConfig<F> {
         };
 
         Self {
+            #[cfg(feature = "for-a7")]
             tx_table,
+            #[cfg(feature = "for-a7")]
             rw_table,
             #[cfg(feature = "for-a7")]
             mpt_table,
+            #[cfg(feature = "for-a7")]
             bytecode_table,
+            #[cfg(feature = "for-a7")]
             copy_table,
+            #[cfg(feature = "for-a7")]
             exp_table,
+            #[cfg(feature = "for-a7")]
             pi_table,
             pi_circuit,
             block_table,
             keccak_table,
             byte_table,
+            #[cfg(feature = "for-a7")]
             anchor_tx_circuit,
+            #[cfg(feature = "for-a7")]
             evm_circuit,
             #[cfg(feature = "for-a7")]
             keccak_circuit,
@@ -221,11 +247,13 @@ impl<F: Field> SubCircuitConfig<F> for SuperCircuitConfig<F> {
 pub struct SuperCircuit<F: Field> {
     /// Public Input Circuit
     pub pi_circuit: TaikoPiCircuit<F>,
+
     /// Anchor Transaction Circuit
+    #[cfg(feature = "for-a7")]
     pub anchor_tx_circuit: AnchorTxCircuit<F>,
     /// EVM Circuit
+    #[cfg(feature = "for-a7")]
     pub evm_circuit: EvmCircuit<F>,
-
     // planed circuits for a6
     #[cfg(feature = "for-a7")]
     pub(crate) keccak_circuit: KeccakCircuit<F>,
@@ -264,10 +292,18 @@ impl<F: Field> SubCircuit<F> for SuperCircuit<F> {
 
     fn new_from_block(block: &Block<F>) -> Self {
         let pi_circuit = TaikoPiCircuit::new_from_block(block);
-        let anchor_tx_circuit = AnchorTxCircuit::new_from_block(block);
-        let evm_circuit = EvmCircuit::new_from_block(block);
         #[cfg(feature = "for-a7")]
-        let (keccak_circuit, bytecode_circuit, state_circuit, copy_circuit, exp_circuit) = {
+        let (
+            anchor_tx_circuit,
+            evm_circuit,
+            keccak_circuit,
+            bytecode_circuit,
+            state_circuit,
+            copy_circuit,
+            exp_circuit,
+        ) = {
+            let anchor_tx_circuit = AnchorTxCircuit::new_from_block(block);
+            let evm_circuit = EvmCircuit::new_from_block(block);
             let keccak_circuit = KeccakCircuit::new_from_block(block);
             let bytecode_circuit = BytecodeCircuit::new_from_block(block);
             let state_circuit = StateCircuit::new_from_block(block);
@@ -284,7 +320,9 @@ impl<F: Field> SubCircuit<F> for SuperCircuit<F> {
 
         SuperCircuit::<_> {
             pi_circuit,
+            #[cfg(feature = "for-a7")]
             anchor_tx_circuit,
+            #[cfg(feature = "for-a7")]
             evm_circuit,
             #[cfg(feature = "for-a7")]
             keccak_circuit,
@@ -311,7 +349,20 @@ impl<F: Field> SubCircuit<F> for SuperCircuit<F> {
     fn min_num_rows_block(block: &Block<F>) -> (usize, usize) {
         [
             TaikoPiCircuit::min_num_rows_block(block),
+            #[cfg(feature = "for-a7")]
             AnchorTxCircuit::min_num_rows_block(block),
+            #[cfg(feature = "for-a7")]
+            EvmCircuit::min_num_rows_block(block),
+            #[cfg(feature = "for-a7")]
+            KeccakCircuit::min_num_rows_block(block),
+            #[cfg(feature = "for-a7")]
+            BytecodeCircuit::min_num_rows_block(block),
+            #[cfg(feature = "for-a7")]
+            StateCircuit::min_num_rows_block(block),
+            #[cfg(feature = "for-a7")]
+            CopyCircuit::min_num_rows_block(block),
+            #[cfg(feature = "for-a7")]
+            ExpCircuit::min_num_rows_block(block),
         ]
         .iter()
         .fold((0, 0), |(x1, y1), (x2, y2)| {
@@ -328,12 +379,15 @@ impl<F: Field> SubCircuit<F> for SuperCircuit<F> {
     ) -> Result<(), Error> {
         self.pi_circuit
             .synthesize_sub(&config.pi_circuit, challenges, layouter)?;
-        self.anchor_tx_circuit
-            .synthesize_sub(&config.anchor_tx_circuit, challenges, layouter)?;
-        self.evm_circuit
-            .synthesize_sub(&config.evm_circuit, challenges, layouter)?;
         #[cfg(feature = "for-a7")]
         {
+            self.anchor_tx_circuit.synthesize_sub(
+                &config.anchor_tx_circuit,
+                challenges,
+                layouter,
+            )?;
+            self.evm_circuit
+                .synthesize_sub(&config.evm_circuit, challenges, layouter)?;
             self.keccak_circuit
                 .synthesize_sub(&config.keccak_circuit, challenges, layouter)?;
             self.bytecode_circuit
@@ -408,39 +462,42 @@ impl<F: Field> Circuit<F> for SuperCircuit<F> {
             &challenges,
         )?;
         config.byte_table.load(&mut layouter)?;
-        config.pi_table.load(
-            &mut layouter,
-            self.block.protocol_instance.as_ref().unwrap(),
-            &challenges,
-        )?;
-        config.tx_table.load(
-            &mut layouter,
-            &self.block.txs,
-            self.block.circuits_params.max_txs,
-            self.block.circuits_params.max_calldata,
-            &challenges,
-        )?;
-        self.block.rws.check_rw_counter_sanity();
-        config.rw_table.load(
-            &mut layouter,
-            &self.block.rws.table_assignments(),
-            self.block.circuits_params.max_rws,
-            challenges.evm_word(),
-        )?;
-        config
-            .bytecode_table
-            .load(&mut layouter, self.block.bytecodes.values(), &challenges)?;
-        config.exp_table.load(&mut layouter, &self.block)?;
-        config
-            .copy_table
-            .load(&mut layouter, &self.block, &challenges)?;
-
         #[cfg(feature = "for-a7")]
-        config.mpt_table.load(
-            &mut layouter,
-            &MptUpdates::mock_from(&self.state_circuit.rows),
-            randomness,
-        )?;
+        {
+            config.pi_table.load(
+                &mut layouter,
+                self.block.protocol_instance.as_ref().unwrap(),
+                &challenges,
+            )?;
+            config.tx_table.load(
+                &mut layouter,
+                &self.block.txs,
+                self.block.circuits_params.max_txs,
+                self.block.circuits_params.max_calldata,
+                &challenges,
+            )?;
+            self.block.rws.check_rw_counter_sanity();
+            config.rw_table.load(
+                &mut layouter,
+                &self.block.rws.table_assignments(),
+                self.block.circuits_params.max_rws,
+                challenges.evm_word(),
+            )?;
+            config.bytecode_table.load(
+                &mut layouter,
+                self.block.bytecodes.values(),
+                &challenges,
+            )?;
+            config.exp_table.load(&mut layouter, &self.block)?;
+            config
+                .copy_table
+                .load(&mut layouter, &self.block, &challenges)?;
+            config.mpt_table.load(
+                &mut layouter,
+                &MptUpdates::mock_from(&self.state_circuit.rows),
+                randomness,
+            )?;
+        }
 
         self.synthesize_sub(&config, &challenges, &mut layouter)
     }

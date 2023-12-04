@@ -22,7 +22,6 @@ mod public_data_test {
         dev::{CellValue, MockProver},
         halo2curves::bn256::Fr,
     };
-    use log::error;
     use std::str::FromStr;
     use testool::{parse_address, parse_hash};
     use zkevm_circuits::{
@@ -307,9 +306,9 @@ mod public_data_test {
         let k = 20;
         let prover = MockProver::run(k, &circuit, instance).unwrap();
         let res = prover.verify_par();
-        if let Err(err) = res {
-            error!("Verification failures: {:#?}", err);
-            panic!("Failed verification");
+        if res.is_err() {
+            // show what went wrong
+            prover.assert_satisfied();
         }
     }
 
@@ -338,20 +337,20 @@ mod public_data_test {
 
     fn gen_requests() -> Vec<ProtocolInstance> {
         let metadata = BlockMetadata {
-            l1Hash: parse_hash("6e3b781b2d9a04e21ecba49e67dc3fb0a8242408cc07fa6fed5d8bd0eca2c985")
+            l1Hash: parse_hash("8374d2fde2f3e5640f0ce4f6bb557e988336c2dae71e55cb3734c5c6be450820")
                 .unwrap()
                 .as_fixed_bytes()
                 .into(),
             txListHash: parse_hash(
-                "569e75fc77c1a856f6daaf9e69d8a9566ca34aa47f9133711ce065a571af0cfd",
+                "b3de7eaf38c3c84a34d7d80100c1b133bd7734f03b5c8e86cb806d684b718d85",
             )
             .unwrap()
             .as_fixed_bytes()
             .into(),
             id: 10,
-            timestamp: 1694510352,
-            l1Height: 4272887,
-            coinbase: parse_address("0000777700000000000000000000000000000001")
+            timestamp: 1699729048,
+            l1Height: 131,
+            coinbase: parse_address("0x1000777700000000000000000000000000000001")
                 .unwrap()
                 .as_fixed_bytes()
                 .into(),
@@ -361,19 +360,19 @@ mod public_data_test {
         let block_evidence = BlockEvidence {
             blockMetadata: metadata,
             parentHash: parse_hash(
-                "a534f7f74d155fa0575ccfd9dbb2a7c4f89baa0fb48c3a312f0d97e3fbff7c47",
+                "beb327617555bd45c05ac7e33d2c509c77192eb8c372873483696b1a7367750a",
             )
             .unwrap()
             .as_fixed_bytes()
             .into(),
             blockHash: parse_hash(
-                "c32ce5789b5ae9b2a3921e43fb16c429abcb520acf5e27dc717a9caf46c4319f",
+                "8a8c11d6c46c1e8cce87900b52854fc74975aab054355c2a060aeefc6419b606",
             )
             .unwrap()
             .as_fixed_bytes()
             .into(),
             signalRoot: parse_hash(
-                "95a87577b110954a0daf867bd574aa726ec9a061b4bf0903d5adef23872f7f1b",
+                "61e8be9519dac9b5e5124dd2e3f4e79628def914c8a9e6290caddef681fad23b",
             )
             .unwrap()
             .as_fixed_bytes()

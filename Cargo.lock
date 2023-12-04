@@ -818,6 +818,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "circuit-benchmarks"
+version = "0.1.0"
+dependencies = [
+ "ark-std 0.3.0",
+ "bus-mapping",
+ "env_logger",
+ "eth-types",
+ "ethers-signers",
+ "halo2_proofs 0.2.0",
+ "hex",
+ "itertools",
+ "keccak256",
+ "mock",
+ "rand",
+ "rand_chacha",
+ "rand_xorshift",
+ "serde",
+ "serde_json",
+ "snark-verifier",
+ "snark-verifier-sdk",
+ "zkevm-circuits",
+]
+
+[[package]]
 name = "clang-sys"
 version = "1.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
