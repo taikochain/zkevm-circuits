@@ -26,9 +26,7 @@ use crate::{
         BlockTable, ByteTable, BytecodeTable, CopyTable, ExpTable, KeccakTable, PiTable, RwTable,
         TxTable,
     },
-    taiko_pi_circuit::{
-        PublicData, TaikoPiCircuit, TaikoPiCircuitConfig, TaikoPiConfigArgs,
-    },
+    taiko_pi_circuit::{PublicData, TaikoPiCircuit, TaikoPiCircuitConfig, TaikoPiConfigArgs},
     util::{log2_ceil, Challenges, SubCircuit, SubCircuitConfig},
     witness::{block_convert, Block},
 };
@@ -395,7 +393,9 @@ impl<F: Field> Circuit<F> for SuperCircuit<F> {
             self.block
                 .sha3_inputs
                 .iter()
-                .chain(std::iter::once(&self.pi_circuit.public_data.protocol_instance.abi_encode()))
+                .chain(std::iter::once(
+                    &self.pi_circuit.public_data.protocol_instance.abi_encode(),
+                ))
                 .chain(
                     &self
                         .block

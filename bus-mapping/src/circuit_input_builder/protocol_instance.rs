@@ -1,14 +1,13 @@
 #![allow(missing_docs)]
 
-use alloy_dyn_abi::DynSolValue;
-use alloy_primitives::{B256, U160, U256};
-use alloy_primitives::Address as SolAddress;
+use alloy_primitives::{B256, U256};
+
 use alloy_sol_types::{sol, SolValue};
-use eth_types::{Address, Bytes, ToBigEndian, ToWord};
+use eth_types::Address;
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use sha3::{Digest, Keccak256};
-use std::{iter, str::FromStr};
+use std::str::FromStr;
 
 /// L1 signal service
 pub static L1_SIGNAL_SERVICE: Lazy<Address> = Lazy::new(|| {
@@ -100,11 +99,11 @@ impl ProtocolInstance {
     // return keccak256(abi.encode(tran, prover, metaHash, txListHash, pointValue));
     pub fn hash(&self, evidence_type: EvidenceType) -> B256 {
         match evidence_type {
-            EvidenceType::Sgx { new_pubkey } => todo!(),
-            EvidenceType::PseZk  => {
+            EvidenceType::Sgx { new_pubkey: _ } => todo!(),
+            EvidenceType::PseZk => {
                 // keccak256(abi.encode(tran, prover, metaHash, txListHash, pointValue));
                 keccak(self.abi_encode()).into()
-            },
+            }
         }
     }
 
@@ -119,29 +118,28 @@ impl ProtocolInstance {
             prover: self.prover.as_fixed_bytes().into(),
             txListHash: self.block_metadata.blobHash,
             pointValue: U256::from(0),
-        
-        }.abi_encode()
-        .into()
+        }
+        .abi_encode()
     }
 
     pub fn parentHash(&self) -> Vec<u8> {
-        self.transition.parentHash.abi_encode().into()
+        self.transition.parentHash.abi_encode()
     }
 
     pub fn blockHash(&self) -> Vec<u8> {
-        self.transition.blockHash.abi_encode().into()
+        self.transition.blockHash.abi_encode()
     }
 
     pub fn signalRoot(&self) -> Vec<u8> {
-        self.transition.signalRoot.abi_encode().into()
+        self.transition.signalRoot.abi_encode()
     }
 
     pub fn graffiti(&self) -> Vec<u8> {
-        self.transition.graffiti.abi_encode().into()
+        self.transition.graffiti.abi_encode()
     }
 
     pub fn prover(&self) -> Vec<u8> {
-        self.prover.as_fixed_bytes().abi_encode().into()
+        self.prover.as_fixed_bytes().abi_encode()
     }
 
     pub fn meta_hash(&self) -> Vec<u8> {
@@ -149,13 +147,12 @@ impl ProtocolInstance {
     }
 
     pub fn tx_list_hash(&self) -> Vec<u8> {
-        self.block_metadata.blobHash.abi_encode().into()
+        self.block_metadata.blobHash.abi_encode()
     }
 
     pub fn point_value(&self) -> Vec<u8> {
-        U256::from(0).abi_encode().into()
+        U256::from(0).abi_encode()
     }
-
 }
 
 #[inline]

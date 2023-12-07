@@ -4,12 +4,12 @@ mod dev;
 mod param;
 #[cfg(any(test))]
 mod test;
-use bus_mapping::circuit_input_builder::{protocol_instance::{EvidenceType, self}, ProtocolInstance};
+use bus_mapping::circuit_input_builder::ProtocolInstance;
 
 use param::*;
 
 // use bus_mapping::circuit_input_builder::ProtocolInstance;
-use eth_types::{Field, ToBigEndian, ToWord, U256};
+use eth_types::{Field, U256};
 
 use ethers_core::utils::keccak256;
 use halo2_proofs::circuit::{AssignedCell, Layouter, SimpleFloorPlanner, Value};
@@ -30,7 +30,7 @@ use crate::{
     util::{Challenges, SubCircuit, SubCircuitConfig},
     witness::{self, BlockContext},
 };
-use alloy_dyn_abi::DynSolValue::FixedBytes;
+
 use core::result::Result;
 use halo2_proofs::plonk::Error;
 
@@ -386,7 +386,6 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
         challenge: &Challenges<Value<F>>,
         public_data: &PublicData<F>,
     ) -> Result<(), Error> {
-        
         let evm_word = challenge.evm_word();
         let keccak_r = challenge.keccak_input();
         let hi_lo_cells = layouter.assign_region(
@@ -420,7 +419,6 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
                 self.keccak_bytes.assign(&mut region, 0, &public_data.keccak_assignment())
                     .expect("Keccak bytes assignment failed");                
                 assign!(region, self.total_acc, 0 => public_data.total_acc(keccak_r))?;
-                
                 let hi_low_assignment = public_data.keccak_hi_low();
                 let hi = assign!(region, self.keccak_hi_lo[0], 0 => hi_low_assignment[0])?;
                 let lo = assign!(region, self.keccak_hi_lo[1], 0 => hi_low_assignment[1])?;

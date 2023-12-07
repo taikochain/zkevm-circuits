@@ -75,10 +75,7 @@ pub fn protocol_instancetable_assignments<F: Field>(
         [
             Value::known(F::from(PiFieldTag::L1Hash as u64)),
             rlc_be_bytes(
-                protocol_instance
-                    .block_metadata
-                    .l1Hash
-                    .as_slice(),
+                protocol_instance.block_metadata.l1Hash.as_slice(),
                 randomness,
             ),
         ],

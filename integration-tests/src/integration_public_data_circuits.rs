@@ -7,7 +7,7 @@ mod public_data_test {
     use crate::get_client;
     use bus_mapping::{
         circuit_input_builder::{
-            protocol_instance::{BlockEvidence, BlockMetadata},
+            protocol_instance::{BlockMetadata, Transition},
             BuilderClient, CircuitsParams, ProtocolInstance,
         },
         rpc::BlockNumber,
@@ -337,7 +337,7 @@ mod public_data_test {
     }
 
     fn gen_requests() -> Vec<ProtocolInstance> {
-        let metadata = BlockMetadata {
+        let block_metadata = BlockMetadata {
             l1Hash: parse_hash("6e3b781b2d9a04e21ecba49e67dc3fb0a8242408cc07fa6fed5d8bd0eca2c985")
                 .unwrap()
                 .as_fixed_bytes()
@@ -358,8 +358,7 @@ mod public_data_test {
             ..Default::default()
         };
 
-        let block_evidence = BlockEvidence {
-            blockMetadata: metadata,
+        let transition = Transition {
             parentHash: parse_hash(
                 "a534f7f74d155fa0575ccfd9dbb2a7c4f89baa0fb48c3a312f0d97e3fbff7c47",
             )
@@ -382,7 +381,8 @@ mod public_data_test {
         };
 
         let protocol_instance = ProtocolInstance {
-            block_evidence,
+            transition,
+            block_metadata,
             ..Default::default()
         };
         vec![protocol_instance]
@@ -392,7 +392,7 @@ mod public_data_test {
         circuits_params: CircuitsParams,
         protocol_instance: ProtocolInstance,
     ) -> Block<Fr> {
-        let block_num = protocol_instance.block_evidence.blockMetadata.id;
+        let block_num = protocol_instance.block_metadata.id;
         let cli = get_client();
 
         let cli = BuilderClient::new(cli, circuits_params, Some(protocol_instance.clone()))

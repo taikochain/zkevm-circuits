@@ -1,5 +1,3 @@
-use crate::witness::Block;
-
 use super::*;
 
 #[cfg(any(feature = "test", test))]
@@ -54,13 +52,11 @@ impl<F: Field> Circuit<F> for TaikoPiCircuit<F> {
             .block_table
             .load(&mut layouter, &evidance.block_context, randomness)?;
         // assign keccak table
-        config
-            .keccak_table
-            .dev_load(
-                &mut layouter, 
-                vec![&evidance.protocol_instance.abi_encode()], 
-                &challenges
-            )?;
+        config.keccak_table.dev_load(
+            &mut layouter,
+            vec![&evidance.protocol_instance.abi_encode()],
+            &challenges,
+        )?;
         config.byte_table.load(&mut layouter)?;
 
         self.synthesize_sub(&config, &challenges, &mut layouter)
