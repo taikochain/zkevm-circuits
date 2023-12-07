@@ -160,8 +160,8 @@ impl<F: Field> PublicData<F> {
             1 => self.protocol_instance.blockHash(),
             2 => self.protocol_instance.signalRoot(),
             3 => self.protocol_instance.graffiti(),
-            4 => self.protocol_instance.prover(),
-            5 => self.protocol_instance.meta_hash(),
+            4 => self.protocol_instance.meta_hash(),
+            5 => self.protocol_instance.prover(),
             6 => self.protocol_instance.tx_list_hash(),
             7 => self.protocol_instance.point_value(),
             _ => unreachable!(),
@@ -412,16 +412,15 @@ impl<F: Field> TaikoPiCircuitConfig<F> {
                     &self.tx_list_hash,
                     &self.point_value,
                 ].iter().for_each(|gadget| {
-                    println!("gadget {:?} len = {}", idx, gadget.len);
                     gadget.assign(&mut region, 0, &public_data.assignment(idx))
                         .expect(&format!("FieldGadget assignment failed at {:?}", idx));
                     idx += 1;
                 });
+
                 self.keccak_bytes.assign(&mut region, 0, &public_data.keccak_assignment())
-                    .expect("Keccak bytes assignment failed");
-                
-                println!("total_acc = {:?}", public_data.total_acc(keccak_r));
+                    .expect("Keccak bytes assignment failed");                
                 assign!(region, self.total_acc, 0 => public_data.total_acc(keccak_r))?;
+                
                 let hi_low_assignment = public_data.keccak_hi_low();
                 let hi = assign!(region, self.keccak_hi_lo[0], 0 => hi_low_assignment[0])?;
                 let lo = assign!(region, self.keccak_hi_lo[1], 0 => hi_low_assignment[1])?;

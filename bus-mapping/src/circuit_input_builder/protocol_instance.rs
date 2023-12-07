@@ -103,8 +103,6 @@ impl ProtocolInstance {
             EvidenceType::Sgx { new_pubkey } => todo!(),
             EvidenceType::PseZk  => {
                 // keccak256(abi.encode(tran, prover, metaHash, txListHash, pointValue));
-                let meta_hash = keccak(self.block_metadata.abi_encode());
-                self.block_metadata.blobHash;
                 keccak(self.abi_encode()).into()
             },
         }
@@ -140,14 +138,6 @@ impl ProtocolInstance {
 
     pub fn graffiti(&self) -> Vec<u8> {
         self.transition.graffiti.abi_encode().into()
-    }
-
-    pub fn transition(&self) -> Vec<u8> {
-        self.transition.abi_encode().into()
-    }
-
-    pub fn block_metadata(&self) -> Vec<u8> {
-        self.block_metadata.abi_encode().into()
     }
 
     pub fn prover(&self) -> Vec<u8> {

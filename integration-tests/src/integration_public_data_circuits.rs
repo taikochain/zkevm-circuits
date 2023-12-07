@@ -342,7 +342,7 @@ mod public_data_test {
                 .unwrap()
                 .as_fixed_bytes()
                 .into(),
-            txListHash: parse_hash(
+            blobHash: parse_hash(
                 "569e75fc77c1a856f6daaf9e69d8a9566ca34aa47f9133711ce065a571af0cfd",
             )
             .unwrap()
