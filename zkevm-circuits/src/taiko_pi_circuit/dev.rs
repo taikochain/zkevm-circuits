@@ -1,3 +1,5 @@
+use crate::witness::Block;
+
 use super::*;
 
 #[cfg(any(feature = "test", test))]
@@ -11,7 +13,7 @@ impl<F: Field> Circuit<F> for TaikoPiCircuit<F> {
     }
 
     fn params(&self) -> Self::Params {
-        self.evidence.clone()
+        self.public_data.clone()
     }
 
     fn configure(meta: &mut ConstraintSystem<F>) -> Self::Config {
@@ -27,8 +29,8 @@ impl<F: Field> Circuit<F> for TaikoPiCircuit<F> {
         (
             TaikoPiCircuitConfig::new(
                 meta,
-                TaikoPiCircuitConfigArgs {
-                    evidence: params,
+                TaikoPiConfigArgs {
+                    public_data: params,
                     block_table,
                     keccak_table,
                     byte_table,
@@ -54,7 +56,11 @@ impl<F: Field> Circuit<F> for TaikoPiCircuit<F> {
         // assign keccak table
         config
             .keccak_table
-            .dev_load(&mut layouter, vec![&evidance.encode_raw()], &challenges)?;
+            .dev_load(
+                &mut layouter, 
+                vec![&evidance.protocol_instance.abi_encode()], 
+                &challenges
+            )?;
         config.byte_table.load(&mut layouter)?;
 
         self.synthesize_sub(&config, &challenges, &mut layouter)

@@ -3,7 +3,7 @@ use super::{dev::*, param::*, *};
 use std::vec;
 
 use alloy_primitives::FixedBytes;
-use bus_mapping::circuit_input_builder::protocol_instance::{self, BlockEvidence};
+use bus_mapping::circuit_input_builder::{protocol_instance::{self, BlockEvidence, Transition}, Transaction, BlockMetadata};
 use core::result::Result;
 use eth_types::{H160, H256};
 use halo2_proofs::{
@@ -41,11 +41,12 @@ fn run<F: Field>(
 
 fn mock_public_data() -> PublicData<Fr> {
     let protocol_instance = ProtocolInstance {
-        block_evidence: BlockEvidence {
+        transition: Transition {
             parentHash: LAST_HASH.as_fixed_bytes().into(),
             blockHash: THIS_HASH.as_fixed_bytes().into(),
             ..Default::default()
         },
+        block_metadata: BlockMetadata::default(),
         prover: *PROVER_ADDR,
     };
     let block_context = BlockContext {
@@ -80,7 +81,7 @@ fn mock(
         ..Default::default()
     };
     let protocol_instance = ProtocolInstance {
-        block_evidence: BlockEvidence {
+        transition: Transition {
             parentHash: last_hash.as_fixed_bytes().into(),
             blockHash: this_hash.as_fixed_bytes().into(),
             ..Default::default()

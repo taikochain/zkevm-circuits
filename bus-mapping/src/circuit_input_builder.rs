@@ -9,7 +9,6 @@ mod input_state_ref;
 // mod protocol_instance;
 ///
 pub mod protocol_instance;
-pub mod protocol_instance_;
 
 #[cfg(test)]
 mod tracer_tests;
