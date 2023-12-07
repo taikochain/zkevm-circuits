@@ -62,7 +62,6 @@ impl KeccakTable {
                 challenge,
             )
         });
-
         vec![[
             Value::known(F::ONE),
             input_rlc,
@@ -112,6 +111,7 @@ impl KeccakTable {
                 let keccak_table_columns = <KeccakTable as LookupTable<F>>::advice_columns(self);
                 for input in inputs.clone() {
                     for row in Self::assignments(input, challenges) {
+                        println!("keccak row: {:?}", row);
                         // let mut column_index = 0;
                         for (&column, value) in keccak_table_columns.iter().zip_eq(row) {
                             region.assign_advice(

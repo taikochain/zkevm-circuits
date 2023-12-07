@@ -12,4 +12,4 @@ pub const PROVER: usize = 5;
 pub const TX_LIST_HASH: usize = 6;
 pub const POINT_VALUE: usize = 7;
 
-pub const CM_HEIGHT: usize = 15;
+pub const CM_HEIGHT: usize = 20;

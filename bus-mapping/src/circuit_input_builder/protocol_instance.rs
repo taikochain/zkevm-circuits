@@ -85,7 +85,7 @@ pub enum EvidenceType {
 pub struct ProtocolInstance {
     pub transition: Transition,
     pub block_metadata: BlockMetadata,
-    pub prover: SolAddress,
+    pub prover: Address,
 }
 
 impl ProtocolInstance {
@@ -118,7 +118,7 @@ impl ProtocolInstance {
             signalRoot: self.transition.signalRoot,
             graffiti: self.transition.graffiti,
             metaHash: meta_hash.into(),
-            prover: self.prover,
+            prover: self.prover.as_fixed_bytes().into(),
             txListHash: self.block_metadata.blobHash,
             pointValue: U256::from(0),
         
@@ -151,7 +151,7 @@ impl ProtocolInstance {
     }
 
     pub fn prover(&self) -> Vec<u8> {
-        self.prover.abi_encode().into()
+        self.prover.as_fixed_bytes().abi_encode().into()
     }
 
     pub fn meta_hash(&self) -> Vec<u8> {

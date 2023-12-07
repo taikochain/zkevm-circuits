@@ -3,7 +3,7 @@ use super::{dev::*, param::*, *};
 use std::vec;
 
 use alloy_primitives::FixedBytes;
-use bus_mapping::circuit_input_builder::{protocol_instance::{self, BlockEvidence, Transition}, Transaction, BlockMetadata};
+use bus_mapping::circuit_input_builder::{protocol_instance::Transition, Transaction, BlockMetadata};
 use core::result::Result;
 use eth_types::{H160, H256};
 use halo2_proofs::{
