@@ -288,7 +288,7 @@ pub struct StorageProof {
     /// Storage Value
     pub value: U256,
     /// Storage proof: rlp-encoded trie nodes from root to value.
-    pub proof: Vec<Bytes>,
+    pub proof: Option<Vec<Bytes>>,
 }
 
 /// Struct used to define the result of `eth_getProof` call

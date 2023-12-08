@@ -37,14 +37,14 @@ const ANCHOR_VALUE: u64 = 0;
 const ANCHOR_IS_CREATE: bool = false;
 const ANCHOR_GAS_PRICE: u64 = 0;
 const ANCHOR_GAS_TIP_CAP: u64 = 0;
-const ANCHOR_GAS_LIMIT: u64 = 0;
+const ANCHOR_GAS_LIMIT: u64 = 250000;
 
 const MAX_DEGREE: usize = 9;
 const BYTE_POW_BASE: u64 = 1 << 8;
 
 /// L2 contract address
 pub static L2_CONTRACT: Lazy<Address> = Lazy::new(|| {
-    Address::from_str("0x1000777700000000000000000000000000000001")
+    Address::from_str("0x1670010000000000000000000000000000010001")
         .expect("invalid l2 contract address")
 });
 
