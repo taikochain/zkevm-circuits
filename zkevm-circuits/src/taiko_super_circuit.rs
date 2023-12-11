@@ -26,12 +26,7 @@ use crate::table::{ByteTable, BytecodeTable, CopyTable, ExpTable};
 use crate::{table::MptTable, witness::MptUpdates};
 
 use crate::{
-    anchor_tx_circuit::{AnchorTxCircuit, AnchorTxCircuitConfig, AnchorTxCircuitConfigArgs},
-    evm_circuit::{EvmCircuit, EvmCircuitConfig, EvmCircuitConfigArgs},
-    table::{
-        BlockTable, ByteTable, BytecodeTable, CopyTable, ExpTable, KeccakTable, PiTable, RwTable,
-        TxTable,
-    },
+    table::{BlockTable, ByteTable, KeccakTable},
     taiko_pi_circuit::{PublicData, TaikoPiCircuit, TaikoPiCircuitConfig, TaikoPiConfigArgs},
     util::{log2_ceil, Challenges, SubCircuit, SubCircuitConfig},
     witness::{block_convert, Block},
