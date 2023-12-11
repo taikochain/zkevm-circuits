@@ -26,10 +26,13 @@ use crate::table::{ByteTable, BytecodeTable, CopyTable, ExpTable};
 use crate::{table::MptTable, witness::MptUpdates};
 
 use crate::{
-    table::{BlockTable, ByteTable, KeccakTable},
-    taiko_pi_circuit::{
-        PublicData, TaikoPiCircuit, TaikoPiCircuitConfig, TaikoPiCircuitConfigArgs,
+    anchor_tx_circuit::{AnchorTxCircuit, AnchorTxCircuitConfig, AnchorTxCircuitConfigArgs},
+    evm_circuit::{EvmCircuit, EvmCircuitConfig, EvmCircuitConfigArgs},
+    table::{
+        BlockTable, ByteTable, BytecodeTable, CopyTable, ExpTable, KeccakTable, PiTable, RwTable,
+        TxTable,
     },
+    taiko_pi_circuit::{PublicData, TaikoPiCircuit, TaikoPiCircuitConfig, TaikoPiConfigArgs},
     util::{log2_ceil, Challenges, SubCircuit, SubCircuitConfig},
     witness::{block_convert, Block},
 };
@@ -119,8 +122,8 @@ impl<F: Field> SubCircuitConfig<F> for SuperCircuitConfig<F> {
 
         let pi_circuit = TaikoPiCircuitConfig::new(
             meta,
-            TaikoPiCircuitConfigArgs {
-                evidence: PublicData::default(),
+            TaikoPiConfigArgs {
+                public_data: PublicData::default(),
                 block_table: block_table.clone(),
                 keccak_table: keccak_table.clone(),
                 byte_table: byte_table.clone(),
@@ -449,7 +452,9 @@ impl<F: Field> Circuit<F> for SuperCircuit<F> {
             self.block
                 .sha3_inputs
                 .iter()
-                .chain(std::iter::once(&self.pi_circuit.evidence.encode_raw()))
+                .chain(std::iter::once(
+                    &self.pi_circuit.public_data.protocol_instance.abi_encode(),
+                ))
                 .chain(
                     &self
                         .block
@@ -518,9 +523,9 @@ impl<F: Field> SuperCircuit<F> {
         let block_data =
             BlockData::new_from_geth_data_with_params(geth_data.clone(), circuits_params);
         let mut builder = block_data.new_circuit_input_builder();
-        protocol_instance.block_evidence.blockHash =
+        protocol_instance.transition.blockHash =
             geth_data.eth_block.hash.unwrap().as_fixed_bytes().into();
-        protocol_instance.block_evidence.parentHash =
+        protocol_instance.transition.parentHash =
             geth_data.eth_block.parent_hash.as_fixed_bytes().into();
         builder.block.protocol_instance = Some(protocol_instance);
         builder

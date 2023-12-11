@@ -3,9 +3,11 @@ use super::{dev::*, param::*, *};
 use std::vec;
 
 use alloy_primitives::FixedBytes;
-use bus_mapping::circuit_input_builder::protocol_instance::{self, BlockEvidence};
+use bus_mapping::circuit_input_builder::{
+    protocol_instance::Transition, BlockMetadata, Transaction,
+};
 use core::result::Result;
-use eth_types::{H160, H256};
+use eth_types::{ToWord, H160, H256};
 use halo2_proofs::{
     dev::{MockProver, VerifyFailure},
     halo2curves::bn256::Fr,
@@ -13,7 +15,6 @@ use halo2_proofs::{
 };
 use lazy_static::lazy_static;
 use snark_verifier_sdk::halo2::gen_srs;
-
 lazy_static! {
     static ref LAST_HASH: H256 = H256::from_slice(
         &hex::decode("1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347").unwrap(),
@@ -41,11 +42,12 @@ fn run<F: Field>(
 
 fn mock_public_data() -> PublicData<Fr> {
     let protocol_instance = ProtocolInstance {
-        block_evidence: BlockEvidence {
+        transition: Transition {
             parentHash: LAST_HASH.as_fixed_bytes().into(),
             blockHash: THIS_HASH.as_fixed_bytes().into(),
             ..Default::default()
         },
+        block_metadata: BlockMetadata::default(),
         prover: *PROVER_ADDR,
     };
     let block_context = BlockContext {
@@ -80,7 +82,7 @@ fn mock(
         ..Default::default()
     };
     let protocol_instance = ProtocolInstance {
-        block_evidence: BlockEvidence {
+        transition: Transition {
             parentHash: last_hash.as_fixed_bytes().into(),
             blockHash: this_hash.as_fixed_bytes().into(),
             ..Default::default()

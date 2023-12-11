@@ -7,7 +7,7 @@ mod public_data_test {
     use crate::get_client;
     use bus_mapping::{
         circuit_input_builder::{
-            protocol_instance::{BlockEvidence, BlockMetadata},
+            protocol_instance::{BlockMetadata, Transition},
             BuilderClient, CircuitsParams, ProtocolInstance,
         },
         rpc::BlockNumber,
@@ -336,13 +336,13 @@ mod public_data_test {
     }
 
     fn gen_requests() -> Vec<ProtocolInstance> {
-        let metadata = BlockMetadata {
-            l1Hash: parse_hash("8374d2fde2f3e5640f0ce4f6bb557e988336c2dae71e55cb3734c5c6be450820")
+        let block_metadata = BlockMetadata {
+            l1Hash: parse_hash("6e3b781b2d9a04e21ecba49e67dc3fb0a8242408cc07fa6fed5d8bd0eca2c985")
                 .unwrap()
                 .as_fixed_bytes()
                 .into(),
-            txListHash: parse_hash(
-                "b3de7eaf38c3c84a34d7d80100c1b133bd7734f03b5c8e86cb806d684b718d85",
+            blobHash: parse_hash(
+                "569e75fc77c1a856f6daaf9e69d8a9566ca34aa47f9133711ce065a571af0cfd",
             )
             .unwrap()
             .as_fixed_bytes()
@@ -357,8 +357,7 @@ mod public_data_test {
             ..Default::default()
         };
 
-        let block_evidence = BlockEvidence {
-            blockMetadata: metadata,
+        let transition = Transition {
             parentHash: parse_hash(
                 "beb327617555bd45c05ac7e33d2c509c77192eb8c372873483696b1a7367750a",
             )
@@ -381,7 +380,8 @@ mod public_data_test {
         };
 
         let protocol_instance = ProtocolInstance {
-            block_evidence,
+            transition,
+            block_metadata,
             ..Default::default()
         };
         vec![protocol_instance]
@@ -391,7 +391,7 @@ mod public_data_test {
         circuits_params: CircuitsParams,
         protocol_instance: ProtocolInstance,
     ) -> Block<Fr> {
-        let block_num = protocol_instance.block_evidence.blockMetadata.id;
+        let block_num = protocol_instance.block_metadata.id;
         let cli = get_client();
 
         let cli = BuilderClient::new(cli, circuits_params, Some(protocol_instance.clone()))
