@@ -337,7 +337,7 @@ mod public_data_test {
 
     fn gen_requests() -> Vec<ProtocolInstance> {
         let block_metadata = BlockMetadata {
-            l1Hash: parse_hash("6e3b781b2d9a04e21ecba49e67dc3fb0a8242408cc07fa6fed5d8bd0eca2c985")
+            l1Hash: parse_hash("73d982228d47736b4ac3079ab3e2469662ac873c6af08a46783932ca08c7d6ad")
                 .unwrap()
                 .as_fixed_bytes()
                 .into(),
@@ -348,8 +348,8 @@ mod public_data_test {
             .as_fixed_bytes()
             .into(),
             id: 10,
-            timestamp: 1699729048,
-            l1Height: 131,
+            timestamp: 1702037218,
+            l1Height: 57,
             coinbase: parse_address("0x1000777700000000000000000000000000000001")
                 .unwrap()
                 .as_fixed_bytes()
@@ -359,19 +359,19 @@ mod public_data_test {
 
         let transition = Transition {
             parentHash: parse_hash(
-                "beb327617555bd45c05ac7e33d2c509c77192eb8c372873483696b1a7367750a",
+                "35edce94199aa6d431a5229092123b222f3de42cfc1dbedeec8633efb3b8dfc5",
             )
             .unwrap()
             .as_fixed_bytes()
             .into(),
             blockHash: parse_hash(
-                "8a8c11d6c46c1e8cce87900b52854fc74975aab054355c2a060aeefc6419b606",
+                "fb9f43d074f3e889f7870aed5bf57a07d287a0444196e432153ac0c8bb526128",
             )
             .unwrap()
             .as_fixed_bytes()
             .into(),
             signalRoot: parse_hash(
-                "61e8be9519dac9b5e5124dd2e3f4e79628def914c8a9e6290caddef681fad23b",
+                "4863d4338e270b3bd07ed68e084177b2faf9a07546dc644ed2322cbd2431f2ef",
             )
             .unwrap()
             .as_fixed_bytes()
