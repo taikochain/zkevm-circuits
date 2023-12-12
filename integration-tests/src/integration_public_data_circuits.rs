@@ -354,6 +354,16 @@ mod public_data_test {
                 .unwrap()
                 .as_fixed_bytes()
                 .into(),
+            gasLimit: 80000000,
+            txListByteOffset: 0,
+            txListByteSize: 0,
+            blobUsed: false,
+            parentMetaHash: parse_hash(
+                "569e75fc77c1a856f6daaf9e69d8a9566ca34aa47f9133711ce065a571af0cfd",
+            )
+            .unwrap()
+            .as_fixed_bytes()
+            .into(),
             ..Default::default()
         };
 
@@ -376,13 +386,22 @@ mod public_data_test {
             .unwrap()
             .as_fixed_bytes()
             .into(),
+            graffiti: parse_hash(
+                "6162630000000000000000000000000000000000000000000000000000000000",
+            )
+            .unwrap()
+            .as_fixed_bytes()
+            .into(),
             ..Default::default()
         };
 
         let protocol_instance = ProtocolInstance {
             transition,
             block_metadata,
-            ..Default::default()
+            prover: parse_address("0000000000000000000000000000000000000001")
+                .unwrap()
+                .as_fixed_bytes()
+                .into(),
         };
         vec![protocol_instance]
     }
