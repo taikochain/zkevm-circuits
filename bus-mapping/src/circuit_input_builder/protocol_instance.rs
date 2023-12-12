@@ -139,7 +139,8 @@ impl ProtocolInstance {
     }
 
     pub fn prover(&self) -> Vec<u8> {
-        self.prover.as_fixed_bytes().abi_encode()
+        let sol_addr = alloy_sol_types::private::Address::from(self.prover.as_fixed_bytes());
+        sol_addr.abi_encode()
     }
 
     pub fn meta_hash(&self) -> Vec<u8> {
