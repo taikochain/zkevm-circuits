@@ -392,7 +392,6 @@ mod public_data_test {
             .unwrap()
             .as_fixed_bytes()
             .into(),
-            ..Default::default()
         };
 
         let protocol_instance = ProtocolInstance {
