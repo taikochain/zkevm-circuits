@@ -107,12 +107,16 @@ impl<P: JsonRpcClient> GethClient<P> {
     pub async fn trace_block_by_hash(&self, hash: Hash) -> Result<Vec<GethExecTrace>, Error> {
         let hash = serialize(&hash);
         let cfg = serialize(&GethLoggerConfig::default());
-        let resp: ResultGethExecTraces = self
-            .0
-            .request("debug_traceBlockByHash", [hash, cfg])
-            .await
-            .map_err(|e| Error::JSONRpcError(e.into()))?;
-        Ok(resp.0.into_iter().map(|step| step.result).collect())
+        if cfg!(feature = "disable_l2_trace_block") {
+            Ok(vec![])
+        } else {
+            let resp: ResultGethExecTraces = self
+                .0
+                .request("debug_traceBlockByHash", [hash, cfg])
+                .await
+                .map_err(|e| Error::JSONRpcError(e.into()))?;
+            Ok(resp.0.into_iter().map(|step| step.result).collect())
+        }
     }
 
     /// Calls `debug_traceBlockByNumber` via JSON-RPC returning a
@@ -124,12 +128,17 @@ impl<P: JsonRpcClient> GethClient<P> {
     ) -> Result<Vec<GethExecTrace>, Error> {
         let num = serialize(&block_num);
         let cfg = serialize(&GethLoggerConfig::default());
-        let resp: ResultGethExecTraces = self
-            .0
-            .request("debug_traceBlockByNumber", [num, cfg])
-            .await
-            .map_err(|e| Error::JSONRpcError(e.into()))?;
-        Ok(resp.0.into_iter().map(|step| step.result).collect())
+        if cfg!(feature = "disable_l2_trace_block") {
+            Ok(vec![])
+        } else {
+            println!("enable_debug_trace_block");
+            let resp: ResultGethExecTraces = self
+                .0
+                .request("debug_traceBlockByNumber", [num, cfg])
+                .await
+                .map_err(|e| Error::JSONRpcError(e.into()))?;
+            Ok(resp.0.into_iter().map(|step| step.result).collect())
+        }
     }
 
     /// Calls `eth_getCode` via JSON-RPC returning a contract code

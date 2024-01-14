@@ -14,12 +14,12 @@ mock = { path = "../mock", optional = true }
 sha3 = "0.10"
 once_cell = "1.17.1"
 alloy-primitives = { version = "0.4", default-features = false, features = [
-  "rlp",
-  "serde",
-  "std",
+    "rlp",
+    "serde",
+    "std",
 ] }
-alloy-sol-types = { version = "0.4"}
-alloy-dyn-abi = { version = "0.4"}
+alloy-sol-types = { version = "0.4" }
+alloy-dyn-abi = { version = "0.4" }
 
 ethers-core = "=2.0.0"
 ethers-providers = "=2.0.0"
@@ -45,3 +45,4 @@ rand = "0.8"
 
 [features]
 test = ["mock"]
+disable_l2_trace_block = []

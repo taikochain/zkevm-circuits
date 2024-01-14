@@ -212,18 +212,20 @@ impl<'a> CircuitInputBuilder {
         eth_block: &EthBlock,
         geth_traces: &[eth_types::GethExecTrace],
     ) -> Result<(), Error> {
-        // accumulates gas across all txs in the block
-        for (tx_index, tx) in eth_block.transactions.iter().enumerate() {
-            let geth_trace = &geth_traces[tx_index];
-            self.handle_tx(
-                eth_block,
-                tx,
-                geth_trace,
-                tx_index + 1 == eth_block.transactions.len(),
-            )?;
+        if !cfg!(feature = "disable_l2_trace_block") {
+            // accumulates gas across all txs in the block
+            for (tx_index, tx) in eth_block.transactions.iter().enumerate() {
+                let geth_trace = &geth_traces[tx_index];
+                self.handle_tx(
+                    eth_block,
+                    tx,
+                    geth_trace,
+                    tx_index + 1 == eth_block.transactions.len(),
+                )?;
+            }
+            self.set_value_ops_call_context_rwc_eor();
+            self.set_end_block();
         }
-        self.set_value_ops_call_context_rwc_eor();
-        self.set_end_block();
         Ok(())
     }
 
@@ -421,31 +423,37 @@ pub fn get_state_accesses(
     geth_traces: &[eth_types::GethExecTrace],
     protocol_instance: &Option<ProtocolInstance>,
 ) -> Result<AccessSet, Error> {
-    let mut block_access_trace = vec![Access::new(
-        None,
-        RW::WRITE,
-        AccessValue::Account {
-            address: eth_block
-                .author
-                .ok_or(Error::EthTypeError(eth_types::Error::IncompleteBlock))?,
-        },
-    )];
-    for (tx_index, tx) in eth_block.transactions.iter().enumerate() {
-        let geth_trace = &geth_traces[tx_index];
-        let tx_access_trace = gen_state_access_trace(eth_block, tx, geth_trace)?;
-        block_access_trace.extend(tx_access_trace);
-    }
-    if let Some(_pi) = protocol_instance {
-        block_access_trace.push(Access::new(
+    if cfg!(feature = "disable_l2_trace_block") {
+        Ok(AccessSet::from(vec![]))
+    } else {
+        let mut block_access_trace = vec![Access::new(
             None,
             RW::WRITE,
             AccessValue::Account {
-                address: *protocol_instance::TREASURY,
+                address: eth_block
+                    .author
+                    .ok_or(Error::EthTypeError(eth_types::Error::IncompleteBlock))?,
             },
-        ));
-    }
+        )];
 
-    Ok(AccessSet::from(block_access_trace))
+        for (tx_index, tx) in eth_block.transactions.iter().enumerate() {
+            let geth_trace = &geth_traces[tx_index];
+            let tx_access_trace = gen_state_access_trace(eth_block, tx, geth_trace)?;
+            block_access_trace.extend(tx_access_trace);
+        }
+
+        if let Some(_pi) = protocol_instance {
+            block_access_trace.push(Access::new(
+                None,
+                RW::WRITE,
+                AccessValue::Account {
+                    address: *protocol_instance::TREASURY,
+                },
+            ));
+        }
+
+        Ok(AccessSet::from(block_access_trace))
+    }
 }
 
 /// Build a partial StateDB from step 3
@@ -561,26 +569,31 @@ impl<P: JsonRpcClient> BuilderClient<P> {
         Error,
     > {
         let mut proofs = Vec::new();
-        for (address, key_set) in access_set.state {
-            let mut keys: Vec<Word> = key_set.iter().cloned().collect();
-            keys.sort();
-            let proof = self
-                .cli
-                .get_proof(address, keys, (block_num - 1).into())
-                .await
-                .unwrap();
-            proofs.push(proof);
-        }
         let mut codes: HashMap<Address, Vec<u8>> = HashMap::new();
-        for address in access_set.code {
-            let code = self
-                .cli
-                .get_code(address, (block_num - 1).into())
-                .await
-                .unwrap();
-            codes.insert(address, code);
+        if cfg!(feature = "disable_l2_trace_block") {
+            Ok((proofs, codes))
+        } else {
+            for (address, key_set) in access_set.state {
+                let mut keys: Vec<Word> = key_set.iter().cloned().collect();
+                keys.sort();
+                let proof = self
+                    .cli
+                    .get_proof(address, keys, (block_num - 1).into())
+                    .await
+                    .unwrap();
+                proofs.push(proof);
+            }
+            for address in access_set.code {
+                let code = self
+                    .cli
+                    .get_code(address, (block_num - 1).into())
+                    .await
+                    .unwrap();
+                codes.insert(address, code);
+            }
+
+            Ok((proofs, codes))
         }
-        Ok((proofs, codes))
     }
 
     /// Step 4. Build a partial StateDB from step 3
