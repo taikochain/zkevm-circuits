@@ -8,7 +8,7 @@ license = "MIT OR Apache-2.0"
 [dependencies]
 halo2_proofs = { git = "https://github.com/taikoxyz/halo2.git", features = [
   "circuit-params",
-], branch = "taiko/unstable"}
+], tag = "taiko-alpha-6"}
 eth-types = { path = "../eth-types" }
 external-tracer = { path = "../external-tracer" }
 lazy_static = "1.4"

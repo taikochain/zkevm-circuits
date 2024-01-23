@@ -23,7 +23,7 @@ alloy-dyn-abi = { version = "0.4" }
 
 ethers-core = "=2.0.0"
 ethers-providers = "=2.0.0"
-halo2_proofs = { git = "https://github.com/taikoxyz/halo2.git", branch = "taiko/unstable" }
+halo2_proofs = { git = "https://github.com/taikoxyz/halo2.git", tag = "taiko-alpha-6" }
 itertools = "0.10"
 lazy_static = "1.4"
 log = "0.4.14"
