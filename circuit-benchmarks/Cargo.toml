@@ -7,7 +7,7 @@ license = "MIT OR Apache-2.0"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-halo2_proofs = { git = "https://github.com/taikoxyz/halo2.git", branch = "taiko/unstable" }
+halo2_proofs = { git = "https://github.com/taikoxyz/halo2.git", tag = "taiko-alpha-6" }
 snark-verifier = { git = "https://github.com/taikoxyz/snark-verifier.git", branch = "a6-integration", default-features = false, features = [
     "loader_halo2",
     "system_halo2",
