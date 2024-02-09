@@ -1,4 +1,6 @@
 //! Transaction & TransactionContext utility module.
+use std::convert::TryInto;
+use std::collections::HashMap;
 
 use std::collections::BTreeMap;
 
@@ -52,11 +54,11 @@ impl TransactionContext {
                     // Dive into call
                     if geth_step.depth + 1 == geth_next_step.depth {
                         call_indices.push(index);
-                    // Emerge from call
+                        // Emerge from call
                     } else if geth_step.depth - 1 == geth_next_step.depth {
                         let is_success = !geth_next_step.stack.last()?.is_zero();
                         call_is_success_map.insert(call_indices.pop().unwrap(), is_success);
-                    // Callee with empty code
+                        // Callee with empty code
                     } else if CallKind::try_from(geth_step.op).is_ok() {
                         let is_success = !geth_next_step.stack.last()?.is_zero();
                         call_is_success_map.insert(index, is_success);
@@ -70,11 +72,11 @@ impl TransactionContext {
         };
 
         let mut tx_ctx = Self {
-            id: eth_tx
-                .transaction_index
-                .ok_or(Error::EthTypeError(eth_types::Error::IncompleteBlock))?
-                .as_u64() as usize
-                + 1,
+            id: (
+                eth_tx.transaction_index
+                    .ok_or(Error::EthTypeError(eth_types::Error::IncompleteBlock))?
+                    .as_u64() as usize
+            ) + 1,
             log_id: 0,
             is_anchor_tx,
             is_last_tx,
@@ -213,7 +215,12 @@ impl Transaction {
         if !found {
             return Err(Error::AccountNotFound(eth_tx.from));
         }
-
+        let call_data_length = eth_tx.input
+            .len()
+            .try_into()
+            .map_err(|_| {
+                Error::InvalidDataLength("Transaction input length cannot be converted to u64")
+            })?;
         let call = if let Some(address) = eth_tx.to {
             // Contract Call / Transfer
             let (found, account) = sdb.get_account(&address);
@@ -225,6 +232,7 @@ impl Transaction {
                 call_id,
                 kind: CallKind::Call,
                 is_root: true,
+                call_data_length,
                 is_persistent: is_success,
                 is_success,
                 caller_address: eth_tx.from,
@@ -249,6 +257,7 @@ impl Transaction {
                 address: get_contract_address(eth_tx.from, eth_tx.nonce),
                 code_source: CodeSource::Tx,
                 code_hash,
+                call_data_length,
                 depth: 1,
                 value: eth_tx.value,
                 call_data_length: eth_tx.input.len().try_into().unwrap(),
@@ -265,14 +274,41 @@ impl Transaction {
         })
     }
 
+    // Add a new method to check if the transaction is invalid
+    pub fn is_invalid(&self) -> bool {
+        self.invalid_tx
+    }
     /// Whether this [`Transaction`] is a create one
     pub fn is_create(&self) -> bool {
         self.calls[0].is_create()
     }
 
+    // Add a new method to get the sender's account from the state database
+    pub fn sender_account(&self, sdb: &StateDB) -> Result<Account, Error> {
+        let (found, account) = sdb.get_account(&self.tx.from);
+        if !found {
+            return Err(Error::AccountNotFound(self.tx.from));
+        }
+        Ok(account)
+    }
+
+    // Add a new method to get the call by index
+    pub fn get_call_by_index(&self, index: usize) -> Option<&Call> {
+        self.calls.get(index)
+    }
+
     /// Return the list of execution steps of this transaction.
     pub fn steps(&self) -> &[ExecStep] {
         &self.steps
+    }
+    // Add a new method to get the transaction value
+    pub fn value(&self) -> u64 {
+        self.tx.value.as_u64()
+    }
+
+    // Add a new method to get the access list gas cost
+    pub fn access_list_gas_cost(&self) -> u64 {
+        self.access_list_gas_cost
     }
 
     /// Return a mutable reference to the list of execution steps of this
