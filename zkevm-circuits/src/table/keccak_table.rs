@@ -130,7 +130,7 @@ impl KeccakTable {
     }
 
     /// returns matchings between the circuit columns passed as parameters and
-    /// the table collumns
+    /// the table columns
     pub fn match_columns(
         &self,
         value_rlc: Column<Advice>,

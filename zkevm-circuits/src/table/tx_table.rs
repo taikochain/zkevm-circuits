@@ -93,7 +93,7 @@ impl TxTable {
         }
     }
 
-    /// Assign the `TxTable` from a list of block `Transaction`s, followig the
+    /// Assign the `TxTable` from a list of block `Transaction`s, following the
     /// same layout that the Tx Circuit uses.
     pub fn load<F: Field>(
         &self,
@@ -109,7 +109,7 @@ impl TxTable {
         )
     }
 
-    /// Assign the `TxTable` from a list of block `Transaction`s, followig the
+    /// Assign the `TxTable` from a list of block `Transaction`s, following the
     /// same layout that the Tx Circuit uses.
     /// NOTE: This function is used by passing the region directly
     pub fn load_with_region<F: Field>(

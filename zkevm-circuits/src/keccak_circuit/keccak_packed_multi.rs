@@ -416,7 +416,7 @@ pub(crate) mod transform {
     }
 }
 
-// Transfroms values to cells
+// Transforms values to cells
 pub(crate) mod transform_to {
     use super::{Cell, KeccakRegion, Part, PartValue};
     use crate::{

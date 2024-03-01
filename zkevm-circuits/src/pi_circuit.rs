@@ -75,7 +75,7 @@ pub struct ExtraValues {
     prev_state_root: H256,
 }
 
-/// PublicData contains all the values that the PiCircuit recieves as input
+/// PublicData contains all the values that the PiCircuit receives as input
 #[derive(Debug, Clone)]
 pub struct PublicData {
     /// chain id
@@ -1110,7 +1110,7 @@ impl<F: Field> PiCircuitConfig<F> {
 pub struct PiCircuit<F: Field> {
     max_txs: usize,
     max_calldata: usize,
-    /// Randomness for RLC encdoing
+    /// Randomness for RLC encoding
     pub randomness: F,
     /// Randomness for PI encoding
     pub rand_rpi: F,
@@ -1209,7 +1209,7 @@ impl<F: Field> SubCircuit<F> for PiCircuit<F> {
             BLOCK_LEN + 1 + EXTRA_LEN + 3 * (TX_LEN * self.max_txs + 1) + self.max_calldata
         );
 
-        // Computation of raw_pulic_inputs
+        // Computation of raw_public_inputs
         let rlc_rpi = rlc_rpi_col
             .iter()
             .rev()

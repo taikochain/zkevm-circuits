@@ -40,7 +40,7 @@ impl<F: Field> ExecutionGadget<F> for ErrorWriteProtectionGadget<F> {
         let value = cb.query_word_rlc();
         let is_value_zero = IsZeroGadget::construct(cb, value.expr());
 
-        // require_in_set method will spilit into more low degree expressions if exceed
+        // require_in_set method will split into more low degree expressions if exceed
         // max_degree. otherwise need to do fixed lookup for these opcodes
         // checking.
         cb.require_in_set(
@@ -72,7 +72,7 @@ impl<F: Field> ExecutionGadget<F> for ErrorWriteProtectionGadget<F> {
         // current call context is readonly
         cb.call_context_lookup(false.expr(), None, CallContextFieldTag::IsStatic, 1.expr());
 
-        // constrain not root call as at least one previous staticcall preset.
+        // constrain not root call as at least one previous statical preset.
         cb.require_zero(
             "ErrorWriteProtection only happen in internal call",
             cb.curr.state.is_root.expr(),
