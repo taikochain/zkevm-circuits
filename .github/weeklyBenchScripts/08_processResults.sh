@@ -48,7 +48,7 @@ circuit=$(echo "$l" |  awk '{print $1}')
 time=$(date +%Y-%m-%d_%H-%M-%S)
 test_id=$time-$circuit-$degree-Benchmark
 
-cd "$trigger_results_dir"
+cd "$trigger_results_dir" || exit
 tar -czvf ./"$test_id".tar.gz ./*proverlog ./*.stats
 
 cp ../../zkevm-circuits/.github/weeklyBenchScripts/reporting*.py .

@@ -8,5 +8,5 @@ target_dir="$base_dir"PR"$1"
 
 source_dir=$2
 
-cd $source_dir && scp -r * prover:$target_dir
+cd "$source_dir" && scp -r * prover:"$target_dir"
 
