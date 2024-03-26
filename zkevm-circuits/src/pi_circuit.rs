@@ -1110,7 +1110,7 @@ impl<F: Field> PiCircuitConfig<F> {
 pub struct PiCircuit<F: Field> {
     max_txs: usize,
     max_calldata: usize,
-    /// Randomness for RLC encdoing
+    /// Randomness for RLC encoding
     pub randomness: F,
     /// Randomness for PI encoding
     pub rand_rpi: F,
