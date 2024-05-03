@@ -1,4 +1,4 @@
-Deprecated in favor of [raiko](https://github.com/taikoxyz/raiko).
+# Deprecated in favor of [raiko](https://github.com/taikoxyz/raiko)!
 
 # Circuits for zkEVM
 
