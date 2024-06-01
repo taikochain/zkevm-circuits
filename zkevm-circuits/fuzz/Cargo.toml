@@ -1,0 +1,77 @@
+[package]
+name = "zkevm_circuits_fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+arbitrary = { version = "1", features = ["derive"] }
+evm-disassembler = { git = "https://github.com/krzysztofpaliga/evm-disassembler.git" }
+halo2_proofs = { git = "https://github.com/privacy-scaling-explorations/halo2.git", features = ["circuit-params"], tag = "v2023_04_20" }
+halo2curves = "0.4.0"
+libfuzzer-sys = "0.4"
+log = "0.4.20"
+secp256k1-sys = { version = "0.6.1", features = ['std'] }
+#zkevm-circuits = { git = "https://github.com/taikoxyz/zkevm-circuits" }
+eth-types = { path = "../../eth-types" }
+mock = { path = "../../mock" }
+bus-mapping = { path = "../../bus-mapping" }
+rand = "0.8.5"
+rand_chacha = "0.3.1"
+num-bigint = "0.4.4"
+num-traits = "0.2.16"
+nonzero = "0.2.0"
+hex = "0.4.3"
+ethers-signers = "2.0.0"
+lazy_static = "1.4.0"
+regex = "1.10.2"
+[dependencies.zkevm-circuits]
+path = "../"
+
+
+
+# Prevent this from interfering with workspaces
+[workspace]
+members = ["."]
+
+[profile.release]
+debug = 1
+
+[[bin]]
+name = "fuzz_target_1"
+path = "fuzz_targets/fuzz_target_1.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "exp"
+path = "fuzz_targets/exp.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "state"
+path = "fuzz_targets/state.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "tx"
+path = "fuzz_targets/tx.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "bytecode"
+path = "fuzz_targets/bytecode.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "evm"
+path = "fuzz_targets/evm.rs"
+test = false
+doc = false

@@ -6,8 +6,10 @@ use crate::{
     Error,
 };
 use eth_types::{bytecode, Bytecode, GethExecStep, Word, U256};
-use ethers_core::utils::keccak256;
-use rand::{rngs::ThreadRng, Rng};
+use ethers_core::{
+    rand::{rngs::ThreadRng, Rng},
+    utils::keccak256,
+};
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct Sha3;
@@ -94,7 +96,7 @@ pub struct Sha3CodeGen {
 impl Sha3CodeGen {
     /// Construct with memory less than size
     pub fn mem_lt_size(offset: usize, size: usize) -> Self {
-        let mut rng = rand::thread_rng();
+        let mut rng = ethers_core::rand::thread_rng();
         let data_len = offset
             + if size.gt(&0) {
                 rng.gen_range(0..size)
@@ -115,12 +117,12 @@ impl Sha3CodeGen {
             offset,
             size,
             data_len,
-            rng: rand::thread_rng(),
+            rng: ethers_core::rand::thread_rng(),
         }
     }
     /// Construct with memory greater than size
     pub fn mem_gt_size(offset: usize, size: usize) -> Self {
-        let mut rng = rand::thread_rng();
+        let mut rng = ethers_core::rand::thread_rng();
         let data_len = offset
             + size
             + if size.gt(&0) {
@@ -141,7 +143,7 @@ impl Sha3CodeGen {
             offset,
             size,
             data_len: 0,
-            rng: rand::thread_rng(),
+            rng: ethers_core::rand::thread_rng(),
         }
     }
     fn rand_bytes(&mut self) -> Vec<u8> {

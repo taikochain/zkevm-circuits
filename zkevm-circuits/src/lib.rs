@@ -13,7 +13,7 @@
 #![allow(clippy::upper_case_acronyms)]
 // Catch documentation errors caused by code changes.
 #![deny(rustdoc::broken_intra_doc_links)]
-#![deny(missing_docs)]
+// #![deny(missing_docs)]
 #![deny(unsafe_code)]
 #![deny(clippy::debug_assert_with_mut_call)]
 
@@ -30,7 +30,7 @@ pub mod table;
 pub mod taiko_pi_circuit;
 pub mod taiko_super_circuit;
 
-#[cfg(any(feature = "test", test))]
+// #[cfg(any(feature = "test", test))]
 pub mod test_util;
 
 pub mod anchor_tx_circuit;

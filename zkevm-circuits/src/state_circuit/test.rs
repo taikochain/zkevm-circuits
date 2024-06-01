@@ -36,7 +36,7 @@ fn state_circuit_unusable_rows() {
     )
 }
 
-fn test_state_circuit_ok(
+pub fn test_state_circuit_ok(
     memory_ops: Vec<Operation<MemoryOp>>,
     stack_ops: Vec<Operation<StackOp>>,
     storage_ops: Vec<Operation<StorageOp>>,

@@ -25,6 +25,8 @@ strum_macros = "0.24"
 
 revm-precompile = "2.0.2"
 
+secp256k1-sys = { version = "0.8.1", features = ['std'] }
+
 [dev-dependencies]
 hex = "0.4.3"
 pretty_assertions = "1.0.0"

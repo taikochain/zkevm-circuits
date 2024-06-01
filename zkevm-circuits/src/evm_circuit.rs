@@ -10,9 +10,9 @@ mod execution;
 pub mod param;
 pub mod step;
 pub mod table;
-pub(crate) mod util;
+pub mod util;
 
-#[cfg(any(feature = "test", test))]
+// #[cfg(any(feature = "test", test))]
 pub(crate) mod test;
 use self::step::HasExecutionState;
 #[cfg(any(feature = "test", test, feature = "test-circuits"))]
@@ -298,7 +298,7 @@ pub(crate) fn detect_fixed_table_tags<F: Field>(block: &Block<F>) -> Vec<FixedTa
         .collect()
 }
 
-#[cfg(any(feature = "test", test))]
+// #[cfg(any(feature = "test", test))]
 pub(crate) mod cached {
     use super::*;
     use halo2_proofs::halo2curves::bn256::Fr;
