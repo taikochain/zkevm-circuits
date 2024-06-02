@@ -14,7 +14,7 @@ First take a look at our [specs](https://github.com/privacy-scaling-explorations
 2. Write a simple markdown spec doc about the PR and send to the `zkevm-specs` repo.
     - ******************NOTE:****************** If the PR changes the circuit behavior, it is encouraged to reflect the changes in high level python ([here](https://github.com/privacy-scaling-explorations/zkevm-specs/tree/master/src/zkevm_specs)) and submit them along the same PR with the markdown spec to `zkevm-specs` repo.
 3. We encourage everyone to [open an issue](https://github.com/privacy-scaling-explorations/zkevm-circuits/issues/new/choose) and wait until this feature/proposal gets approved by the repo maintainers before getting to work on a PR. However, this is a must for PRs that change significantly the codebase or the way on which some procedure is done (test-suite, cross-crate structures, module refactors).
-4. Create a separate branch that will host all commits. Give branch names succinct title describing the change.
+4. Create a separate branch that will host all commits. Give branch names a succinct title describing the change.
 5. Start to make your changes. Please also make sure that the following commands pass if you have changed the code:
     
     ```
@@ -22,7 +22,7 @@ First take a look at our [specs](https://github.com/privacy-scaling-explorations
     make clippy
     ```
     
-6. Once you made the changes, give the commit message a sufficient description of the change. The message content can be brief, including only enough details to summarize the purpose of the commit. In other instances, more in-depth explanations about how the commit accomplishes its goals are better suited as comments in the code.
+6. Once you've made the changes, give the commit message a sufficient description of the change. The message content can be brief, including only enough details to summarize the purpose of the commit. In other instances, more in-depth explanations about how the commit accomplishes its goals are better suited as comments in the code.
     - ******************NOTE:****************** The commits in a pull request should be organized in a manner where each commit represents a small, coherent step towards the pull request's overall objective. The structure of the pull request should facilitate the reviewer in easily tracking and understanding each change made.
 7. Send the circuit PR to the `zkevm-circuits` repo. Make sure you give a clear title and succinct description of the PR and the area you are changing. 
     - ******************NOTE:****************** Make atomic PRs. Focused on a single feature or topic. Don't mix different topics or issues in the same PR if it can be avoided.
@@ -44,7 +44,7 @@ First take a look at our [specs](https://github.com/privacy-scaling-explorations
 
 ### Submitting Bug Issues
 
-1. If you identified a bug, please create a new issue or discuss it in our [forums](https://github.com/privacy-scaling-explorations/zkevm-circuits/discussions). 
+1. If you've identified a bug, please create a new issue or discuss it in our [forums](https://github.com/privacy-scaling-explorations/zkevm-circuits/discussions). 
 2. In the description, provide the following:
     - Describe the bug
     - Concrete steps to reproduce the bug
@@ -90,4 +90,4 @@ A: You don’t need permissions from PSE, can just create an issue or propose a 
 
 Q: Is there a forum for discussing different issues or features where I can get started?
 
-A: There’s the issues section in zkevm repos, but for more nuanced discussion join our [Github Discussions](https://github.com/privacy-scaling-explorations/zkevm-circuits/discussions) or [discord](https://discord.com/invite/sF5CT5rzrR).
+A: There’s an issues section in zkevm repos, but for more nuanced discussion join our [Github Discussions](https://github.com/privacy-scaling-explorations/zkevm-circuits/discussions) or [discord](https://discord.com/invite/sF5CT5rzrR).
