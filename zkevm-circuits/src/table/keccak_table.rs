@@ -52,6 +52,7 @@ impl KeccakTable {
         let input_rlc = challenges
             .keccak_input()
             .map(|challenge| rlc::value(input.iter().rev(), challenge));
+
         let input_len = F::from(input.len() as u64);
         let mut keccak = Keccak::default();
         keccak.update(input);
@@ -62,7 +63,6 @@ impl KeccakTable {
                 challenge,
             )
         });
-
         vec![[
             Value::known(F::ONE),
             input_rlc,

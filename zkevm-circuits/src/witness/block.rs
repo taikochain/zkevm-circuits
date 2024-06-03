@@ -11,6 +11,7 @@ use bus_mapping::{
     Error,
 };
 use eth_types::{Address, Field, ToLittleEndian, ToScalar, ToWord, Word};
+
 use halo2_proofs::circuit::Value;
 
 use super::{tx::tx_convert, Bytecode, ExecStep, ProtocolInstance, Rw, RwMap, Transaction};
@@ -186,6 +187,7 @@ impl BlockContext {
                 [
                     Value::known(F::from(BlockContextFieldTag::BlockHash as u64)),
                     Value::known(self.number.to_scalar().unwrap()),
+                    // Value::known(F::ZERO),
                     randomness
                         .map(|randomness| rlc::value(&self.block_hash.to_le_bytes(), randomness)),
                 ],
