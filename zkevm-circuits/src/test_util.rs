@@ -1,5 +1,4 @@
 //! Testing utilities
-
 use crate::{
     evm_circuit::{cached::EvmCircuitCached, EvmCircuit},
     state_circuit::StateCircuit,

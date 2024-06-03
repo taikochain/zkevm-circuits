@@ -1,7 +1,7 @@
 //! Mock Block definition and builder related methods.
 
 use crate::{MockTransaction, MOCK_BASEFEE, MOCK_CHAIN_ID, MOCK_DIFFICULTY, MOCK_GASLIMIT};
-use eth_types::{Address, Block, Bytes, Hash, Transaction, Word, H64, U64};
+use eth_types::{Address, Block, Bytes, Hash, Transaction, Word, H256, H64, U64};
 use ethers_core::types::{Bloom, OtherFields};
 
 #[derive(Clone, Debug)]
@@ -31,6 +31,7 @@ pub struct MockBlock {
     size: Word,
     mix_hash: Hash,
     nonce: H64,
+    withdrawals_root: H256,
     // This field is handled here as we assume that all block txs have the same ChainId.
     // Also, the field is stored in the block_table since we don't have a chain_config
     // structure/table.
@@ -63,6 +64,7 @@ impl Default for MockBlock {
             mix_hash: Hash::zero(),
             nonce: H64::zero(),
             chain_id: *MOCK_CHAIN_ID,
+            withdrawals_root: H256::zero(),
         }
     }
 }
@@ -96,6 +98,7 @@ impl From<MockBlock> for Block<Transaction> {
             mix_hash: Some(mock.mix_hash),
             nonce: Some(mock.nonce),
             base_fee_per_gas: Some(mock.base_fee_per_gas),
+            withdrawals_root: Some(mock.withdrawals_root),
             other: OtherFields::default(),
         }
     }
@@ -126,6 +129,7 @@ impl From<MockBlock> for Block<()> {
             mix_hash: Some(mock.mix_hash),
             nonce: Some(mock.nonce),
             base_fee_per_gas: Some(mock.base_fee_per_gas),
+            withdrawals_root: Some(mock.withdrawals_root),
             other: OtherFields::default(),
         }
     }
